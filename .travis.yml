@@ -1,0 +1,28 @@
+language: python
+python:
+  - "3.6"
+os: linux
+sudo: required
+dist: trusty
+compiler: gcc
+
+env:
+  - OS_TYPE=centos OS_VERSION=7
+
+services:
+  - docker
+
+install:
+  - sudo apt-get update
+  - echo 'DOCKER_OPTS="-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -s devicemapper"' | sudo tee /etc/default/docker > /dev/null
+  - sudo service docker restart
+  - sleep 5
+  - sudo docker pull lsstdesc/stack-sims:w_2018_03-sims_2_5_0
+  - pip install coveralls
+
+script:
+  - sudo chown -R 1000:1000 .
+  - docker run -v `pwd`:${TRAVIS_BUILD_DIR} -e TRAVIS_BUILD_DIR lsstdesc/stack-sims:w_2018_03-sims_2_5_0 ${TRAVIS_BUILD_DIR}/travis_test.sh
+
+after_success:
+  - coveralls
