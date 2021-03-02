@@ -14,7 +14,7 @@ class SkyCatalogs(object):
         # One might check that the config is complete and well-formed
         # and that the data directory exists, create an empty dict for
         # per-HEALpix pixel information and so forth.
-
+        self._hps = {}
 
     def get_objects_by_region(datetime, region, obj_type_list=None):
         '''
