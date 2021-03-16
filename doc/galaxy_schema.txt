@@ -1,0 +1,25 @@
+# Proposed columns for the galaxy files
+
+galaxy_id    Same value will be used for disk, bulge, knots belonging to
+             the same galaxy
+subcomponent Name of a bulge, disk or knots subtype	     
+ra           Right ascension
+dec          Declination
+redshift     Redshift
+sed_values   Array of floating point values. Precise meaning depends on model.
+             Should they be float or double?
+gamma1       Shear parameter
+gamma2       Shear parameter
+kappa        Magnification parameter
+spatial_pars Array of floating point values.  Precise meaning depends on model
+internalAv
+internalRv
+galacticAv
+galacticRv
+flux_noMW_lsst_u
+flux_noMW_lsst_g
+flux_noMW_lsst_r
+flux_noMW_lsst_i
+flux_noMW_lsst_z
+flux_noMW_lsst_y
+(or store with-extinction values instead?  or both?)

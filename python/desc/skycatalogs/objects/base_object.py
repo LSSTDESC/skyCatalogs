@@ -1,4 +1,8 @@
-
+'''
+Main object types.   There are also may be subtypes. For example,
+there could be two subtypes for bulge components, differing in the
+form of their associated SEDs
+'''
 GALAXY=1
 GALAXY_BULGE=2
 GALAXY_DISK=3
@@ -20,6 +24,8 @@ Abstract base class for static objects. Might need a variant for SSO.
         self._id = id
         self._object_type = object_type
         self._hp_id = hp_id
+
+        # All objects also include redshift and extinction information
 
 
     @property
@@ -44,13 +50,20 @@ Abstract base class for static objects. Might need a variant for SSO.
             # Need to compute from ra, dec, but for now
             pass
         return self._hp_id
-    def get_flux(self, date_time, band):
+
+    def get_flux(self, date_time, band, noMW=False):
         '''
         Parameters
         ----------
         date_time   datetime object; time at which flux is requested
         band        specifies interval over which flux is to be integrated
                     (and filter characteristics?)
+        noMW        If true, don't include Milky Way extinction
+
+        Returns
+        -------
+        Flux of the object for specified time, band.  By default
+        include Milky Way extinction.
         '''
         raise NotImplementedError
 

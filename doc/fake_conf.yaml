@@ -1,0 +1,37 @@
+#  A sample sky catalog config for galaxies only
+catalog_name : first_fake
+data_file_type : parquet
+area_partition :
+  { type: healpix, ordering : ring, nside : 32}
+root_directory : /global/cscratch1/sd/jrbogart/fake_sky
+subdirectory_template : 'first_fake_healpix(?P<healpix>\d+)'
+SED_models :
+  - tophat :
+      units : nm
+      bins : [ [100, 400 ], [300, 600], [500, 800], [700, 1000],
+      [900, 1200], [1100, 1500], [1400, 1800], [1700, 2000]]
+object_types :
+  - galaxy :
+      file_template : 'galaxy_healpix(?P<healpix>\d+).parquet'
+      composite :
+        bulge : required
+        disk  : required
+        knots : optional
+  - bulge_basic
+      subtype : bulge
+      sed_model : tophat
+      internal_extinction : CCM
+      MW_extinction : CCM
+      spatial_model : sersic2D
+  - disk_basic
+      subtype : disk
+      sed_model : tophat
+      internal_extinction : CCM
+      MW_extinction : CCM
+      spatial_model :  sersic2D
+  - knots_basic
+      subtype : knots
+      sed_model : tophat
+      internal_extinction : CCM
+      MW_extinction : CCM
+      spatial_model :  knots
