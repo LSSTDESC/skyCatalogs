@@ -63,3 +63,6 @@ target/
 
 # Backup files
 *~
+
+# local sandbox
+local/
