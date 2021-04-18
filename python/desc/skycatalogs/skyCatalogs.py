@@ -25,8 +25,10 @@ def _get_intersecting_hps(hp_ordering, nside, region):
 
     return healpy.query_polygon(nside, vec, inclusive=True)
 
-class SkyCatalogs(object):
+class SkyCatalog(object):
     '''
+    A base class with derived classes for galaxies, static (w.r.t. coordinates)
+    point sources, SSOs
 
     '''
     def __init__(self, config, mp=False):
