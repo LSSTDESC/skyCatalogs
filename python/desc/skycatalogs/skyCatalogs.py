@@ -2,7 +2,7 @@ import yaml
 from collections import namedtuple
 import healpy
 
-__all__ = ['SkyCatalogs', 'open_catalog', 'Region']
+__all__ = ['SkyCatalog', 'open_catalog', 'Region']
 
 Region = namedtuple('Region', ['ra_min', 'ra_max', 'dec_min', 'dec_max'])
 

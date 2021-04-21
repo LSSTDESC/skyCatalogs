@@ -5,7 +5,10 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import h5py
+
 import GCRCatalogs
+
+from desc.skycatalogs.utils.common_utils import print_date
 
 """
 Code to create a sky catalog for a particular object type
@@ -54,6 +57,7 @@ def create_galaxy_catalog(parts, area_partition, galaxy_truth=None,
         gal_truth = _cosmo_cat
 
     print('gal_truth is ', gal_truth)
+    print('output_dir is ', output_dir)
 
     # If multiprocessing probably should defer this to create_pixel
     gal_cat = GCRCatalogs.load_catalog(gal_truth)
@@ -63,15 +67,18 @@ def create_galaxy_catalog(parts, area_partition, galaxy_truth=None,
         lookup = _sedLookup_dir
 
     for p in parts:
-        print("Start on pixel ", p)
+        print("Starting on pixel ", p)
+        print_date()
         create_pixel(p, area_partition, gal_cat, lookup, output_type, output_dir)
         print("completed pixel ", p)
+        print_date()
 
 def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output_dir):
 
     # Filename templates: input (sedLookup) and our output.  Hardcode for now.
     sedLookup_template = 'sed_fit_{}.h5'
     output_template = 'galaxy_{}.parquet'
+    rel_dir_template = 'galaxy_{}'
     tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
     tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
 
@@ -144,13 +151,34 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
     out_dict['internalRv_bulge'] = bulge_rv
     out_dict['internalAv_disk'] = disk_av
     out_dict['internalRv_disk'] = disk_rv
+    part_values= np.empty_like(out_dict['position_angle'], np.ushort)
 
+    # Increment value of partition column every million entries
+    stride = 1000000
+    for i in np.arange(0, cosmo_gid.shape[0], stride):
+        part_values[i : i + stride] = int(i/stride)
+
+    out_dict['partition_column'] = part_values      # new for toy 3
     out_df = pd.DataFrame.from_dict(out_dict)
     out_table = pa.Table.from_pandas(out_df)
+    print('out_table column names', out_table.column_names)
+    print_date()
 
-    pq.write_table(out_table, os.path.join(output_dir,
-                                           output_template.format(pixel)))
+    print('About to output dataset')
+    print_date()
+    #pq.write_table(out_table, os.path.join(output_dir,
+    #                                       output_template.format(pixel)))
+    metadata_collector = []
+    root_path = os.path.join(output_dir, rel_dir_template.format(pixel))
+    print('root_path is: ', root_path)
 
+
+    pq.write_to_dataset(out_table, root_path, partition_cols=['partition_column'],
+                        metadata_collector=metadata_collector)
+    pq.write_metadata(out_table.schema,
+                      os.path.join(root_path, '_common_metadata'))
+    pq.write_metadata(out_table.schema, os.path.join(root_path, '_metadata'),
+                      metadata_collector=metadata_collector)
 
 # May want a base truth class for this
 
@@ -164,7 +192,8 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
 if __name__ == "__main__":
     area_partition = {'type' : 'healpix', 'ordering' : 'ring', 'nside' : 32}
     parts = [9556]
-    output_dir='/global/cscratch1/sd/jrbogart/desc/skycatalogs/toy2'
+    output_dir='/global/cscratch1/sd/jrbogart/desc/skycatalogs/toy4'
     print('Starting with healpix pixel ', parts[0])
+    print_date()
     create_galaxy_catalog(parts, area_partition, output_dir=output_dir)
     print('All done')
