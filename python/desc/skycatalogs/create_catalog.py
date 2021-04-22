@@ -5,9 +5,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import h5py
-
 import GCRCatalogs
-
 from desc.skycatalogs.utils.common_utils import print_date
 
 """
@@ -57,7 +55,6 @@ def create_galaxy_catalog(parts, area_partition, galaxy_truth=None,
         gal_truth = _cosmo_cat
 
     print('gal_truth is ', gal_truth)
-    print('output_dir is ', output_dir)
 
     # If multiprocessing probably should defer this to create_pixel
     gal_cat = GCRCatalogs.load_catalog(gal_truth)
@@ -78,9 +75,11 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
     # Filename templates: input (sedLookup) and our output.  Hardcode for now.
     sedLookup_template = 'sed_fit_{}.h5'
     output_template = 'galaxy_{}.parquet'
-    rel_dir_template = 'galaxy_{}'
     tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
     tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
+
+    # Number of rows to include in a row group
+    stride = 1000000
 
     # to_fetch = all columns of interest in gal_cat
     non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'shear_1',
@@ -142,43 +141,51 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
         print('lookup galaxies differ from cosmodc2 galaxies in content or ordering')
         exit(1)
 
-    # For first attempt make a parquet file in the simplest possible way
-    out_dict = { k : df[k] for k in non_sed if k != 'position_angle_true'}
-    out_dict['position_angle'] = np.radians(df['position_angle_true'])
-    out_dict['sed_val_bulge'] = bulge_seds
-    out_dict['sed_val_disk'] = disk_seds
-    out_dict['internalAv_bulge'] = bulge_av
-    out_dict['internalRv_bulge'] = bulge_rv
-    out_dict['internalAv_disk'] = disk_av
-    out_dict['internalRv_disk'] = disk_rv
-    part_values= np.empty_like(out_dict['position_angle'], np.ushort)
 
-    # Increment value of partition column every million entries
-    stride = 1000000
-    for i in np.arange(0, cosmo_gid.shape[0], stride):
-        part_values[i : i + stride] = int(i/stride)
+    # Form arrow schema.  To get the type write, easiest to make a tiny
+    # table and extract schema
+    dummy_dict = { k : df[k][:10] for k in non_sed if k != 'position_angle_true'}
+    dummy_dict['position_angle'] = np.radians(df['position_angle_true'][:10])
+    dummy_dict['sed_val_bulge'] = bulge_seds[:10]
+    dummy_dict['sed_val_disk'] = disk_seds[:10]
+    dummy_dict['internalAv_bulge'] = bulge_av[:10]
+    dummy_dict['internalRv_bulge'] = bulge_rv[:10]
+    dummy_dict['internalAv_disk'] = disk_av[:10]
+    dummy_dict['internalRv_disk'] = disk_rv[:10]
 
-    out_dict['partition_column'] = part_values      # new for toy 3
-    out_df = pd.DataFrame.from_dict(out_dict)
-    out_table = pa.Table.from_pandas(out_df)
-    print('out_table column names', out_table.column_names)
-    print_date()
+    dummy_df = pd.DataFrame.from_dict(dummy_dict)
+    dummy_table = pa.Table.from_pandas(dummy_df)
 
-    print('About to output dataset')
-    print_date()
-    #pq.write_table(out_table, os.path.join(output_dir,
-    #                                       output_template.format(pixel)))
-    metadata_collector = []
-    root_path = os.path.join(output_dir, rel_dir_template.format(pixel))
-    print('root_path is: ', root_path)
+    arrow_schema = dummy_table.schema
 
 
-    pq.write_to_dataset(out_table, root_path, partition_cols=['partition_column'],
-                        metadata_collector=metadata_collector)
-    pq.write_metadata(out_table.schema,
-                      os.path.join(root_path, '_common_metadata'))
-    pq.write_metadata(out_table.schema, os.path.join(root_path, '_metadata'),
-                      metadata_collector=metadata_collector)
+    writer = pq.ParquetWriter(os.path.join(output_dir, output_template.format(pixel)), arrow_schema)
+
+    #  Write row groups of size stride (or less) until input is exhausted
+    total_row = lookup_gid.shape[0] - 1
+    u_bnd = min(stride, total_row)
+    l_bnd = 0
+    rg_written = 0
+
+    while u_bnd > l_bnd:
+        out_dict = { k : df[k][l_bnd : u_bnd] for k in non_sed if k != 'position_angle_true'}
+        out_dict['position_angle'] = np.radians(df['position_angle_true'][l_bnd : u_bnd])
+        out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
+        out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
+        out_dict['internalAv_bulge'] = bulge_av[l_bnd : u_bnd]
+        out_dict['internalRv_bulge'] = bulge_rv[l_bnd : u_bnd]
+        out_dict['internalAv_disk'] = disk_av[l_bnd : u_bnd]
+        out_dict['internalRv_disk'] = disk_rv[l_bnd : u_bnd]
+
+        out_df = pd.DataFrame.from_dict(out_dict)
+        out_table = pa.Table.from_pandas(out_df)
+        writer.write_table(out_table)
+        rg_written += 1
+        l_bnd = u_bnd
+        u_bnd = min(l_bnd + stride, total_row)
+
+    writer.close()
+    print("# row groups written: ", rg_written)
 
 # May want a base truth class for this
 
@@ -192,8 +199,7 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
 if __name__ == "__main__":
     area_partition = {'type' : 'healpix', 'ordering' : 'ring', 'nside' : 32}
     parts = [9556]
-    output_dir='/global/cscratch1/sd/jrbogart/desc/skycatalogs/toy4'
+    output_dir='/global/cscratch1/sd/jrbogart/desc/skycatalogs/toy5_rowgroup'
     print('Starting with healpix pixel ', parts[0])
-    print_date()
     create_galaxy_catalog(parts, area_partition, output_dir=output_dir)
     print('All done')
