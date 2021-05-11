@@ -4,6 +4,7 @@ import yaml
 from collections import namedtuple
 import healpy
 import numpy as np
+import numpy.ma as ma
 import pyarrow.parquet as pq
 from objects import *
 
@@ -227,13 +228,17 @@ class SkyCatalog(object):
                 print('Read minimal columns')
                 print('Table shape: ', arrow_t.shape)
                 # Make a boolean array, value set to 1 for objects
-                # inside the region
-                mask = np.logical_and((np.array(arrow_t['ra']) > region.ra_min),
-                                      (np.array(arrow_t['ra']) < region.ra_max))
-                mask = np.logical_and(mask,
-                                      (np.array(arrow_t['dec']) > region.dec_min))
-                mask = np.logical_and(mask,
-                                      (np.array(arrow_t['dec']) < region.dec_max))
+                # outside the region
+                mask = np.logical_or((np.array(arrow_t['ra']) < region.ra_min),
+                                      (np.array(arrow_t['ra']) > region.ra_max))
+                mask = np.logical_or(mask,
+                                      (np.array(arrow_t['dec']) < region.dec_min))
+                mask = np.logical_or(mask,
+                                      (np.array(arrow_t['dec']) > region.dec_max))
+                masked_ra = ma.array(np.array(arrow_t['ra']), mask=mask)
+                print("Masked array size: ", masked_ra.size)
+                print("Masked array compressed size: ", masked_ra.compressed().size)
+
                 obj_collect.append(BaseObjectCollection(arrow_t['ra'],
                                                         arrow_t['dec'],
                                                         arrow_t['galaxy_id'],
@@ -298,9 +303,11 @@ if __name__ == '__main__':
     for h in hps: print(h)
 
     ra_min = 56.0
-    ra_max = 56.2
+    #ra_max = 56.2
+    ra_max = 56.1
     dec_min = -36.4
-    dec_max = -36.2
+    #dec_max = -36.2
+    dec_max = -36.3
     rgn = Region(ra_min, ra_max, dec_min, dec_max)
 
     intersect_hps = _get_intersecting_hps('ring', 32, rgn)
