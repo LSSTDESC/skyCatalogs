@@ -104,6 +104,7 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
 
     sed_bulge_names.sort(key=_sed_bulge_key, reverse=True)
     sed_disk_names.sort(key=_sed_disk_key, reverse=True)
+
     #Fetch the data
     to_fetch = non_sed + sed_bulge_names + sed_disk_names
 
@@ -114,6 +115,11 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
         m = re.match(tophat_bulge_re, s)
         if m:
             tophat_parms.append((m['start'], m['width']))
+
+    #for prm in tophat_parms:
+    #    print('start={}, width={}'.format(prm[0], prm[1]))
+
+    #exit(0)
 
     df = gal_cat.get_quantities(to_fetch,
                                 native_filters=f'healpix_pixel=={pixel}')
@@ -198,7 +204,7 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
 # Try it out
 if __name__ == "__main__":
     area_partition = {'type' : 'healpix', 'ordering' : 'ring', 'nside' : 32}
-    parts = [9556]
+    parts = pixels[4:6]
     output_dir='/global/cscratch1/sd/jrbogart/desc/skycatalogs/toy5_rowgroup'
     print('Starting with healpix pixel ', parts[0])
     create_galaxy_catalog(parts, area_partition, output_dir=output_dir)

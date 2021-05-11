@@ -1,6 +1,11 @@
+import os
+import re
 import yaml
 from collections import namedtuple
 import healpy
+import numpy as np
+import pyarrow.parquet as pq
+from objects import *
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Region']
 
@@ -50,16 +55,55 @@ class SkyCatalog(object):
         # create an empty dict for
         # per-HEALpix pixel information and so forth.
 
-        self._hps = self._find_all_hps()
+        self._validate_config()
+
+        # Outer dict: hpid for key. Value is another dict
+        #    with keys 'files', 'object_types', each with value another dict
+        #    for 'files', map filepath to handle (initially None)
+        #    for 'object_types', map object type to filepath
+        self._hp_info = dict()
+        self._find_all_hps()
+
+    def _validate_config(self):
+        pass
 
     def _find_all_hps(self):
-        # for each file matching pattern in the directory, make an
-        # entry in self._hps
-        #   self._hps[hpid] = {'relpath' : the_filename, gal_handle : None}
-        # When file is open, set gal_handle to the Parquet file object
+        # for each healpix with files matching pattern in the directory,
+        # update _hp_info
+        #   self._hp_info[hpid]['files'] =
+        #     {'relpath' : the_filename, 'handle' : None}    and,
+        #  for each object_type represented in the file,
+        #   self._hp_info[hpid]['object_types'][ot] = the_filename
+        # When file is open, set handle to the Parquet file object
         # (or perhaps something else if underlying format is not Parquet)
 
-        pass         # for now
+        cat_dir = self._config['root_directory']
+
+        # If major organization is by healpix, healpix # will be in
+        # subdirectory name.  Otherwise there may be no subdirectories
+        # or data may be organized by component type.
+        # Here only handle case where data files are directly in root dir
+        files = os.listdir(cat_dir)
+        o_types = self._config['object_types']
+        #####o_types_enum = set([OBJECT_TYPES[t] for t in o_types])
+        hp_set = set()
+        for f in files:
+            for ot in o_types:
+                if 'file_template' in o_types[ot]:
+                    m = re.match(o_types[ot]['file_template'], f)
+                    if m:
+                        hp = int(m['healpix'])
+                        hp_set.add(hp)
+
+                        if hp not in self._hp_info:
+                            self._hp_info[hp] = {'files' : {f : None},
+                                                 'object_types' : {ot : f}}
+                        else:
+                            this_hp = self._hp_info[hp]
+                            if f not in this_hp['files'] :
+                                this_hp['files'][f] = None
+                            this_hp['object_types'][ot] = f
+        return hp_set
 
     def get_hps_by_region(self, region):
         '''
@@ -71,7 +115,8 @@ class SkyCatalog(object):
         return _get_intersecting_hps(
             self._config['area_partition']['ordering'],
             self._config['area_partition']['nside'],
-            region).intersetion(self._hps.keys())
+            region)
+            #.intersection(self._hps.keys())
 
     def get_object_type_names(self):
         return set(self._config['object_types'].keys())
@@ -94,23 +139,24 @@ class SkyCatalog(object):
         # Take intersection of obj_type_list and available object types
         # Determine healpix intersecting the region
 
+        print("Region ", region)
+        print("obj_type_set ", obj_type_set)
         if self._config['area_partition']['type'] == 'healpix':
             hps = self.get_hps_by_region(region)
 
         # otherwise raise a not-supported exception
 
-        objects = []
+        obj_colls = []
         if obj_type_set is None:
             obj_types = self.get_object_type_names()
         else:
-            obj_types = self.get_object_type_names().intersection(obj_types)
+            obj_types = self.get_object_type_names().intersection(obj_type_set)
         for hp in hps:
             # Maybe have a multiprocessing switch? Run-time option when
             # catalog is opened?
-            objects = objects + self.get_objects_by_healpix(datetime, hp,
-                                                            obj_types)
+            obj_colls.append(self.get_objects_by_hp(datetime, region, hp, obj_types))
 
-        return objects
+        return obj_colls
 
     def get_object_iterator_by_region(self, datetime, region,
                                       obj_type_set=None, max_chunk=None):
@@ -133,17 +179,81 @@ class SkyCatalog(object):
         # If so we don't have to check whether individual object are
         # in the region or not.
 
+        # Find the right Sky Catalog file or files (depends on obj_type_set)
         # Get file handle(s) and store if we don't already have it (them)
-        # Read into dataframe
-        # transpose;
-        # create object for each row, plus galaxy object with subcomponents
-        # for each duple or triple with same object id
-        # return collection of objects (and cache under self._hps[hp])
+
+        # Return object collection
+
+        G_COLUMNS = ['galaxy_id', 'ra', 'dec']
+        print('Working on healpix pixel ', hp)
+
+        obj_types = obj_type_set
+        if obj_types is None:
+            obj_types = self._config['object_types'].keys()
+        else:
+            parents = set()
+            for ot in obj_types:
+                if 'parent' in self._config['object_types'][ot]:
+                    parents.add(self._config['object_types'][ot]['parent'])
+            obj_types = obj_types.union(parents)
+
+        # Associate object types with handles.  May be > one type per handle
+        hndl_ot = dict()
+        root_dir = self._config['root_directory']
+        for ot in obj_types:
+            if 'file_template' in self._config['object_types'][ot]:
+                f = self._hp_info[hp]['object_types'][ot]
+            elif 'parent' in self._config['object_types'][ot]:
+                f = self._hp_info[hp]['object_types'][obj_types[ot]['parent']]
+            if f not in self._hp_info[hp]:
+                self._hp_info[hp][f] = pq.ParquetFile(os.path.join(root_dir,f))
+            hndl = self._hp_info[hp][f]
+            if hndl in hndl_ot:
+                hndl_ot[hndl].add(ot)
+                print("added object type for handle ", hndl_ot)
+            else:
+                hndl_ot[hndl] = set([ot])
+                print("added hndl ", hndl, "and object type ", ot)
+
+        # Now get minimal columns for objects using the handles
+        obj_collect = []
+        for h in hndl_ot:
+            print("Object types associated with handle ",h)
+            print(hndl_ot[h])
+            #if 'galaxy' in hndl_ot[h]:
+            if 'galaxy' in hndl_ot[h]:
+                print("about to read table")
+                arrow_t = h.read(columns = G_COLUMNS) # or read_row_group
+                print('Read minimal columns')
+                print('Table shape: ', arrow_t.shape)
+                # Make a boolean array, value set to 1 for objects
+                # inside the region
+                mask = np.logical_and((np.array(arrow_t['ra']) > region.ra_min),
+                                      (np.array(arrow_t['ra']) < region.ra_max))
+                mask = np.logical_and(mask,
+                                      (np.array(arrow_t['dec']) > region.dec_min))
+                mask = np.logical_and(mask,
+                                      (np.array(arrow_t['dec']) < region.dec_max))
+                obj_collect.append(BaseObjectCollection(arrow_t['ra'],
+                                                        arrow_t['dec'],
+                                                        arrow_t['galaxy_id'],
+                                                        'galaxy',
+                                                        include_mask=mask,
+                                                        hp_id=hp,
+                                                        region=region))
+        return obj_collect
 
 
+        # For each
+        #      read in predetermined set of columns (at least id, ra, dec; maybe no more)
+        #      make mask array to select those in region
+        #      create ObjectCollection of correct type (e.g. GALAXY)
+        #
+        # For generator version, do this a row group at a time
+        #    but if region cut leaves too small a list, read more rowgroups
+        #    to achieve a reasonable size list (or exhaust the file)
 
-
-        pass     # implementation to be filled in later
+        # implementation to be filled in later
 
     def get_object_iterator_by_hp(self, datetime, hp, obj_type_set=None,
                                   max_chunk=None):
@@ -174,3 +284,29 @@ def open_catalog(config_file, mp=False):
     '''
     with open(config_file) as f:
         return SkyCatalog(yaml.safe_load(f), mp)
+
+if __name__ == '__main__':
+    cfg_file = '/global/homes/j/jrbogart/Joanne_git/skyCatalogs/cfg/galaxy.yaml'
+
+    # For tract 3828
+    #   55.73604 < ra < 57.563452
+    #  -37.19001 < dec < -35.702481
+
+    cat = open_catalog(cfg_file)
+    hps = cat._find_all_hps()
+    print('Found {} healpix pixels '.format(len(hps)))
+    for h in hps: print(h)
+
+    ra_min = 56.0
+    ra_max = 56.2
+    dec_min = -36.4
+    dec_max = -36.2
+    rgn = Region(ra_min, ra_max, dec_min, dec_max)
+
+    intersect_hps = _get_intersecting_hps('ring', 32, rgn)
+
+    print("For region ", rgn)
+    print("intersecting pixels are ", intersect_hps)
+
+    colls = cat.get_objects_by_region(0, rgn, obj_type_set=set(['galaxy']) )
+    print('Number of collections returned:  ', len(colls))
