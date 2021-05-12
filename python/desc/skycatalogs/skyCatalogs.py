@@ -155,7 +155,9 @@ class SkyCatalog(object):
         for hp in hps:
             # Maybe have a multiprocessing switch? Run-time option when
             # catalog is opened?
-            obj_colls.append(self.get_objects_by_hp(datetime, region, hp, obj_types))
+            c = self.get_objects_by_hp(datetime, region, hp, obj_types)
+            if (len(c)) > 0:
+                obj_colls = obj_colls + c
 
         return obj_colls
 
@@ -176,10 +178,6 @@ class SkyCatalog(object):
         pass
 
     def get_objects_by_hp(self, datetime, region, hp, obj_type_set=None):
-        # Determine if healpix pixel is entirely contained within region.
-        # If so we don't have to check whether individual object are
-        # in the region or not.
-
         # Find the right Sky Catalog file or files (depends on obj_type_set)
         # Get file handle(s) and store if we don't already have it (them)
 
@@ -219,13 +217,13 @@ class SkyCatalog(object):
         # Now get minimal columns for objects using the handles
         obj_collect = []
         for h in hndl_ot:
-            print("Object types associated with handle ",h)
-            print(hndl_ot[h])
+            #print("Object types associated with handle ",h)
+            #print(hndl_ot[h])
             #if 'galaxy' in hndl_ot[h]:
             if 'galaxy' in hndl_ot[h]:
-                print("about to read table")
+                #print("about to read table")
                 arrow_t = h.read(columns = G_COLUMNS) # or read_row_group
-                print('Read minimal columns')
+                #print('Read minimal columns')
                 print('Table shape: ', arrow_t.shape)
                 # Make a boolean array, value set to 1 for objects
                 # outside the region
@@ -238,14 +236,19 @@ class SkyCatalog(object):
                 masked_ra = ma.array(np.array(arrow_t['ra']), mask=mask)
                 print("Masked array size: ", masked_ra.size)
                 print("Masked array compressed size: ", masked_ra.compressed().size)
+                ra_compress = masked_ra.compressed()
+                if ra_compress.size > 0:
+                    dec_compress = ma.array(np.array(arrow_t['dec']), mask=mask)
+                    id_compress = ma.array(np.array(arrow_t['galaxy_id']),
+                                           mask=mask)
 
-                obj_collect.append(BaseObjectCollection(arrow_t['ra'],
-                                                        arrow_t['dec'],
-                                                        arrow_t['galaxy_id'],
-                                                        'galaxy',
-                                                        include_mask=mask,
-                                                        hp_id=hp,
-                                                        region=region))
+                    obj_collect.append(BaseObjectCollection(ra_compress,
+                                                            dec_compress,
+                                                            id_compress,
+                                                            'galaxy',
+                                                            include_mask=mask,
+                                                            hp_id=hp,
+                                                            region=region))
         return obj_collect
 
 
@@ -302,12 +305,12 @@ if __name__ == '__main__':
     print('Found {} healpix pixels '.format(len(hps)))
     for h in hps: print(h)
 
-    ra_min = 56.0
+    ra_min = 55.736
     #ra_max = 56.2
-    ra_max = 56.1
-    dec_min = -36.4
-    #dec_max = -36.2
-    dec_max = -36.3
+    ra_max = 57.564
+    dec_min = -37.190
+    #dec_max = -35.2
+    dec_max = -35.702
     rgn = Region(ra_min, ra_max, dec_min, dec_max)
 
     intersect_hps = _get_intersecting_hps('ring', 32, rgn)
@@ -317,3 +320,6 @@ if __name__ == '__main__':
 
     colls = cat.get_objects_by_region(0, rgn, obj_type_set=set(['galaxy']) )
     print('Number of collections returned:  ', len(colls))
+
+    for c in colls:
+        print("For hpid ", c.get_hpid(), "found ", len(c), " objects")

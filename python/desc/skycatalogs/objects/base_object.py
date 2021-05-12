@@ -114,13 +114,17 @@ class BaseObjectCollection(BaseObject, Sequence):
         ra, dec, id must be array-like.
         object_type  may be either single value or array-like.
         h_id  may be either single value or array-like or None
-        All arrays must be the same length
-        If collection is formed by filtering on region, save that; e.g.
-        save mask array.
+        All arrays must be the same length except for the mask, which may
+        be longer. # zeros in the mask must equal length of other arrays.
+        If mask array is None no filtering was done
+
         '''
         self._ra = np.array(ra)
         self._dec = np.array(dec)
         self._id = np.array(id)
+
+        # Save the mask in case we need to look up other columns later
+        self._include_mask = include_mask
 
         # Maybe the following is silly and hp_id, object_type should always be stored
         # as arrays
@@ -184,7 +188,7 @@ class BaseObjectCollection(BaseObject, Sequence):
         if self._uniform_hp_id:
             hp_id = self._hp_id
         else:
-            hp_id = delf._hp_id[key]
+            hp_id = self._hp_id[key]
 
         if self._uniform_object_type:
             object_type = self._object_type
@@ -199,6 +203,9 @@ class BaseObjectCollection(BaseObject, Sequence):
             return BaseObjectCollection(self.ra[key], self.dec[key].
                                         self.id[key], object_type, hp_id,
                                         region, reader)
+
+    def get_hpid(self):
+        return self._hp_unique        # None if not uniform
 
     def count(self, obj):
         '''
