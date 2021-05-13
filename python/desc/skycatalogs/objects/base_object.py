@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 import numpy as np
+import itertools
 
 '''
 Main object types.   There are also may be subtypes. For example,
@@ -26,9 +27,11 @@ class BaseObject(object):
     Likely need a variant for SSO.
     '''
     def __init__(self, ra, dec, id, object_type, redshift=None,
-                 hp_id=None):
+                 hp_id=None, belongs_to=None):
         '''
         Minimum information needed for static (not SSO) objects
+        ra, dec needed to check for region containment
+        belongs_to is object collection, if any, this object belongs to
         '''
         self._ra = ra
         self._dec = dec
@@ -36,6 +39,7 @@ class BaseObject(object):
         self._object_type = object_type
         ##self._redshift = redshift    #  do we want this?
         self._hp_id = hp_id
+        self._belongs_to = belongs_to
 
 
         # All objects also include redshift information. Also MW extinction,
@@ -123,6 +127,10 @@ class BaseObjectCollection(BaseObject, Sequence):
         self._dec = np.array(dec)
         self._id = np.array(id)
 
+        print("BaseObjectCollection constructor called with hp_id=")
+        print(hp_id)
+        print("type is ", type(hp_id))
+
         # Save the mask in case we need to look up other columns later
         self._include_mask = include_mask
 
@@ -131,16 +139,22 @@ class BaseObjectCollection(BaseObject, Sequence):
         if isinstance(object_type, list):
             self._object_types = np.array(object_type)
             self._object_type_unique = None
+            self._uniform_object_type = False
         else:
             self._object_types = None
             self._object_type_unique = object_type
+            self._uniform_object_type = True
 
         if isinstance(hp_id, list):
+            print("hp_id arg is a list")
             self._hp_ids = np.array(hp_id)
             self._hp_unique = None
+            self._uniform_hp_id = False
         else:
+            print("hp_id arg is a single item: ", hp_id)
             self._hp_ids = None
             self._hp_unique = hp_id
+            self._uniform_hp_id = True
 
         if isinstance(redshift, list):
             self._redshift = np.array(redshift)
@@ -148,10 +162,6 @@ class BaseObjectCollection(BaseObject, Sequence):
             self._redshift = redshift
 
         self._region = region
-        ### self._reader = reader     # Not sure we need this
-
-        self._uniform_object_type = (type(object_type) == type('galaxy'))
-        self._uniform_hp_id = (type(hp_id) == type(10)) or (hp_id is None)
 
         #####if type(object_type) == type
         # do we need to do more here?
@@ -183,26 +193,28 @@ class BaseObjectCollection(BaseObject, Sequence):
         Parameters
         ----------
         If key is an int return a single base object
-        If key is a slice return a BaseObjectCollection
+        If key is a slice return a list of object
         '''
         if self._uniform_hp_id:
-            hp_id = self._hp_id
+            hp_id = self._hp_unique
         else:
-            hp_id = self._hp_id[key]
+            hp_id = self._hp_ids[key]
 
         if self._uniform_object_type:
-            object_type = self._object_type
+            object_type = self._object_type_unique
         else:
-            object_type = self._object_type[key]
+            object_type = self._object_types[key]
 
         if type(key) == type(10):
-            return BaseObject(self.ra[key], self.dec[key]. self.id[key],
-                              object_type, hp_id, region, reader)
+            return BaseObject(self._ra[key], self._dec[key], self._id[key],
+                              object_type, hp_id, belongs_to = self)
 
         else:
-            return BaseObjectCollection(self.ra[key], self.dec[key].
-                                        self.id[key], object_type, hp_id,
-                                        region, reader)
+            ixdata = [i for i in range(min(key.stop,len(self.ra)))]
+            ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
+            return [BaseObject(self.ra[i], self.dec[i], self.id[i],
+                               object_type, hp_id, belongs_to=self)
+                    for i in ixes]
 
     def get_hpid(self):
         return self._hp_unique        # None if not uniform

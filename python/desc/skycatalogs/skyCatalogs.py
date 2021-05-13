@@ -300,18 +300,22 @@ if __name__ == '__main__':
     #   55.73604 < ra < 57.563452
     #  -37.19001 < dec < -35.702481
 
+
     cat = open_catalog(cfg_file)
     hps = cat._find_all_hps()
     print('Found {} healpix pixels '.format(len(hps)))
     for h in hps: print(h)
 
-    ra_min = 55.736
-    #ra_max = 56.2
-    ra_max = 57.564
-    dec_min = -37.190
-    #dec_max = -35.2
-    dec_max = -35.702
-    rgn = Region(ra_min, ra_max, dec_min, dec_max)
+    ra_min_tract = 55.736
+    ra_max_tract = 57.564
+    dec_min_tract = -37.190
+    dec_max_tract = -35.702
+    ra_min_small = 56.0
+    ra_max_small = 56.2
+    dec_min_small = -36.2
+    dec_max_small = -36.0
+
+    rgn = Region(ra_min_small, ra_max_small, dec_min_small, dec_max_small)
 
     intersect_hps = _get_intersecting_hps('ring', 32, rgn)
 
@@ -323,3 +327,10 @@ if __name__ == '__main__':
 
     for c in colls:
         print("For hpid ", c.get_hpid(), "found ", len(c), " objects")
+        print("First object: ")
+        print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec)
+
+        print("Slice [1:3]")
+        slice13 = c[1:3]
+        for o in slice13:
+            print(o)
