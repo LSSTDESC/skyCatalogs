@@ -214,35 +214,33 @@ class SkyCatalog(object):
             the_reader = self._hp_info[hp][f]
             if the_reader in rdr_ot:
                 rdr_ot[the_reader].add(ot)
-                print("added object type for reader ", rdr_ot)
+                #print("added object type for reader ", rdr_ot)
             else:
                 rdr_ot[the_reader] = set([ot])
-                print("added reader ", the_reader, "and object type ", ot)
+                #print("added reader ", the_reader, "and object type ", ot)
 
         # Now get minimal columns for objects using the readers
         obj_collect = []
         for rdr in rdr_ot:
             if 'galaxy' in rdr_ot[rdr]:
-                #print("about to read table")
                 arrow_t = rdr.read_columns(G_COLUMNS) # or read_row_group
-                #print('Read minimal columns')
-                print('Table shape: ', arrow_t.shape)
                 # Make a boolean array, value set to 1 for objects
                 # outside the region
-                mask = np.logical_or((np.array(arrow_t['ra']) < region.ra_min),
-                                      (np.array(arrow_t['ra']) > region.ra_max))
-                mask = np.logical_or(mask,
-                                      (np.array(arrow_t['dec']) < region.dec_min))
-                mask = np.logical_or(mask,
-                                      (np.array(arrow_t['dec']) > region.dec_max))
-                masked_ra = ma.array(np.array(arrow_t['ra']), mask=mask)
+                mask = np.logical_or((arrow_t['ra'] < region.ra_min),
+                                      (arrow_t['ra'] > region.ra_max))
+                mask = np.logical_or(mask, (arrow_t['dec'] < region.dec_min))
+                mask = np.logical_or(mask, (arrow_t['dec'] > region.dec_max))
+
+                # Any future reads should compress output using the mask
+                rdr.set_mask(mask)
+
+                masked_ra = ma.array(arrow_t['ra'], mask=mask)
                 print("Masked array size: ", masked_ra.size)
                 print("Masked array compressed size: ", masked_ra.compressed().size)
                 ra_compress = masked_ra.compressed()
                 if ra_compress.size > 0:
-                    dec_compress = ma.array(np.array(arrow_t['dec']), mask=mask)
-                    id_compress = ma.array(np.array(arrow_t['galaxy_id']),
-                                           mask=mask)
+                    dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
+                    id_compress = ma.array(arrow_t['galaxy_id'], mask=mask).compressed()
 
                     obj_collect.append(BaseObjectCollection(ra_compress,
                                                             dec_compress,
@@ -324,9 +322,20 @@ if __name__ == '__main__':
     for c in colls:
         print("For hpid ", c.get_hpid(), "found ", len(c), " objects")
         print("First object: ")
-        print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec)
+        print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
+              ' belongs_index=', c[0]._belongs_index)
 
         print("Slice [1:3]")
         slice13 = c[1:3]
         for o in slice13:
-            print(o)
+            print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
+                  o._belongs_index)
+        print("Object 1000")
+        print(c[1000], '\nid=', c[1000].id, ' ra=', c[1000].ra, ' dec=',
+              c[1000].dec,
+              ' belongs_index=', c[1000]._belongs_index)
+        slice_late = c[163994:163997]
+        print('\nobjects indexed 163994 through 163996')
+        for o in slice_late:
+            print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
+                  o._belongs_index)

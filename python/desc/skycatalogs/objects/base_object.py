@@ -132,9 +132,9 @@ class BaseObjectCollection(BaseObject, Sequence):
         self._redshift = None
         self._rdr = reader
 
-        print("BaseObjectCollection constructor called with hp_id=")
+        #print("BaseObjectCollection constructor called with hp_id=")
         print(hp_id)
-        print("type is ", type(hp_id))
+        #print("type is ", type(hp_id))
 
         # Save the mask in case we need to look up other columns later
         self._include_mask = include_mask
@@ -175,7 +175,7 @@ class BaseObjectCollection(BaseObject, Sequence):
         def redshift(self):
             if not self._redshift:
                 # read from our file
-                pass
+                self._redshift = self._rdr.read_columns('redshift')
 
 
     # implement Sequence methods
@@ -246,12 +246,8 @@ class BaseObjectCollection(BaseObject, Sequence):
         '''
         return self._id.index(obj.id)
 
-
-
     def add_columns(self, column_dict):
         '''
         Store more information about this collection
         '''
         pass
-
-###def read_objects(f, object_type=None, region=None):
