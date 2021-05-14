@@ -27,7 +27,7 @@ class BaseObject(object):
     Likely need a variant for SSO.
     '''
     def __init__(self, ra, dec, id, object_type, redshift=None,
-                 hp_id=None, belongs_to=None):
+                 hp_id=None, belongs_to=None, belongs_index=None):
         '''
         Minimum information needed for static (not SSO) objects
         ra, dec needed to check for region containment
@@ -37,9 +37,10 @@ class BaseObject(object):
         self._dec = dec
         self._id = id
         self._object_type = object_type
-        ##self._redshift = redshift    #  do we want this?
+        self._redshift = redshift
         self._hp_id = hp_id
         self._belongs_to = belongs_to
+        self._belongs_index = belongs_index
 
 
         # All objects also include redshift information. Also MW extinction,
@@ -63,6 +64,9 @@ class BaseObject(object):
 
     @property
     def redshift(self):
+        if self._redshift:        return self._redshift
+        if self._belongs_to:
+            self._redshift = self._belongs_to.redshift[self._belongs_index]
         return self._redshift
 
     @property
@@ -109,8 +113,7 @@ class BaseObjectCollection(BaseObject, Sequence):
     '''
     def __init__(self, ra, dec, id, object_type, include_mask = None,
                  redshift=None,
-                 hp_id=None, region=None):
-                 #reader=None):
+                 hp_id=None, indexes = None, region=None, reader=None):
         '''
         Minimum information needed for static objects.
         (Not sure redshift is necessary.  reader even less likely)
@@ -126,6 +129,8 @@ class BaseObjectCollection(BaseObject, Sequence):
         self._ra = np.array(ra)
         self._dec = np.array(dec)
         self._id = np.array(id)
+        self._redshift = None
+        self._rdr = reader
 
         print("BaseObjectCollection constructor called with hp_id=")
         print(hp_id)
@@ -165,6 +170,13 @@ class BaseObjectCollection(BaseObject, Sequence):
 
         #####if type(object_type) == type
         # do we need to do more here?
+
+        @property
+        def redshift(self):
+            if not self._redshift:
+                # read from our file
+                pass
+
 
     # implement Sequence methods
     def __contains__(self, obj):
@@ -207,13 +219,15 @@ class BaseObjectCollection(BaseObject, Sequence):
 
         if type(key) == type(10):
             return BaseObject(self._ra[key], self._dec[key], self._id[key],
-                              object_type, hp_id, belongs_to = self)
+                              object_type, hp_id, belongs_to=self,
+                              belongs_index=key)
 
         else:
             ixdata = [i for i in range(min(key.stop,len(self.ra)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
             return [BaseObject(self.ra[i], self.dec[i], self.id[i],
-                               object_type, hp_id, belongs_to=self)
+                               object_type, hp_id, belongs_to=self,
+                               belongs_index=i)
                     for i in ixes]
 
     def get_hpid(self):

@@ -7,6 +7,8 @@ import numpy as np
 import numpy.ma as ma
 import pyarrow.parquet as pq
 from objects import *
+from readers import *
+from readers import ParquetReader
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Region']
 
@@ -196,8 +198,8 @@ class SkyCatalog(object):
                     parents.add(self._config['object_types'][ot]['parent'])
             obj_types = obj_types.union(parents)
 
-        # Associate object types with handles.  May be > one type per handle
-        hndl_ot = dict()
+        # Associate object types with readers.  May be > one type per reader
+        rdr_ot = dict()
         root_dir = self._config['root_directory']
         for ot in obj_types:
             if 'file_template' in self._config['object_types'][ot]:
@@ -205,24 +207,24 @@ class SkyCatalog(object):
             elif 'parent' in self._config['object_types'][ot]:
                 f = self._hp_info[hp]['object_types'][obj_types[ot]['parent']]
             if f not in self._hp_info[hp]:
-                self._hp_info[hp][f] = pq.ParquetFile(os.path.join(root_dir,f))
-            hndl = self._hp_info[hp][f]
-            if hndl in hndl_ot:
-                hndl_ot[hndl].add(ot)
-                print("added object type for handle ", hndl_ot)
+                ##self._hp_info[hp][f] = pq.ParquetFile(os.path.join(root_dir,f))
+                # or maybe something like
+                the_reader = parquet_reader.ParquetReader(os.path.join(root_dir,f))
+                self._hp_info[hp][f] = the_reader
+            the_reader = self._hp_info[hp][f]
+            if the_reader in rdr_ot:
+                rdr_ot[the_reader].add(ot)
+                print("added object type for reader ", rdr_ot)
             else:
-                hndl_ot[hndl] = set([ot])
-                print("added hndl ", hndl, "and object type ", ot)
+                rdr_ot[the_reader] = set([ot])
+                print("added reader ", the_reader, "and object type ", ot)
 
-        # Now get minimal columns for objects using the handles
+        # Now get minimal columns for objects using the readers
         obj_collect = []
-        for h in hndl_ot:
-            #print("Object types associated with handle ",h)
-            #print(hndl_ot[h])
-            #if 'galaxy' in hndl_ot[h]:
-            if 'galaxy' in hndl_ot[h]:
+        for rdr in rdr_ot:
+            if 'galaxy' in rdr_ot[rdr]:
                 #print("about to read table")
-                arrow_t = h.read(columns = G_COLUMNS) # or read_row_group
+                arrow_t = rdr.read_columns(G_COLUMNS) # or read_row_group
                 #print('Read minimal columns')
                 print('Table shape: ', arrow_t.shape)
                 # Make a boolean array, value set to 1 for objects
@@ -248,20 +250,14 @@ class SkyCatalog(object):
                                                             'galaxy',
                                                             include_mask=mask,
                                                             hp_id=hp,
-                                                            region=region))
+                                                            region=region,
+                                                            reader=rdr))
         return obj_collect
 
 
-        # For each
-        #      read in predetermined set of columns (at least id, ra, dec; maybe no more)
-        #      make mask array to select those in region
-        #      create ObjectCollection of correct type (e.g. GALAXY)
-        #
         # For generator version, do this a row group at a time
         #    but if region cut leaves too small a list, read more rowgroups
         #    to achieve a reasonable size list (or exhaust the file)
-
-        # implementation to be filled in later
 
     def get_object_iterator_by_hp(self, datetime, hp, obj_type_set=None,
                                   max_chunk=None):
