@@ -66,7 +66,7 @@ class BaseObject(object):
     def redshift(self):
         if self._redshift:        return self._redshift
         if self._belongs_to:
-            self._redshift = self._belongs_to.redshift[self._belongs_index]
+            self._redshift = self._belongs_to.redshifts()[self._belongs_index]
         return self._redshift
 
     @property
@@ -105,7 +105,7 @@ class BaseObject(object):
         raise NotImplementedError
 
 
-class BaseObjectCollection(BaseObject, Sequence):
+class BaseObjectCollection(Sequence):
     '''
     Abstract base class for collection of static objects.
     Many of the methods look the same as for BaseObject but they return arrays
@@ -129,7 +129,7 @@ class BaseObjectCollection(BaseObject, Sequence):
         self._ra = np.array(ra)
         self._dec = np.array(dec)
         self._id = np.array(id)
-        self._redshift = None
+        self._redshifts = None
         self._rdr = reader
 
         #print("BaseObjectCollection constructor called with hp_id=")
@@ -162,21 +162,17 @@ class BaseObjectCollection(BaseObject, Sequence):
             self._uniform_hp_id = True
 
         if isinstance(redshift, list):
-            self._redshift = np.array(redshift)
+            self._redshifts = np.array(redshift)
         else:
-            self._redshift = redshift
+            self._redshifts = redshift
 
         self._region = region
 
-        #####if type(object_type) == type
-        # do we need to do more here?
-
-        @property
-        def redshift(self):
-            if not self._redshift:
-                # read from our file
-                self._redshift = self._rdr.read_columns('redshift')
-
+    def redshifts(self):
+        if not self._redshifts:
+            # read from our file
+            self._redshifts = self._rdr.read_columns(['redshift'])['redshift']
+        return self._redshifts
 
     # implement Sequence methods
     def __contains__(self, obj):
@@ -195,7 +191,7 @@ class BaseObjectCollection(BaseObject, Sequence):
         return id in self._id
 
     def __len__(self):
-        return len(self.id)
+        return len(self._id)
 
     #def __iter__(self):   Standard impl based on __getitem__ should be ok
     #def __reversed__(self):   Default implementation ok
@@ -219,13 +215,13 @@ class BaseObjectCollection(BaseObject, Sequence):
 
         if type(key) == type(10):
             return BaseObject(self._ra[key], self._dec[key], self._id[key],
-                              object_type, hp_id, belongs_to=self,
+                              object_type, hp_id=hp_id, belongs_to=self,
                               belongs_index=key)
 
         else:
-            ixdata = [i for i in range(min(key.stop,len(self.ra)))]
+            ixdata = [i for i in range(min(key.stop,len(self._ra)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
-            return [BaseObject(self.ra[i], self.dec[i], self.id[i],
+            return [BaseObject(self._ra[i], self._dec[i], self._id[i],
                                object_type, hp_id, belongs_to=self,
                                belongs_index=i)
                     for i in ixes]

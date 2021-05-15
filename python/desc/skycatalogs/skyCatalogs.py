@@ -339,3 +339,11 @@ if __name__ == '__main__':
         for o in slice_late:
             print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
                   o._belongs_index)
+
+    coll = colls[0]
+    print(type(coll))
+    #reds = coll.redshifts()
+    #print('redshift length: ', len(reds))
+    #print('first few: ', reds[0], ' ', reds[1], ' ', reds[2])
+    redshift0 = coll[0].redshift
+    print('First redshift: ', redshift0)

@@ -1,6 +1,7 @@
 import pyarrow as pa
 import pyarrow.parquet as pq
 import numpy as np
+import numpy.ma as ma
 import warnings
 
 __all__ = ['ParquetReader']
@@ -43,14 +44,14 @@ class ParquetReader:
         '''
 
         d = dict()
-        use_mask = apply_mask and self._mask
+        use_mask = apply_mask and (self._mask is not None)
         if not self._pqfile:
             self._open()
         tbl = self._pqfile.read(columns = cols)
         for c in cols:
             c_data = np.array(tbl[c])
             if use_mask:
-                d[c] = ma.array(c_data, mask=mask).compressed()
+                d[c] = ma.array(c_data, mask=self._mask).compressed()
             else:
                 d[c] = c_data
 
