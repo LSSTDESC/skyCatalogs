@@ -61,4 +61,4 @@ class ParquetReader:
         if not self._mask:
             self._mask = mask
         else:
-            warnings.warn('ParquetReader: override of mask existing setting ignored')
+            warnings.warn('ParquetReader: override of mask existing setting not allowed. Mask is unchanged')
