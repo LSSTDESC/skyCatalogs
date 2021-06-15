@@ -3,18 +3,23 @@ def class GalaxyObject(BaseObject):
 '''
 Galaxy object.
 '''
-    def __init__(self, ra, dec, id, hp_id):
+      def __init__(self, ra, dec, id, redshift=None, hp_id=None,
+                   belongs_to=None, belongs_index=None)
         '''
-        Minimum information needed for static (not SSO) objects
+        Minimum information needed for position static (not SSO) objects
         Type of object_type should perhaps be an enumeration
         '''
-        super().__init__(ra, dec, id, hp_id, BaseObject.GALAXY)
-        self._cmps = {GALAXY_BULGE : BulgeObject(ra, dec, id, hp_id, self),
-                      GALAXY_DISK : DiskObject(ra, dec, id, hp_id, self),
-                      GALAXY_KNOTS : KnotsObject(ra,dec, id, hp_id, self)}
+        super().__init__(ra, dec, id, BaseObject.GALAXY, redshift,
+                         hp_id, belongs_to, belongs_index)
 
-    def get_subcomponent(self, cmp_type):
-        return self._cmps.get(cmp_type)
+        # self._cmps = {GALAXY_BULGE : GalaxySub(self, GALAXY_BULGE),
+        #               GALAXY_DISK : GalaxySub(self, GALAXY_DISK)}
+        # Don't always have knots.  When we do, handling could be different
+        #               GALAXY_KNOTS : GalaxySub(self, GALAXY_KNOTS)
+        #    or         GALAXY_KNOTS : KnotsObject(self)
+
+    # def get_subcomponent(self, cmp_type):
+    #     return self._cmps.get(cmp_type)
 
     def get_flux(self, date_time, band):
         '''
@@ -25,6 +30,9 @@ Galaxy object.
                     (and filter characteristics?)
         '''
         raise NotImplementedError
+
+    ##### -------------------------------------------
+    # Everything below this line needs thought, likely redesign
 
     def get_sed(self, subcomponent_list=[GALAXY_BULGE, GALAXY_DISK, GALAXY_KNOTS], **kwargs):
         '''
@@ -47,21 +55,23 @@ Galaxy object.
 
         return d
 
-# If galaxy subcomponents all implement their methods the same way probably can
-# get by with just one subcomponent class.  Does the bulge need to know it's a
-# bulge, or is it sufficient that the parent knows?
+# All galaxy information which is not indirected (e.g. if SEDs are stored
+# in files there will be separate ones for different components) is read
+# in at once. Provide a way to restrict information returned to a particular
+# component if desired
 
-def class GalaxyBulge(BaseObject):
-    def __init__(self, ra, dec, id, parent):
-        super().__init__(ra, dec, id, BaseObject.GALAXY_BULGE)
-        self._parent = parent
 
-def class GalaxyDisk(BaseObject):
-    def __init__(self, ra, dec, id, parent):
-        super().__init__(ra, dec, id, BaseObject.GALAXY_DISK)
+def class GalaxySub(object):
+    def __init__(self, parent, component_type):
         self._parent = parent
+        self._cmp = component_type
 
-def class GalaxyKnots(BaseObject):
-    def __init__(self, ra, dec, id, parent):
-        super().__init__(ra, dec, id, BaseObject.GALAXY_KNOTS)
+    def get_sed(self):
+        pass
+
+    def
+
+def class GalaxyKnots(object):
+    def __init__(self, parent):
         self._parent = parent
+        self._cmp = GALAXY_KNOTS
