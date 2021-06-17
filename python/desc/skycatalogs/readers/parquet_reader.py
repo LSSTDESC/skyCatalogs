@@ -14,7 +14,8 @@ class ParquetReader:
     '''
     def __init__(self, filepath, mask=None):
         self._filepath = filepath
-        self._pqfile = self._open()
+        self._open()
+        self._columns = set(self._pqfile.schema.names)
         self._mask = mask
 
     def _open(self):
@@ -42,6 +43,10 @@ class ParquetReader:
         -------
         dict where keys are column names, values are numpy arrays
         '''
+
+        if not set(cols).issubset(self._columns):
+            # raise exception?   For now, just
+            return None
 
         d = dict()
         use_mask = apply_mask and (self._mask is not None)

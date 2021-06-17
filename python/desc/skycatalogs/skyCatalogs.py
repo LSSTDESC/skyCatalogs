@@ -358,7 +358,11 @@ if __name__ == '__main__':
     print("For region ", rgn)
     print("intersecting pixels are ", intersect_hps)
 
+    print('Invoke get_objects_by_hp with box region')
     colls = cat.get_objects_by_region(0, rgn, obj_type_set=set(['galaxy']) )
+    # Try out get_objects_by_hp with no region
+    #print('Invoke get_objects_by_hp with region=None')
+    #colls = cat.get_objects_by_hp(0, 9812, None, obj_type_set=set(['galaxy']) )
     print('Number of collections returned:  ', len(colls))
 
     for c in colls:

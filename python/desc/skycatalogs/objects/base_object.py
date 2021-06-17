@@ -129,7 +129,7 @@ class BaseObjectCollection(Sequence):
         self._ra = np.array(ra)
         self._dec = np.array(dec)
         self._id = np.array(id)
-        self._redshifts = None
+        self._redshift = None
         self._rdr = reader
 
         #print("BaseObjectCollection constructor called with hp_id=")
@@ -169,10 +169,28 @@ class BaseObjectCollection(Sequence):
         self._region = region
 
     def redshifts(self):
-        if not self._redshifts:
+        if not self._redshift:
             # read from our file
-            self._redshifts = self._rdr.read_columns(['redshift'])['redshift']
-        return self._redshifts
+            ##self._redshift = self._rdr.read_columns(['redshift'])['redshift']
+            self._redshift = self.get_attribute('redshift')
+        return self._redshift
+
+    def get_attribute(self, attribute_name):
+        '''
+        Retrieve a particular attribute for a source.
+        If we already have it, just return it.  Otherwise attempt
+        to fetch.   Reader should check whether the attribute actually
+        exists.
+        '''
+        val = getattr(self, attribute_name, None)
+        if val is not None: return val
+
+        val = self._rdr.read_columns([attribute_name])[attribute_name]
+        if val is not None:
+            setattr(self, attribute_name, val)
+        return val
+
+
 
     # implement Sequence methods
     def __contains__(self, obj):
