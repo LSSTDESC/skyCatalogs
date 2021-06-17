@@ -393,3 +393,11 @@ if __name__ == '__main__':
     #print('first few: ', reds[0], ' ', reds[1], ' ', reds[2])
     redshift0 = coll[0].redshift
     print('First redshift: ', redshift0)
+
+    sed_bulges = coll.get_attribute('sed_val_bulge')
+
+    print("first bulge sed:")
+    for v in sed_bulges[0]:
+        print(v)
+    #convergence = coll.get_attribute('convergence')
+    #print("first convergence: ", convergence[0])

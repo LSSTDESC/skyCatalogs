@@ -14,9 +14,12 @@ class ParquetReader:
     '''
     def __init__(self, filepath, mask=None):
         self._filepath = filepath
-        self._open()
-        self._columns = set(self._pqfile.schema.names)
+        # meta data includes num_columns, num_rows, num_row_groups
+        self._meta = pq.read_metadata(filepath)
+        self._schema = pq.read_schema(filepath)
+        self._columns = set(self._schema.names)
         self._mask = mask
+        self._open()
 
     def _open(self):
         self._pqfile = pq.ParquetFile(self._filepath)
