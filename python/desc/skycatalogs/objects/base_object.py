@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from collections import namedtuple
 import numpy as np
 import itertools
 
@@ -8,7 +9,7 @@ there could be two subtypes for bulge components, differing in the
 form of their associated SEDs
 '''
 
-__all__ = ['BaseObject', 'BaseObjectCollection', 'OBJECT_TYPES']
+__all__ = ['BaseObject', 'ObjectCollection', 'ObjectList', 'OBJECT_TYPES']
 GALAXY=1
 GALAXY_BULGE=2
 GALAXY_DISK=3
@@ -27,7 +28,7 @@ class BaseObject(object):
     Likely need a variant for SSO.
     '''
     def __init__(self, ra, dec, id, object_type, redshift=None,
-                 hp_id=None, belongs_to=None, belongs_index=None):
+                 partition_id=None, belongs_to=None, belongs_index=None):
         '''
         Minimum information needed for static (not SSO) objects
         ra, dec needed to check for region containment
@@ -38,10 +39,9 @@ class BaseObject(object):
         self._id = id
         self._object_type = object_type
         self._redshift = redshift
-        self._hp_id = hp_id
+        self._partition_id = partition_id
         self._belongs_to = belongs_to
         self._belongs_index = belongs_index
-
 
         # All objects also include redshift information. Also MW extinction,
         # but extinction is by subcomponent for galaxies
@@ -69,12 +69,18 @@ class BaseObject(object):
             self._redshift = self._belongs_to.redshifts()[self._belongs_index]
         return self._redshift
 
+    # About to become obsolete when BaseObjectCollection is replaced
+    # by new class ObjectCollection
     @property
-    def hp_id(self):
-        if not self._hp_id:
+    def partition_id(self):
+        if not self._partition_id:
             # Need to compute from ra, dec, but for now
             pass
-        return self._hp_id
+        return self._partition_id
+
+    @property
+    def partition_id(self):
+        return self._belongs_to.partition_id
 
     def get_flux(self, date_time, band, noMW=False):
         '''
@@ -104,26 +110,23 @@ class BaseObject(object):
         '''
         raise NotImplementedError
 
-
-class BaseObjectCollection(Sequence):
+class ObjectCollection(Sequence):
     '''
-    Abstract base class for collection of static objects.
+    Class for collection of static objects coming from the same
+    source (e.g., file for particular healpix)
     Many of the methods look the same as for BaseObject but they return arrays
     rather than a single number.  There are some additional methods
     '''
-    def __init__(self, ra, dec, id, object_type, include_mask = None,
-                 redshift=None,
-                 hp_id=None, indexes = None, region=None, reader=None):
+    def __init__(self, ra, dec, id, object_type, partition_id,
+                 redshift=None, indexes = None, region=None, reader=None):
         '''
         Minimum information needed for static objects.
         (Not sure redshift is necessary.  reader even less likely)
 
         ra, dec, id must be array-like.
         object_type  may be either single value or array-like.
-        h_id  may be either single value or array-like or None
-        All arrays must be the same length except for the mask, which may
-        be longer. # zeros in the mask must equal length of other arrays.
-        If mask array is None no filtering was done
+        partition_id (e.g. healpix id)
+        All arrays must be the same length
 
         '''
         self._ra = np.array(ra)
@@ -131,15 +134,11 @@ class BaseObjectCollection(Sequence):
         self._id = np.array(id)
         self._redshift = None
         self._rdr = reader
+        self._partition_id = partition_id
 
-        #print("BaseObjectCollection constructor called with hp_id=")
-        print(hp_id)
-        #print("type is ", type(hp_id))
+        print(partition_id)
 
-        # Save the mask in case we need to look up other columns later
-        self._include_mask = include_mask
-
-        # Maybe the following is silly and hp_id, object_type should always be stored
+        # Maybe the following is silly and object_type should always be stored
         # as arrays
         if isinstance(object_type, list):
             self._object_types = np.array(object_type)
@@ -150,17 +149,6 @@ class BaseObjectCollection(Sequence):
             self._object_type_unique = object_type
             self._uniform_object_type = True
 
-        if isinstance(hp_id, list):
-            print("hp_id arg is a list")
-            self._hp_ids = np.array(hp_id)
-            self._hp_unique = None
-            self._uniform_hp_id = False
-        else:
-            print("hp_id arg is a single item: ", hp_id)
-            self._hp_ids = None
-            self._hp_unique = hp_id
-            self._uniform_hp_id = True
-
         if isinstance(redshift, list):
             self._redshifts = np.array(redshift)
         else:
@@ -168,10 +156,13 @@ class BaseObjectCollection(Sequence):
 
         self._region = region
 
+    @property
+    def partition_id(self):
+        return self._partition_id
+
     def redshifts(self):
         if not self._redshift:
             # read from our file
-            ##self._redshift = self._rdr.read_columns(['redshift'])['redshift']
             self._redshift = self.get_attribute('redshift')
         return self._redshift
 
@@ -189,8 +180,6 @@ class BaseObjectCollection(Sequence):
         if val is not None:
             setattr(self, attribute_name, val)
         return val
-
-
 
     # implement Sequence methods
     def __contains__(self, obj):
@@ -221,11 +210,8 @@ class BaseObjectCollection(Sequence):
         If key is an int return a single base object
         If key is a slice return a list of object
         '''
-        if self._uniform_hp_id:
-            hp_id = self._hp_unique
-        else:
-            hp_id = self._hp_ids[key]
 
+        partition_id = self._partition_id
         if self._uniform_object_type:
             object_type = self._object_type_unique
         else:
@@ -233,19 +219,19 @@ class BaseObjectCollection(Sequence):
 
         if type(key) == type(10):
             return BaseObject(self._ra[key], self._dec[key], self._id[key],
-                              object_type, hp_id=hp_id, belongs_to=self,
+                              object_type, partition_id=partition_id, belongs_to=self,
                               belongs_index=key)
 
         else:
             ixdata = [i for i in range(min(key.stop,len(self._ra)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
             return [BaseObject(self._ra[i], self._dec[i], self._id[i],
-                               object_type, hp_id, belongs_to=self,
-                               belongs_index=i)
+                               object_type, partition_id=partition_id,
+                               belongs_to=self, belongs_index=i)
                     for i in ixes]
 
-    def get_hpid(self):
-        return self._hp_unique        # None if not uniform
+    def get_partition_id(self):
+        return self._partition_id
 
     def count(self, obj):
         '''
@@ -260,8 +246,133 @@ class BaseObjectCollection(Sequence):
         '''
         return self._id.index(obj.id)
 
-    def add_columns(self, column_dict):
+    #### See get_attribute
+    # def add_columns(self, column_dict):
+    #     '''
+    #     Store more information about this collection
+    #     '''
+    #     pass
+
+LocatedCollection = namedtuple('LocatedCollection',
+                               ['collection', 'first_index', 'upper_bound'])
+'''
+Describes collection included in a list of collections to be concatenated
+   collection:     the data
+   first_index: index in the concatenated list of first elt in this collection
+   upper_bound: index + 1 in concatenated list of last elt in this collection
+      so upper_bound for one collection = first_index in the next
+'''
+
+class ObjectList(Sequence):
+    '''
+    Keep track of a list of ObjectCollection objects, but from user
+    perspective appears to be a list of objects.  Make use of ObjectCollection
+    implementation of Sequence until it's time to move to the next
+    ObjectCollection
+    '''
+
+    def __init__(self):
+        # Elements of _located are named tuples:
+        #   (collection, first_index, upper_bound)
+        self._located = []
+        self._total_len = 0
+
+    def append_collection(self, coll):
+        old = self._total_len
+        self._total_len += len(coll)
+        self._located.append(LocatedCollection(coll, old, self._total_len))
+
+    def append_object_list(self, object_list):
+        for e in object_list._located:
+            self.append_collection(e.collection)
+
+    def redshifts(self):
+        return self.get_attribute('redshift')
+
+    def get_attribute(self, attribute_name):
         '''
-        Store more information about this collection
+        Retrieve a particular attribute for a source.
+        The work is delegated to each of the constituent collections
         '''
-        pass
+        val = self._located[0].collection.get_attribute(attribute_name)
+        for c in self._located[1:]:
+            np.append(val, c.collection.get_attribute(attribute_name))
+
+        return val
+
+    @property
+    def collection_count(self):
+        return len(self._located)
+
+    def get_collections(self):
+        '''
+        return constituent ObjectCollection objects in a list
+        '''
+        collections = []
+        for  e in self._located:
+            collections.append(e.collection)
+
+        return collections
+
+
+    # implement Sequence methods
+    def __contains__(self, obj):
+        '''
+        Parameters
+        ----------
+        obj can be an (object id) or of type BaseObject
+        '''
+        if type(obj) == type(10):
+            id = obj
+        else:
+            if isinstance(obj, BaseObject):
+                id = obj.id
+            else:
+                raise TypeError
+
+        for e in self._located:
+            if id in e.collection._id:
+                return True
+
+        return False
+
+    def __len__(self):
+        return self._total_len
+
+    #     Remainder needs work
+
+    #def __iter__(self):   Standard impl based on __getitem__ should be ok??
+    #def __reversed__(self):   Default implementation ok??
+
+    def __getitem__(self, key):
+        '''
+        Parameters
+        ----------
+        If key is an int return a single base object
+        If key is a slice return a list of object
+        '''
+        one_only =  type(key) == type(10)
+
+        my_element = None
+        if one_only:
+            start = key
+        else:
+            start = key.start
+
+        to_return = []
+        for e in self._located:
+            if start >= e.first_index and start < e.upper_bound:
+                my_element = e
+                rel_first_index = start - e.first_index
+                if one_only:
+                    return e.collection[rel_first_index]
+                if key.stop < e.upper_bound:
+                    rel_stop_ix = key.stop - e.first_index
+                    to_return += e.collection[slice(rel_first_index,
+                                                    rel_stop_ix)]
+                    return to_return
+                else:
+                    to_return += e.collection[slice(rel_first_index, None)]
+                    start = e.upper_bound
+
+        return to_return

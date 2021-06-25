@@ -104,7 +104,7 @@ class SkyCatalog(object):
         # Here only handle case where data files are directly in root dir
         files = os.listdir(cat_dir)
         o_types = self._config['object_types']
-        #####o_types_enum = set([OBJECT_TYPES[t] for t in o_types])
+
         hp_set = set()
         for f in files:
             for ot in o_types:
@@ -154,7 +154,8 @@ class SkyCatalog(object):
 
         Returns
         -------
-        Collection of SkyObjects visible in the region at the specified time
+        ObjectList containing sky objects visible in the region
+        [at the specified time]
         '''
         # Take intersection of obj_type_list and available object types
         # Determine healpix intersecting the region
@@ -166,7 +167,7 @@ class SkyCatalog(object):
 
         # otherwise raise a not-supported exception
 
-        obj_colls = []
+        object_list = ObjectList()
         if obj_type_set is None:
             obj_types = self.get_object_type_names()
         else:
@@ -176,9 +177,10 @@ class SkyCatalog(object):
             # catalog is opened?
             c = self.get_objects_by_hp(datetime, hp, region, obj_types)
             if (len(c)) > 0:
-                obj_colls = obj_colls + c
+                ###obj_colls = obj_colls + c
+                object_list.append_object_list(c)
 
-        return obj_colls
+        return object_list
 
     def get_object_iterator_by_region(self, datetime, region=None,
                                       obj_type_set=None, max_chunk=None):
@@ -200,7 +202,8 @@ class SkyCatalog(object):
         # Find the right Sky Catalog file or files (depends on obj_type_set)
         # Get file handle(s) and store if we don't already have it (them)
 
-        # Return list of object collections
+        # Returns: ObjectList containing sky objects in the region and the hp
+        object_list = ObjectList()
 
         G_COLUMNS = ['galaxy_id', 'ra', 'dec']
         print('Working on healpix pixel ', hp)
@@ -224,8 +227,6 @@ class SkyCatalog(object):
             elif 'parent' in self._config['object_types'][ot]:
                 f = self._hp_info[hp]['object_types'][obj_types[ot]['parent']]
             if f not in self._hp_info[hp]:
-                ##self._hp_info[hp][f] = pq.ParquetFile(os.path.join(root_dir,f))
-                # or maybe something like
                 the_reader = parquet_reader.ParquetReader(os.path.join(root_dir,f))
                 self._hp_info[hp][f] = the_reader
             the_reader = self._hp_info[hp][f]
@@ -237,7 +238,7 @@ class SkyCatalog(object):
                 #print("added reader ", the_reader, "and object type ", ot)
 
         # Now get minimal columns for objects using the readers
-        obj_collect = []
+        ##obj_collect = []
         for rdr in rdr_ot:
             if 'galaxy' in rdr_ot[rdr]:
                 arrow_t = rdr.read_columns(G_COLUMNS) # or read_row_group
@@ -284,15 +285,14 @@ class SkyCatalog(object):
                     dec_compress = arrow_t['dec']
                     id_compress = arrow_t['galaxy_id']
 
-                obj_collect.append(BaseObjectCollection(ra_compress,
-                                                        dec_compress,
-                                                        id_compress,
-                                                        'galaxy',
-                                                        include_mask=mask,
-                                                        hp_id=hp,
-                                                        region=region,
-                                                        reader=rdr))
-        return obj_collect
+                object_list.append_collection(ObjectCollection(ra_compress,
+                                                               dec_compress,
+                                                               id_compress,
+                                                               'galaxy',
+                                                               hp,
+                                                               region=region,
+                                                               reader=rdr))
+        return object_list
 
 
         # For generator version, do this a row group at a time
@@ -358,15 +358,17 @@ if __name__ == '__main__':
     print("For region ", rgn)
     print("intersecting pixels are ", intersect_hps)
 
-    print('Invoke get_objects_by_hp with box region')
-    colls = cat.get_objects_by_region(0, rgn, obj_type_set=set(['galaxy']) )
+    print('Invoke get_objects_by_region with box region')
+    object_list = cat.get_objects_by_region(0, rgn,
+                                            obj_type_set=set(['galaxy']) )
     # Try out get_objects_by_hp with no region
-    #print('Invoke get_objects_by_hp with region=None')
     #colls = cat.get_objects_by_hp(0, 9812, None, obj_type_set=set(['galaxy']) )
-    print('Number of collections returned:  ', len(colls))
 
+    print('Number of collections returned:  ', object_list.collection_count)
+
+    colls = object_list.get_collections()
     for c in colls:
-        print("For hpid ", c.get_hpid(), "found ", len(c), " objects")
+        print("For hpid ", c.get_partition_id(), "found ", len(c), " objects")
         print("First object: ")
         print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
               ' belongs_index=', c[0]._belongs_index)
@@ -386,15 +388,15 @@ if __name__ == '__main__':
             print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
                   o._belongs_index)
 
-    coll = colls[0]
-    print(type(coll))
-    #reds = coll.redshifts()
-    #print('redshift length: ', len(reds))
-    #print('first few: ', reds[0], ' ', reds[1], ' ', reds[2])
-    redshift0 = coll[0].redshift
+    print('Total object count: ', len(object_list))
+
+    obj = object_list[0]
+    print("Type of element in object_list:", type(obj))
+
+    redshift0 = object_list[0].redshift
     print('First redshift: ', redshift0)
 
-    sed_bulges = coll.get_attribute('sed_val_bulge')
+    sed_bulges = colls[0].get_attribute('sed_val_bulge')
 
     print("first bulge sed:")
     for v in sed_bulges[0]:
