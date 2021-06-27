@@ -14,8 +14,11 @@ class ParquetReader:
     '''
     def __init__(self, filepath, mask=None):
         self._filepath = filepath
-        self._pqfile = self._open()
-        self._mask = mask
+        # meta data includes num_columns, num_rows, num_row_groups
+        self._meta = pq.read_metadata(filepath)
+        self._schema = pq.read_schema(filepath)
+        self._columns = set(self._schema.names)
+        self._open()
 
     def _open(self):
         self._pqfile = pq.ParquetFile(self._filepath)
@@ -31,7 +34,7 @@ class ParquetReader:
             pass
 
 
-    def read_columns(self, cols, apply_mask=True):
+    def read_columns(self, cols, mask):
         '''
         Parameters
         -----------
@@ -43,22 +46,19 @@ class ParquetReader:
         dict where keys are column names, values are numpy arrays
         '''
 
+        if not set(cols).issubset(self._columns):
+            # raise exception?   For now, just
+            return None
+
         d = dict()
-        use_mask = apply_mask and (self._mask is not None)
         if not self._pqfile:
             self._open()
         tbl = self._pqfile.read(columns = cols)
         for c in cols:
             c_data = np.array(tbl[c])
-            if use_mask:
-                d[c] = ma.array(c_data, mask=self._mask).compressed()
+            if mask is not None:
+                d[c] = ma.array(c_data, mask=mask).compressed()
             else:
                 d[c] = c_data
 
         return d
-
-    def set_mask(self, mask):
-        if not self._mask:
-            self._mask = mask
-        else:
-            warnings.warn('ParquetReader: override of mask existing setting ignored')
