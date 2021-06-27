@@ -138,7 +138,7 @@ class ObjectCollection(Sequence):
         self._partition_id = partition_id
         self._mask = mask
 
-        print(partition_id)
+        ###print(partition_id)
 
         # Maybe the following is silly and object_type should always be stored
         # as arrays
@@ -296,7 +296,7 @@ class ObjectList(Sequence):
         '''
         val = self._located[0].collection.get_attribute(attribute_name)
         for c in self._located[1:]:
-            np.append(val, c.collection.get_attribute(attribute_name))
+            val = np.append(val, c.collection.get_attribute(attribute_name))
 
         return val
 
