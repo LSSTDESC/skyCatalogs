@@ -7,9 +7,9 @@ import numpy as np
 import numpy.ma as ma
 import pyarrow.parquet as pq
 from astropy import units
-from objects import *
-from readers import *
-from readers import ParquetReader
+from desc.skycatalogs.objects import *
+from desc.skycatalogs.readers import *
+from desc.skycatalogs.readers import ParquetReader
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
 
@@ -227,21 +227,18 @@ class SkyCatalog(object):
             elif 'parent' in self._config['object_types'][ot]:
                 f = self._hp_info[hp]['object_types'][obj_types[ot]['parent']]
             if f not in self._hp_info[hp]:
-                the_reader = parquet_reader.ParquetReader(os.path.join(root_dir,f))
+                the_reader = parquet_reader.ParquetReader(os.path.join(root_dir,f), mask=None)
                 self._hp_info[hp][f] = the_reader
             the_reader = self._hp_info[hp][f]
             if the_reader in rdr_ot:
                 rdr_ot[the_reader].add(ot)
-                #print("added object type for reader ", rdr_ot)
             else:
                 rdr_ot[the_reader] = set([ot])
-                #print("added reader ", the_reader, "and object type ", ot)
 
         # Now get minimal columns for objects using the readers
-        ##obj_collect = []
         for rdr in rdr_ot:
             if 'galaxy' in rdr_ot[rdr]:
-                arrow_t = rdr.read_columns(G_COLUMNS) # or read_row_group
+                arrow_t = rdr.read_columns(G_COLUMNS, None) # or read_row_group
                 # Make a boolean array, value set to 1 for objects
                 # outside the region
                 if region is not None:
@@ -267,9 +264,6 @@ class SkyCatalog(object):
                 else:
                     mask = None
 
-                # Any future reads should compress output using the mask
-                rdr.set_mask(mask)
-
                 if mask is not None:
                     masked_ra = ma.array(arrow_t['ra'], mask=mask)
                     print("Masked array size: ", masked_ra.size)
@@ -285,13 +279,17 @@ class SkyCatalog(object):
                     dec_compress = arrow_t['dec']
                     id_compress = arrow_t['galaxy_id']
 
-                object_list.append_collection(ObjectCollection(ra_compress,
-                                                               dec_compress,
-                                                               id_compress,
-                                                               'galaxy',
-                                                               hp,
-                                                               region=region,
-                                                               reader=rdr))
+                new_collection = ObjectCollection(ra_compress,
+                                                  dec_compress,
+                                                  id_compress,
+                                                  'galaxy',
+                                                  hp,
+                                                  region=region,
+                                                  mask=mask,
+                                                  reader=rdr)
+
+
+                object_list.append_collection(new_collection)
         return object_list
 
 
@@ -346,8 +344,10 @@ if __name__ == '__main__':
     ra_max_tract = 57.564
     dec_min_tract = -37.190
     dec_max_tract = -35.702
-    ra_min_small = 56.0
-    ra_max_small = 56.2
+    ##ra_min_small = 56.0
+    ##ra_max_small = 56.2
+    ra_min_small = 55.9
+    ra_max_small = 56.1
     dec_min_small = -36.2
     dec_max_small = -36.0
 
@@ -362,7 +362,7 @@ if __name__ == '__main__':
     object_list = cat.get_objects_by_region(0, rgn,
                                             obj_type_set=set(['galaxy']) )
     # Try out get_objects_by_hp with no region
-    #colls = cat.get_objects_by_hp(0, 9812, None, obj_type_set=set(['galaxy']) )
+    #colls = cat.get_objects_by_hp(0, 9812, None, set(['galaxy']) )
 
     print('Number of collections returned:  ', object_list.collection_count)
 

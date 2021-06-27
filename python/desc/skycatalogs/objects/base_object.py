@@ -118,7 +118,8 @@ class ObjectCollection(Sequence):
     rather than a single number.  There are some additional methods
     '''
     def __init__(self, ra, dec, id, object_type, partition_id,
-                 redshift=None, indexes = None, region=None, reader=None):
+                 redshift=None, indexes = None, region=None, mask=None,
+                 reader=None):
         '''
         Minimum information needed for static objects.
         (Not sure redshift is necessary.  reader even less likely)
@@ -135,6 +136,7 @@ class ObjectCollection(Sequence):
         self._redshift = None
         self._rdr = reader
         self._partition_id = partition_id
+        self._mask = mask
 
         print(partition_id)
 
@@ -176,9 +178,7 @@ class ObjectCollection(Sequence):
         val = getattr(self, attribute_name, None)
         if val is not None: return val
 
-        val = self._rdr.read_columns([attribute_name])[attribute_name]
-        if val is not None:
-            setattr(self, attribute_name, val)
+        val = self._rdr.read_columns([attribute_name], self._mask)[attribute_name]
         return val
 
     # implement Sequence methods
