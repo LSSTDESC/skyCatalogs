@@ -4,15 +4,30 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from astropy.coordinates import SkyCoord
 import h5py
 import GCRCatalogs
 from desc.skycatalogs.utils.common_utils import print_date
+
+# from dm stack
+from dustmaps.sfd import SFDQuery
 
 """
 Code to create a sky catalog for a particular object type
 """
 
 pixels = [9556, 9683, 9684, 9812, 9813, 9940]
+
+'''
+Dict of MW av column names and multipliers needed to create from ebv, MW_rv
+Multipliers come from
+https://iopscience.iop.org/article/10.1088/0004-637X/737/2/103#apj398709t6
+appendix, table 6
+'''
+MW_extinction_bands = {'MW_av_lsst_u' : 4.145, 'MW_av_lsst_g' : 3.237,
+                       'MW_av_lsst_r' : 2.273, 'MW_av_lsst_i' : 1.684,
+                       'MW_av_lsst_z' : 1.323, 'MW_av_lsst_y' : 1.088}
+
 def create_galaxy_catalog(parts, area_partition, galaxy_truth=None,
                           sedLookup_dir=None, output_type='parquet',
                           output_dir=None):
@@ -83,12 +98,10 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
 
     # to_fetch = all columns of interest in gal_cat
     non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'shear_1',
-               'shear_2_phosim',
+               'shear_2',
                'convergence', 'position_angle_true',
                'size_bulge_true', 'size_minor_bulge_true', 'sersic_bulge',
-               'A_v_bulge', 'R_v_bulge',
-               'size_disk_true', 'size_minor_disk_true', 'sersic_disk',
-               'A_v_disk', 'R_v_disk']
+               'size_disk_true', 'size_minor_disk_true', 'sersic_disk']
     # Find all the tophat sed numbers
     q = gal_cat.list_all_quantities()
     sed_bulge_names = [i for i in q if (i.startswith('sed') and
@@ -137,6 +150,15 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
         bulge_rv = np.array(lookup['bulge_rv'])
         disk_av = np.array(lookup['disk_av'])
         disk_rv = np.array(lookup['disk_rv'])
+        # The following will be of interest when using file sed from our
+        # lookup file
+        # Note shape of bulge_magnorm, disk_magnorm is (6, #objects)
+        # Pick a middle column to use
+        magnorm_col = 3
+        bulge_magnorm = np.array(lookup['bulge_magnorm'][magnorm_col])
+        disk_magnorm =  np.array(lookup['disk_magnorm'][magnorm_col])
+        print('bulge_magnorm shape: ', bulge_magnorm.shape)
+        print('disk_magnorm shape: ', disk_magnorm.shape)
 
     # Check that galaxies match and are ordered the same way
     cosmo_gid = np.array(df['galaxy_id'])
@@ -147,7 +169,15 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
         print('lookup galaxies differ from cosmodc2 galaxies in content or ordering')
         exit(1)
 
-
+    # Assume R(V) = 3.1.  Calculate A(V) from R(V), E(B-V). See "Plotting
+    # Dust Maps" example in
+    # https://dustmaps.readthedocs.io/en/latest/examples.html
+    MW_rv_constant = 3.1
+    MW_rv = np.full_like(disk_rv, MW_rv_constant)
+    MW_av_columns = make_MW_extinction(df['ra'], df['dec'],
+                                       MW_rv_constant,MW_extinction_bands)
+    #MW_av = 2.742 * ebv_raw
+    print("Made extinction")
     # Form arrow schema.  To get the type write, easiest to make a tiny
     # table and extract schema
     dummy_dict = { k : df[k][:10] for k in non_sed if k != 'position_angle_true'}
@@ -159,11 +189,19 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
     dummy_dict['internalAv_disk'] = disk_av[:10]
     dummy_dict['internalRv_disk'] = disk_rv[:10]
 
+    dummy_dict['bulge_magnorm'] = bulge_magnorm[:10]
+    dummy_dict['disk_magnorm'] = disk_magnorm[:10]
+    dummy_dict['MW_rv'] = MW_rv[:10]
+
+    for k,v in MW_av_columns.items():
+        dummy_dict[k] = v[:10]
+
+
     dummy_df = pd.DataFrame.from_dict(dummy_dict)
+    print("Created data frame from dummy_dict")
     dummy_table = pa.Table.from_pandas(dummy_df)
-
+    print("Created pyarrow table from data frame")
     arrow_schema = dummy_table.schema
-
 
     writer = pq.ParquetWriter(os.path.join(output_dir, output_template.format(pixel)), arrow_schema)
 
@@ -182,6 +220,11 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
         out_dict['internalRv_bulge'] = bulge_rv[l_bnd : u_bnd]
         out_dict['internalAv_disk'] = disk_av[l_bnd : u_bnd]
         out_dict['internalRv_disk'] = disk_rv[l_bnd : u_bnd]
+        out_dict['bulge_magnorm'] = bulge_magnorm[l_bnd : u_bnd]
+        out_dict['disk_magnorm'] = disk_magnorm[l_bnd : u_bnd]
+        out_dict['MW_rv'] = MW_rv[l_bnd : u_bnd]
+        for k,v in  MW_av_columns.items():
+            out_dict[k] = v[l_bnd : u_bnd]
 
         out_df = pd.DataFrame.from_dict(out_dict)
         out_table = pa.Table.from_pandas(out_df)
@@ -192,6 +235,27 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
 
     writer.close()
     print("# row groups written: ", rg_written)
+
+def make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
+    '''
+    Given array of MW dust map values, fixed rv and per-band column names
+    and multipliers,reate a MW Av column for each band
+    Parameters:
+    ra, dec - arrays specifying positions where Av is to be computed
+    MW_rv - single constant value for Rv
+    band_dict - keys are column names; values are multipliers
+    Return:
+    dict with keys = column names. Value for each column is array of
+    Av values for a particular band at the ra,dec positions
+    '''
+
+    sfd = SFDQuery()
+    ebv_raw = np.array(sfd.query_equ(ra, dec))
+    av_dict = {}
+    for k,v in band_dict.items():
+        av_dict[k] = MW_rv_constant * v * ebv_raw
+
+    return av_dict
 
 # May want a base truth class for this
 
@@ -204,8 +268,8 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
 # Try it out
 if __name__ == "__main__":
     area_partition = {'type' : 'healpix', 'ordering' : 'ring', 'nside' : 32}
-    parts = pixels[4:6]
-    output_dir='/global/cscratch1/sd/jrbogart/desc/skycatalogs/toy5_rowgroup'
+    parts = pixels[0:1]
+    output_dir='/global/cscratch1/sd/jrbogart/desc/skycatalogs/toy6'
     print('Starting with healpix pixel ', parts[0])
     create_galaxy_catalog(parts, area_partition, output_dir=output_dir)
     print('All done')
