@@ -1,5 +1,6 @@
 import os
 import re
+import argparse
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -7,7 +8,7 @@ import pyarrow.parquet as pq
 from astropy.coordinates import SkyCoord
 import h5py
 import GCRCatalogs
-from desc.skycatalogs.utils.common_utils import print_date
+from desc.skycatalogs.utils.common_utils import print_date, print_callinfo
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
@@ -239,7 +240,7 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
 def make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
     '''
     Given array of MW dust map values, fixed rv and per-band column names
-    and multipliers,reate a MW Av column for each band
+    and multipliers, create a MW Av column for each band
     Parameters:
     ra, dec - arrays specifying positions where Av is to be computed
     MW_rv - single constant value for Rv
@@ -267,9 +268,40 @@ def make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
 
 # Try it out
 if __name__ == "__main__":
+    '''
+    Create sky catalogs for one or more healpixels. Invoke with --help
+    for details
+    '''
+    # For now partitioning is fixed
     area_partition = {'type' : 'healpix', 'ordering' : 'ring', 'nside' : 32}
-    parts = pixels[0:1]
-    output_dir='/global/cscratch1/sd/jrbogart/desc/skycatalogs/toy6'
+
+    parser = argparse.ArgumentParser(description='''
+      Create Sky Catalogs. By default create a galaxy catalog for a
+      single healpix pixel''')
+    parser.add_argument('--pointsource', action='store_true',
+                        help='if used, create point source catalog(s)')
+    parser.add_argument('--no-galaxies', action='store_true',
+                        help='if used galaxy catalogs will NOT be created')
+    parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
+                        help='healpix pixels for which catalogs will be created')
+    out_dir = os.path.join(os.getenv('SCRATCH'), 'desc', 'skycatalogs', 'test')
+    parser.add_argument('--output-dir', help='directory for output files',
+                        default=out_dir)
+    args = parser.parse_args()
+
+    print_callinfo('create_catalog', args)
+
+    ##parts = pixels[0:1]
+    ##output_dir='/global/cscratch1/sd/jrbogart/desc/skycatalogs/toy6'
+    output_dir = args.output_dir
+    parts = args.pixels
     print('Starting with healpix pixel ', parts[0])
-    create_galaxy_catalog(parts, area_partition, output_dir=output_dir)
+    if not args.no_galaxies:
+        print("Creating galaxy catalogs")
+        create_galaxy_catalog(parts, area_partition, output_dir=output_dir)
+
+    if args.pointsource:
+        print("Creating point source catalogs")
+        create_pointsource_Catalog(parts, area_partition, output_dir=output_dir)
+
     print('All done')
