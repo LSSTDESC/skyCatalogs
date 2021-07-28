@@ -29,21 +29,21 @@ MW_extinction_bands = {'MW_av_lsst_u' : 4.145, 'MW_av_lsst_g' : 3.237,
                        'MW_av_lsst_r' : 2.273, 'MW_av_lsst_i' : 1.684,
                        'MW_av_lsst_z' : 1.323, 'MW_av_lsst_y' : 1.088}
 
-def create_galaxy_catalog(parts, area_partition, galaxy_truth=None,
-                          sedLookup_dir=None, output_type='parquet',
-                          output_dir=None):
+def create_galaxy_catalog(parts, area_partition, output_dir=None,
+                          galaxy_truth=None, sedLookup_dir=None,
+                          output_type='parquet'):
     """
     Parameters
     ----------
     parts           Segments for which catalog is to be generated. If partition
                     type is HEALpix, parts would be a collection of HEALpix pixels
     area_partition  Dict characterizing partition; e.g. HEALpix, nside=<something>
+    output_dir      Where to put created sky catalog. Defaults to
+                    current directory.
     galaxy_truth    GCRCatalogs name for galaxy truth (e.g. cosmoDC2)
     sedLookup_dir   Where to find files with some per-galaxy information relevant
                     to finding and using appropriate SED file
     output_type     A format.  For now only parquet is supported
-    output_dir      Where to put created sky catalog. Defaults to
-                    current directory.
 
     Might want to add a way to specify template for output file name
     and template for input sedLookup file name.
@@ -82,11 +82,13 @@ def create_galaxy_catalog(parts, area_partition, galaxy_truth=None,
     for p in parts:
         print("Starting on pixel ", p)
         print_date()
-        create_pixel(p, area_partition, gal_cat, lookup, output_type, output_dir)
+        create_galaxy_pixel(p, area_partition, output_dir, gal_cat, lookup,
+                            output_type)
         print("completed pixel ", p)
         print_date()
 
-def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output_dir):
+def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
+                        output_type='parquet'):
 
     # Filename templates: input (sedLookup) and our output.  Hardcode for now.
     sedLookup_template = 'sed_fit_{}.h5'
@@ -237,6 +239,12 @@ def create_pixel(pixel, area_partition, gal_cat, lookup_dir, output_type, output
     writer.close()
     print("# row groups written: ", rg_written)
 
+
+def create_pointsource_pixel(pixel, area_partition, output_dir,
+                             star_cat=None, sn_cat=None,
+                             output_type='parquet'):
+    pass
+
 def make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
     '''
     Given array of MW dust map values, fixed rv and per-band column names
@@ -266,7 +274,54 @@ def make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
 #         and making available to GalaxySkyCatalog object
 #         """
 
+def create_pointsource_catalog(parts, area_partition, output_dir=None,
+                               star_truth=None, sne_truth=None,
+                               output_type='parquet'):
+
+    """
+    Parameters
+    ----------
+    parts           Segments for which catalog is to be generated. If partition
+                    type is HEALpix, parts would be a collection of HEALpix pixels
+    area_partition  Dict characterizing partition; e.g.
+                    HEALpix, nside=<something>
+    output_dir      Where to put created sky catalog. Defaults to
+                    current directory.
+    star_truth      Where to find star parameters. If None, omit stars
+    sne_truth       Where to find SNe parameters.  If None, omit SNe
+    output_type     A format.  For now only parquet is supported
+
+    Might want to add a way to specify template for output file name
+
+    Returns
+    -------
+    Dict describing catalog produced
+    """
+
+    # For now fixed location for star, SNe parameter files.
+    _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
+    ##_sn_db = '/global/projecta/projectdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF.db'
+    _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
+
+    if area_partition['type'] != 'healpix':
+        raise NotImplementedError('Unknown partition type ')
+    if output_type != 'parquet':
+        raise NotImplementedError('Unknown partition type ')
+
+    #  Need a way to indicate which object types to include; deal with that
+    #  later.  For now, default is stars only.  Use default star parameter file.
+    for p in parts:
+        print("Point sources. Starting on pixel ", p)
+        print_date()
+        create_pointsource_pixel(p, area_partition, output_dir,
+                                 star_cat=_star_db)
+        print("completed pixel ", p)
+        print_date()
+
 # Try it out
+# Note: root dir for SED files is $SIMS_SED_LIBRARY_DIR, defined by
+#       LSST Science Pipelines setup
+#       This applies for galaxy, star and AGN SEDs.
 if __name__ == "__main__":
     '''
     Create sky catalogs for one or more healpixels. Invoke with --help
@@ -302,6 +357,6 @@ if __name__ == "__main__":
 
     if args.pointsource:
         print("Creating point source catalogs")
-        create_pointsource_Catalog(parts, area_partition, output_dir=output_dir)
+        create_pointsource_catalog(parts, area_partition, output_dir=output_dir)
 
     print('All done')
