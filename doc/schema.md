@@ -27,7 +27,7 @@ This draft only includes bulge and disk.  Some fields will be added for knots.  
 | internalRv_disk | R8 | |
 | bulge_magnorm | R8 | |
 | disk_magnorm | R8 | |
-| MW_rv | R8 | should change to R4 |
+| MW_rv | R4 |  |
 | MW_av_lsst_u | R4 | |
 | MW_av_lsst_g | R4 | |
 | MW_av_lsst_r | R4 | |
