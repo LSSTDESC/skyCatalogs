@@ -7,6 +7,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from astropy.coordinates import SkyCoord
 import h5py
+import sqlite3
 import GCRCatalogs
 from desc.skycatalogs.utils.common_utils import print_date, print_callinfo
 
@@ -28,6 +29,68 @@ appendix, table 6
 MW_extinction_bands = {'MW_av_lsst_u' : 4.145, 'MW_av_lsst_g' : 3.237,
                        'MW_av_lsst_r' : 2.273, 'MW_av_lsst_i' : 1.684,
                        'MW_av_lsst_z' : 1.323, 'MW_av_lsst_y' : 1.088}
+
+# Unused for now.  This schema is not the same as the one taken from the data,
+# probably because of the indexing in the schema derived from a pandas df.
+def make_galaxy_schema():
+    fields = [pa.field('galaxy_id', pa.int64()),
+              pa.field('ra', pa.float64() , True),
+##                       metadata={"units" : "radians"}),
+              pa.field('dec', pa.float64() , True),
+##                       metadata={"units" : "radians"}),
+              pa.field('redshift', pa.float64(), True),
+              pa.field('shear_1', pa.float64(), True),
+              pa.field('shear_2', pa.float64(), True),
+              pa.field('convergence', pa.float64(), True),
+              pa.field('size_bulge_true', pa.float32(), True),
+              pa.field('size_minor_bulge_true', pa.float32(), True),
+              pa.field('sersic_bulge', pa.float32(), True),
+              pa.field('size_disk_true', pa.float32(), True),
+              pa.field('size_minor_disk_true', pa.float32(), True),
+              pa.field('sersic_disk', pa.float32(), True),
+              pa.field('position_angle', pa.float64(), True),
+              pa.field('sed_val_bulge', pa.list_(pa.float64()), True),
+              pa.field('sed_val_disk', pa.list_(pa.float64()), True),
+              pa.field('internalAv_bulge', pa.float64(), True),
+              pa.field('internalRv_bulge', pa.float64(), True),
+              pa.field('internalAv_disk', pa.float64(), True),
+              pa.field('internalRv_disk', pa.float64(), True),
+              pa.field('bulge_magnorm', pa.float64(), True),
+              pa.field('disk_magnorm', pa.float64(), True),
+              pa.field('MW_rv', pa.float32(), True),
+              pa.field('MW_av_lsst_u', pa.float32(), True),
+              pa.field('MW_av_lsst_g', pa.float32(), True),
+              pa.field('MW_av_lsst_r', pa.float32(), True),
+              pa.field('MW_av_lsst_i', pa.float32(), True),
+              pa.field('MW_av_lsst_z', pa.float32(), True),
+              pa.field('MW_av_lsst_y', pa.float32(), True)]
+    return pa.schema(fields)
+
+
+def make_star_schema():
+    '''
+    Minimal schema for non-variable stars.  For variables will need to add fields
+    to express variability.   Will also likely have to make changes to accomodate SNe.
+    If AGN also go in this file will need to include gamma1, gamma2, kappa.
+    Could add field for galactic extinction model, but currently it's always 'CCM'
+    so will put it in config.
+    '''
+    fields = [pa.field('object_type', pa.string(), False),
+              pa.field('id', pa.int64(), False),
+              pa.field('ra', pa.float64(), False),
+              pa.field('dec', pa.float64(), False),
+              pa.field('host_galaxy_id', pa.int64(), True),
+              pa.field('magnorm', pa.float64(), True),
+              pa.field('sed_filepath', pa.string(), True),
+              pa.field('MW_rv', pa.float32(), True),
+              pa.field('MW_av_lsst_u', pa.float32(), True),
+              pa.field('MW_av_lsst_g', pa.float32(), True),
+              pa.field('MW_av_lsst_r', pa.float32(), True),
+              pa.field('MW_av_lsst_i', pa.float32(), True),
+              pa.field('MW_av_lsst_z', pa.float32(), True),
+              pa.field('MW_av_lsst_y', pa.float32(), True)]
+    return pa.schema(fields)
+
 
 def create_galaxy_catalog(parts, area_partition, output_dir=None,
                           galaxy_truth=None, sedLookup_dir=None,
@@ -79,16 +142,18 @@ def create_galaxy_catalog(parts, area_partition, output_dir=None,
     if lookup is None:
         lookup = _sedLookup_dir
 
+    arrow_schema = make_galaxy_schema()
+
     for p in parts:
         print("Starting on pixel ", p)
         print_date()
         create_galaxy_pixel(p, area_partition, output_dir, gal_cat, lookup,
-                            output_type)
+                            arrow_schema, output_type)
         print("completed pixel ", p)
         print_date()
 
 def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
-                        output_type='parquet'):
+                        arrow_schema, output_type='parquet'):
 
     # Filename templates: input (sedLookup) and our output.  Hardcode for now.
     sedLookup_template = 'sed_fit_{}.h5'
@@ -132,20 +197,14 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
         if m:
             tophat_parms.append((m['start'], m['width']))
 
-    #for prm in tophat_parms:
-    #    print('start={}, width={}'.format(prm[0], prm[1]))
-
-    #exit(0)
-
     df = gal_cat.get_quantities(to_fetch,
                                 native_filters=f'healpix_pixel=={pixel}')
-    # Re-form sed columns into two arrays
 
+    # Re-form sed columns into two arrays
     bulge_seds = (np.array([df[sbn] for sbn in sed_bulge_names]).T).tolist()
     disk_seds = (np.array([df[sdn] for sdn in sed_disk_names]).T).tolist()
 
     # Look up internal A_v, R_v
-
     with  h5py.File(os.path.join(lookup_dir,
                                  sedLookup_template.format(pixel))) as lookup:
         lookup_gid = np.array(lookup['galaxy_id'])
@@ -176,43 +235,18 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     # Dust Maps" example in
     # https://dustmaps.readthedocs.io/en/latest/examples.html
     MW_rv_constant = 3.1
-    MW_rv = np.full_like(disk_rv, MW_rv_constant)
+    MW_rv = np.full_like(df['sersic_bulge'], MW_rv_constant)
     MW_av_columns = make_MW_extinction(df['ra'], df['dec'],
                                        MW_rv_constant,MW_extinction_bands)
     #MW_av = 2.742 * ebv_raw
     print("Made extinction")
-    # Form arrow schema.  To get the type write, easiest to make a tiny
-    # table and extract schema
-    dummy_dict = { k : df[k][:10] for k in non_sed if k != 'position_angle_true'}
-    dummy_dict['position_angle'] = np.radians(df['position_angle_true'][:10])
-    dummy_dict['sed_val_bulge'] = bulge_seds[:10]
-    dummy_dict['sed_val_disk'] = disk_seds[:10]
-    dummy_dict['internalAv_bulge'] = bulge_av[:10]
-    dummy_dict['internalRv_bulge'] = bulge_rv[:10]
-    dummy_dict['internalAv_disk'] = disk_av[:10]
-    dummy_dict['internalRv_disk'] = disk_rv[:10]
-
-    dummy_dict['bulge_magnorm'] = bulge_magnorm[:10]
-    dummy_dict['disk_magnorm'] = disk_magnorm[:10]
-    dummy_dict['MW_rv'] = MW_rv[:10]
-
-    for k,v in MW_av_columns.items():
-        dummy_dict[k] = v[:10]
-
-
-    dummy_df = pd.DataFrame.from_dict(dummy_dict)
-    print("Created data frame from dummy_dict")
-    dummy_table = pa.Table.from_pandas(dummy_df)
-    print("Created pyarrow table from data frame")
-    arrow_schema = dummy_table.schema
-
-    writer = pq.ParquetWriter(os.path.join(output_dir, output_template.format(pixel)), arrow_schema)
 
     #  Write row groups of size stride (or less) until input is exhausted
     total_row = lookup_gid.shape[0] - 1
     u_bnd = min(stride, total_row)
     l_bnd = 0
     rg_written = 0
+    writer = None
 
     while u_bnd > l_bnd:
         out_dict = { k : df[k][l_bnd : u_bnd] for k in non_sed if k != 'position_angle_true'}
@@ -230,7 +264,11 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
             out_dict[k] = v[l_bnd : u_bnd]
 
         out_df = pd.DataFrame.from_dict(out_dict)
-        out_table = pa.Table.from_pandas(out_df)
+        out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
+        if not writer:
+            #arrow_schema = out_table.schema
+            writer = pq.ParquetWriter(os.path.join(output_dir, output_template.format(pixel)), arrow_schema)
+
         writer.write_table(out_table)
         rg_written += 1
         l_bnd = u_bnd
@@ -240,14 +278,54 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     print("# row groups written: ", rg_written)
 
 
-def create_pointsource_pixel(pixel, area_partition, output_dir,
+def create_pointsource_pixel(pixel, area_partition, output_dir, arrow_schema,
                              star_cat=None, sn_cat=None,
                              output_type='parquet'):
-    pass
+    if not star_cat and not sn_cat:
+        print("no point source inputs specified")
+        return
+
+    output_template = 'pointsource_{}.parquet'
+
+    if star_cat:
+        # Get data for this pixel
+        cols = ','.join(['simobjid as id', 'ra', 'decl as dec', 'magNorm as magnorm',
+                         'sedFilename as sed_filepath'])
+        q = f'select {cols} from stars where hpid={pixel} '
+        with sqlite3.connect(star_cat) as conn:
+            star_df = pd.read_sql_query(q, conn)
+
+        nobj = len(star_df['id'])
+        print(f"Found {nobj} stars")
+        star_df['object_type'] = np.full((nobj,), 'star')
+        star_df['host_galaxy_id'] = np.zeros((nobj,), np.int64())
+
+        MW_rv_constant = 3.1
+        star_df['MW_rv'] = np.full((nobj,), MW_rv_constant, np.float32())
+
+        MW_av_columns = make_MW_extinction(np.array(star_df['ra']),
+                                           np.array(star_df['dec']),
+                                           MW_rv_constant, MW_extinction_bands)
+        for k,v in  MW_av_columns.items():
+            # No need for multiple row groups. Data size is small.
+            #star_df[k] = v[l_bnd : u_bnd]
+            star_df[k] = v
+        out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
+        print("created arrow table from dataframe")
+
+        writer = pq.ParquetWriter(os.path.join(output_dir, output_template.format(pixel)), arrow_schema)
+        writer.write_table(out_table)
+
+        writer.close()
+
+    if sn_cat:
+        raise NotImplementedError('SNe not yet supported. Have a nice day.')
+
+    return
 
 def make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
     '''
-    Given array of MW dust map values, fixed rv and per-band column names
+    Given arrays of ra & dec,  fixed Rv and per-band column names
     and multipliers, create a MW Av column for each band
     Parameters:
     ra, dec - arrays specifying positions where Av is to be computed
@@ -308,12 +386,13 @@ def create_pointsource_catalog(parts, area_partition, output_dir=None,
     if output_type != 'parquet':
         raise NotImplementedError('Unknown partition type ')
 
+    arrow_schema = make_star_schema()
     #  Need a way to indicate which object types to include; deal with that
     #  later.  For now, default is stars only.  Use default star parameter file.
     for p in parts:
         print("Point sources. Starting on pixel ", p)
         print_date()
-        create_pointsource_pixel(p, area_partition, output_dir,
+        create_pointsource_pixel(p, area_partition, output_dir, arrow_schema,
                                  star_cat=_star_db)
         print("completed pixel ", p)
         print_date()
@@ -347,7 +426,6 @@ if __name__ == "__main__":
     print_callinfo('create_catalog', args)
 
     ##parts = pixels[0:1]
-    ##output_dir='/global/cscratch1/sd/jrbogart/desc/skycatalogs/toy6'
     output_dir = args.output_dir
     parts = args.pixels
     print('Starting with healpix pixel ', parts[0])
