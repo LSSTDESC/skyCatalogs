@@ -2,7 +2,7 @@
 catalog_name : toy5
 area_partition :
   { type: healpix, ordering : ring, nside : 32}
-root_directory : /global/cscratch1/sd/jrbogart/desc/skycatalogs/toy5_rowgroup
+root_directory : /global/cscratch1/sd/jrbogart/desc/skycatalogs/test
 SED_models :
   -
     tophat :
