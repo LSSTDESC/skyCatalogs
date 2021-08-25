@@ -1,5 +1,6 @@
 import os
 import re
+import math
 import argparse
 import numpy as np
 import pandas as pd
@@ -94,7 +95,7 @@ def make_star_schema():
 
 def create_galaxy_catalog(parts, area_partition, output_dir=None,
                           galaxy_truth=None, sedLookup_dir=None,
-                          output_type='parquet'):
+                          output_type='parquet', verbose=False):
     """
     Parameters
     ----------
@@ -148,12 +149,12 @@ def create_galaxy_catalog(parts, area_partition, output_dir=None,
         print("Starting on pixel ", p)
         print_date()
         create_galaxy_pixel(p, area_partition, output_dir, gal_cat, lookup,
-                            arrow_schema, output_type)
+                            arrow_schema, output_type, verbose)
         print("completed pixel ", p)
         print_date()
 
 def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
-                        arrow_schema, output_type='parquet'):
+                        arrow_schema, output_type='parquet', verbose=False):
 
     # Filename templates: input (sedLookup) and our output.  Hardcode for now.
     sedLookup_template = 'sed_fit_{}.h5'
@@ -219,8 +220,8 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
         magnorm_col = 3
         bulge_magnorm = np.array(lookup['bulge_magnorm'][magnorm_col])
         disk_magnorm =  np.array(lookup['disk_magnorm'][magnorm_col])
-        print('bulge_magnorm shape: ', bulge_magnorm.shape)
-        print('disk_magnorm shape: ', disk_magnorm.shape)
+        #print('bulge_magnorm shape: ', bulge_magnorm.shape)
+        #print('disk_magnorm shape: ', disk_magnorm.shape)
 
     # Check that galaxies match and are ordered the same way
     cosmo_gid = np.array(df['galaxy_id'])
@@ -239,7 +240,7 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     MW_av_columns = make_MW_extinction(df['ra'], df['dec'],
                                        MW_rv_constant,MW_extinction_bands)
     #MW_av = 2.742 * ebv_raw
-    print("Made extinction")
+    if verbose: print("Made extinction")
 
     #  Write row groups of size stride (or less) until input is exhausted
     total_row = lookup_gid.shape[0] - 1
@@ -275,12 +276,12 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
         u_bnd = min(l_bnd + stride, total_row)
 
     writer.close()
-    print("# row groups written: ", rg_written)
+    if verbose: print("# row groups written: ", rg_written)
 
 
 def create_pointsource_pixel(pixel, area_partition, output_dir, arrow_schema,
                              star_cat=None, sn_cat=None,
-                             output_type='parquet'):
+                             output_type='parquet', verbose=False):
     if not star_cat and not sn_cat:
         print("no point source inputs specified")
         return
@@ -311,7 +312,7 @@ def create_pointsource_pixel(pixel, area_partition, output_dir, arrow_schema,
             #star_df[k] = v[l_bnd : u_bnd]
             star_df[k] = v
         out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
-        print("created arrow table from dataframe")
+        if verbose: print("created arrow table from dataframe")
 
         writer = pq.ParquetWriter(os.path.join(output_dir, output_template.format(pixel)), arrow_schema)
         writer.write_table(out_table)
@@ -354,7 +355,7 @@ def make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
 
 def create_pointsource_catalog(parts, area_partition, output_dir=None,
                                star_truth=None, sne_truth=None,
-                               output_type='parquet'):
+                               output_type='parquet', verbose=False):
 
     """
     Parameters
@@ -368,6 +369,7 @@ def create_pointsource_catalog(parts, area_partition, output_dir=None,
     star_truth      Where to find star parameters. If None, omit stars
     sne_truth       Where to find SNe parameters.  If None, omit SNe
     output_type     A format.  For now only parquet is supported
+    verbose         Print informational messages
 
     Might want to add a way to specify template for output file name
 
@@ -390,12 +392,14 @@ def create_pointsource_catalog(parts, area_partition, output_dir=None,
     #  Need a way to indicate which object types to include; deal with that
     #  later.  For now, default is stars only.  Use default star parameter file.
     for p in parts:
-        print("Point sources. Starting on pixel ", p)
-        print_date()
+        if verbose:
+            print("Point sources. Starting on pixel ", p)
+            print_date()
         create_pointsource_pixel(p, area_partition, output_dir, arrow_schema,
                                  star_cat=_star_db)
-        print("completed pixel ", p)
-        print_date()
+        if verbose:
+            print("completed pixel ", p)
+            print_date()
 
 # Try it out
 # Note: root dir for SED files is $SIMS_SED_LIBRARY_DIR, defined by
@@ -411,7 +415,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='''
       Create Sky Catalogs. By default create a galaxy catalog for a
-      single healpix pixel''')
+      single healpix pixel''', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--pointsource', action='store_true',
                         help='if used, create point source catalog(s)')
     parser.add_argument('--no-galaxies', action='store_true',
@@ -421,6 +425,7 @@ if __name__ == "__main__":
     out_dir = os.path.join(os.getenv('SCRATCH'), 'desc', 'skycatalogs', 'test')
     parser.add_argument('--output-dir', help='directory for output files',
                         default=out_dir)
+    parser.add_argument('--verbose', help='print more output if true', action='store_true')
     args = parser.parse_args()
 
     print_callinfo('create_catalog', args)
@@ -431,10 +436,10 @@ if __name__ == "__main__":
     print('Starting with healpix pixel ', parts[0])
     if not args.no_galaxies:
         print("Creating galaxy catalogs")
-        create_galaxy_catalog(parts, area_partition, output_dir=output_dir)
+        create_galaxy_catalog(parts, area_partition, output_dir=output_dir, verbose=args.verbose)
 
     if args.pointsource:
         print("Creating point source catalogs")
-        create_pointsource_catalog(parts, area_partition, output_dir=output_dir)
+        create_pointsource_catalog(parts, area_partition, output_dir=output_dir, verbose=args.verbose)
 
     print('All done')
