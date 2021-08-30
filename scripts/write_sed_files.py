@@ -45,7 +45,8 @@ if __name__ == "__main__":
     print_callinfo('write_sed_files', args)
 
     # Get a LookupInfo object
-    lookup = LookupInfo(os.getenv('SIMS_SED_LIBRARY_DIR'), args.healpix)
+    sed_fit_dir = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sedLookup'
+    lookup = LookupInfo(sed_fit_dir, args.healpix)
 
     # open sky catalog,  get object list for our hp
     cat = open_catalog(args.skycatalog_config)

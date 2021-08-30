@@ -8,7 +8,7 @@ import numpy as np
 import numpy.ma as ma
 from numpy.random import default_rng
 from desc.skycatalogs.utils.config_utils import Tophat
-from desc.skycatalogs.utils.common_utils import print_date
+from desc.skycatalogs.utils.common_utils import print_dated_msg
 
 __all__ = ['SCALE_FACTOR', 'LookupInfo', 'Cmp']
 
@@ -103,18 +103,20 @@ class LookupInfo(object):
     def __init__(self, sed_library_dir, hp):
         self.sed_lookup_file = os.path.join(sed_library_dir,
                                             f'sed_fit_{hp}.h5')
-        self.sed_names = None
+        self.cached = False
 
     def cache_info(self):
-        if self.sed_names:   return
+        if self.cached:   return
 
         with h5py.File(self.sed_lookup_file) as f:
-            self.sed_names = f['sed_names']
-            self.disk_sed = f['disk_sed']
-            self.bulge_sed = f['bulge_sed']
-            self.galaxy_id = f['galaxy_id']
+            # Make a copy which will exist after file is closed
+            self.sed_names = np.array(f['sed_names'])
+            self.disk_sed = np.array(f['disk_sed'])
+            self.bulge_sed = np.array(f['bulge_sed'])
+            self.galaxy_id = np.array(f['galaxy_id'])
+            self.cached = True
 
-    def get_component_sed_file(self, cmp, galaxy_id, min_ix=0):
+    def get_orig_sed_file(self, cmp, galaxy_id, min_ix=0):
         # Start searching for galaxy_id starting with min_ix
         the_ix = -1
         if cmp not in ['bulge', 'disk']:
@@ -127,9 +129,9 @@ class LookupInfo(object):
             raise ValueError(f'Galaxy {galaxy_id} not found')
 
         if cmp == 'bulge':
-            return self.sed_names[self.bulge_sed[the_ix]]
+            return (self.sed_names[self.bulge_sed[the_ix]]).decode("utf-8")
         else:
-            return self.sed_names[self.disk_sed[the_ix]]
+            return (self.sed_names[self.disk_sed[the_ix]]).decode("utf-8")
 
 
 class Cmp(object):
@@ -158,6 +160,8 @@ class Cmp(object):
         self.n_seds = n_seds
         self.n_seds_done = 0
         self.bins = bins
+        lookup_info.cache_info()
+        self.lookup_info = lookup_info
 
     def _write_sed(self, outpath, sed_list, bins):
         '''
@@ -178,12 +182,15 @@ class Cmp(object):
         _write_sed_file(outpath, lmbda, f_lambda, wv_unit='nm')
         return magnorm     # for now
 
-    def _write_summary(self, ix, gal, sed, orig_magnorm, our_magnorm):
+    def _write_summary(self, ix, gal, sed, orig_magnorm, our_magnorm,
+                       orig_sed_file, tp_sed_file):
         # Filepath.  Use same output dir.
-        print('Entered _srite_summary for component ', self.cmp_name)
-        print_date()
-        basename = f'{self.cmp_name}_random_sed_hp{self.hp}_summary.csv'
-        outpath = os.path.join(self.output_dir, basename)
+        #print('Entered _write_summary for component ', self.cmp_name)
+        print_dated_msg(f'Entered _write_summary for component {self.cmp_name}')
+        basename_csv = f'{self.cmp_name}_random_sed_hp{self.hp}_summary.csv'
+        outpath_csv = os.path.join(self.output_dir, basename_csv)
+        basename_pq = f'{self.cmp_name}_random_sed_hp{self.hp}_summary.parquet'
+        outpath_pq = os.path.join(self.output_dir, basename_pq)
 
         # transpose SEDs
         sed_transposed = [[row[i] for row in sed] for i in range(len(sed[0]))]
@@ -195,27 +202,30 @@ class Cmp(object):
         out_dict['gal_id'] = gal
         out_dict['orig_magnorm'] = orig_magnorm
         out_dict['our_magnorm'] = our_magnorm
+        out_dict['orig_sed_file'] = orig_sed_file
+        out_dict['tp_sed_file'] = tp_sed_file
         for ib in range(len(sed_col_names)):
             out_dict[sed_col_names[ib]] = sed_transposed[ib]
 
         df = pd.DataFrame(data=out_dict)
-        df.to_csv(path_or_buf=outpath)
+        df.to_csv(path_or_buf=outpath_csv)
+        df.to_parquet(outpath_pq)
 
     def create(self, count_start=0):
         '''
-        Create SED files as specified at init time and also table describing which
-        tophat SEDs were used.
-        count_start may be > 0 in case some of the required files have already been
-        created and we just want to pick up where we left off.  [but initial draft
-        won't support this since there are complications]
+        Create SED files as specified at init time and also table describing
+        which tophat SEDs were used.
+        count_start may be > 0 in case some of the required files have already
+        been created and we just want to pick up where we left off.
+        [But initial draft won't support this since there are complications]
         '''
+
         # For debugging predictability
         seed_dict = {}
-        seed_dict['bulge'] = 135711
-        seed_dict['disk'] = 890123
+        seed_dict['bulge'] = 135711 + 2 * self.hp
+        seed_dict['disk'] = 890123 + 2 * self.hp
 
-        print('create called for component', self.cmp_name)
-        print_date()
+        print_dated_msg(f'Cmp.create called for component  {self.cmp_name}')
         sed_col = 'sed_val_' + self.cmp_name
         sed = np.array(self.coll.get_attribute(sed_col))
         magnorm_col = self.cmp_name + '_magnorm'
@@ -231,23 +241,29 @@ class Cmp(object):
         # Choose entries at random
         rng = default_rng(seed_dict[self.cmp_name])
         ix_list = rng.integers(low=0, high=len(good_magnorm), size=self.n_seds)
-        print("random index list: ")
-        for i in ix_list:
-            print(i)
         gal_chosen = [good_gal_id[i] for i in ix_list]
         # magnorm will either always be 1 or will be calculated per galaxy
         # magnorm_chosen = [magnorm[i] for i in ix_list]
         sed_chosen = [good_sed[i] for i in ix_list]
         orig_magnorm_chosen = [good_magnorm[i] for i in ix_list]
         our_magnorm = []
+        orig_sed_file = []
+        tp_sed_file = []
+
+        sed_rootdir = os.getenv('SIMS_SED_LIBRARY_DIR')
         for i in range(len(sed_chosen)):
             # Form output path
             filename = f'{self.cmp_name}_random_sed_{self.hp}_{i}.txt'
             outpath = os.path.join(self.output_dir, filename)
             our_magnorm.append(self._write_sed(outpath, sed_chosen[i], self.bins))
-            print('Wrote file ', i)
-            print_date()
+            tp_sed_file.append(outpath)
+            orig_sed = self.lookup_info.get_orig_sed_file(self.cmp_name, gal_chosen[i],
+                                                          min_ix=ix_list[i])
+            orig_sed_file.append(os.path.join(sed_rootdir, orig_sed))
+
+            print_dated_msg(f'Wrote file {i}')
 
         # Make summary table and write to a file
-        self._write_summary(ix_list, gal_chosen, sed_chosen, orig_magnorm_chosen,
-                            our_magnorm)
+        self._write_summary(ix_list, gal_chosen, sed_chosen,
+                            orig_magnorm_chosen, our_magnorm,
+                            orig_sed_file, tp_sed_file)
