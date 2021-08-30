@@ -8,7 +8,7 @@ from desc.skycatalogs.utils.config_utils import *
 
 if __name__ == "__main__":
     '''
-    Write one or more SED files (bulge & disk) derived from the tophat model in cosmoDC2
+    Write SED files (bulge & disk) derived from tophat model in cosmoDC2
     The output file should look like the ones ImSim is expecting, e.g.
 
     # Wavelength (nm)   F_lamA (normalized erg/cm2/s/A)
@@ -20,7 +20,8 @@ if __name__ == "__main__":
     SED files should express wavelength in nanometers, but cosmoDC2
     uses Angstroms (10 angstroms = 1 nanometer)
 
-    F_lamA is  "spectral flux density": energy per unit time per unit area per unit freq.
+    F_lamA is  "spectral flux density": energy per unit time per unit area per
+    unit freq.
 
     Also write out tables (one for bulge, one for disk) with columns
     row_number   skycat_index   galaxy_id     tophat_values   magnorm
@@ -54,9 +55,10 @@ if __name__ == "__main__":
     obj_list = cat.get_objects_by_hp(0, args.healpix, None, set(['galaxy']))
     collect = obj_list.get_collections()[0]
 
-    cmp_bulge = Cmp('bulge', collect, args.output_dir, args.healpix, args.n_seds,
-                    bins, lookup)
+    cmp_bulge = Cmp('bulge', collect, args.output_dir, args.healpix,
+                    args.n_seds, bins, lookup)
     cmp_bulge.create(args.count_start)
 
-    cmp_disk = Cmp('disk', collect, args.output_dir, args.healpix, args.n_seds, bins, lookup)
+    cmp_disk = Cmp('disk', collect, args.output_dir, args.healpix, args.n_seds,
+                   bins, lookup)
     cmp_disk.create(args.count_start)
