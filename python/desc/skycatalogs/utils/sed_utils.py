@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import numpy.ma as ma
 from numpy.random import default_rng
+from lsst.sims.photUtils import Sed, Bandpass, CosmologyObject
 from desc.skycatalogs.utils.config_utils import Tophat
 from desc.skycatalogs.utils.common_utils import print_dated_msg
 
@@ -21,11 +22,17 @@ __all__ = ['SCALE_FACTOR', 'LookupInfo', 'Cmp']
 
 SCALE_FACTOR = 6.7129e-4
 
+# Really these values should be be looked up from the galaxy catalog (e.g. cosmoDC2)
+# if the catalog is loaded with GCRCatalogs (or, I assume, just opened with standard
+# hdf5 open), use cat.cosmology.H0.value and cat.cosmology.Om0
+_H0 = 71.0
+_Om0 = 0.2648
 
-def _convert_tophat_sed(a_bins, f_nu, granularity=None):
+def _convert_tophat_sed(a_bins, f_nu, redshift=0, granularity=None):
     '''
-    Given a tophat SED, produce an equivalent SED as list of
-    (wavelength, f_lambda)
+    Given a tophat SED and redshift, produce an equivalent SED as lists of
+    wavelength and f_lambda.   Also return base magnorm and magnorm adjusted
+    for redshift
     Parameters
     ----------
     a_bins: list of Tophat [tuples (start, width)] in Angstroms
@@ -50,19 +57,31 @@ def _convert_tophat_sed(a_bins, f_nu, granularity=None):
 
     # For each tophat value choose lambda to use.  For first draft, use midpoint
     lam_a = np.array([ b.start + 0.5*b.width for b in a_bins])     # Angstroms
+    lam_nm = 0.1 * lam_a
     f_nu = np.array(f_nu)
 
     # Convert from f_nu to f_lambda:
     # Up to a constant - universal for all SEDs - all I need to do is divide
     # by lambda^2
-    f_lam = f_nu / (lam_a * lam_a)
+    f_lam = f_nu / (lam_nm * lam_nm)
 
-    if (lam_a[0] > lam_a[1]):     # reverse
-        lam_a[:] = lam_a[::-1]
+    if (lam_nm[0] > lam_nm[1]):     # reverse
+        lam_nm[:] = lam_nm[::-1]
         f_lam[:] = f_lam[::-1]
 
-    magnorm = 1.0         # for now
-    return 0.1 * lam_a, f_lam, magnorm
+    # Calculate magnorm.  Taken from SedFitter._create_library_one_sed in
+    # sims_GCRCatSimInterface
+    base_spec = Sed(wavelen=lam_nm, flambda=f_lam)
+    imsim_bp = Bandpass()
+    imsim_bp.imsimBandpass()
+    magnorm = base_spec.calcMag(imsim_bp)
+
+    # Now adjust for redshift.  But this is a per-object adjustment; we need redshift
+
+    # Get values for H0, Om0. Hardcoded in this file, but should come from galaxy catalog
+    cosmo = CosmologyObject(H0=_H0, Om0=_Om0)
+    distance_modulus = cosmo.distanceModulus(redshift=redshift)
+    return lam_nm, f_lam, magnorm, magnorm + distance_modulus
 
 def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
     '''
@@ -114,6 +133,7 @@ class LookupInfo(object):
             self.disk_sed = np.array(f['disk_sed'])
             self.bulge_sed = np.array(f['bulge_sed'])
             self.galaxy_id = np.array(f['galaxy_id'])
+            self.redshift = np.array(f['galaxy_id'])
             self.cached = True
 
     def get_orig_sed_file(self, cmp, galaxy_id, min_ix=0):
@@ -163,7 +183,7 @@ class Cmp(object):
         lookup_info.cache_info()
         self.lookup_info = lookup_info
 
-    def _write_sed(self, outpath, sed_list, bins):
+    def _write_sed(self, outpath, sed_list, bins, redshift):
         '''
         Convert cosmoDC2-style tophat SEDs to a file of the form expected by
         ImSim.
@@ -172,20 +192,22 @@ class Cmp(object):
         outpath   string              full path of output file
         sed_list  list of floats      list of values as they appear in cosmoDC2 catalog
         bins      list((start,width)) bin definitions
+        redshift  redshift for the object the sed file is associated with
 
         Return
         ------
-        magnorm  (usually 1.0)
+        (magnorm, magnorm_adjust)   where the first is the computed base magnorm and
+        the second has been adjusted for redshift
         '''
 
-        (lmbda,f_lambda,magnorm) = _convert_tophat_sed(bins, sed_list)
+        (lmbda,f_lambda,magnorm,magnorm_adjust) = _convert_tophat_sed(bins, sed_list,
+                                                                      redshift=redshift)
         _write_sed_file(outpath, lmbda, f_lambda, wv_unit='nm')
-        return magnorm     # for now
+        return (magnorm, magnorm_adjust)     # for now
 
-    def _write_summary(self, ix, gal, sed, orig_magnorm, our_magnorm,
-                       orig_sed_file, tp_sed_file):
+    def _write_summary(self, ix, gal, sed, redshift, orig_magnorm, our_magnorm,
+                       our_magnorm_adjust, orig_sed_file, tp_sed_file):
         # Filepath.  Use same output dir.
-        #print('Entered _write_summary for component ', self.cmp_name)
         print_dated_msg(f'Entered _write_summary for component {self.cmp_name}')
         basename_csv = f'{self.cmp_name}_random_sed_hp{self.hp}_summary.csv'
         outpath_csv = os.path.join(self.output_dir, basename_csv)
@@ -200,8 +222,10 @@ class Cmp(object):
         out_dict = {}
         out_dict['chosen_ix'] = ix
         out_dict['gal_id'] = gal
+        out_dict['redshift'] = redshift
         out_dict['orig_magnorm'] = orig_magnorm
         out_dict['our_magnorm'] = our_magnorm
+        out_dict['our_magnorm_adjust'] = our_magnorm_adjust
         out_dict['orig_sed_file'] = orig_sed_file
         out_dict['tp_sed_file'] = tp_sed_file
         for ib in range(len(sed_col_names)):
@@ -231,22 +255,24 @@ class Cmp(object):
         magnorm_col = self.cmp_name + '_magnorm'
         magnorm = np.array(self.coll.get_attribute(magnorm_col))
         gal_id = np.array(self.coll.get_attribute('galaxy_id'))
+        redshift = np.array(self.coll.get_attribute('redshift'))
 
         # mask off anything with magnorm infinite
         mask_inf = np.isinf(magnorm)
         good_sed = ma.array(sed, mask=mask_inf).compressed()
         good_gal_id = ma.array(gal_id, mask=mask_inf).compressed()
         good_magnorm = ma.array(magnorm, mask=mask_inf).compressed()
+        good_redshift = ma.array(redshift, mask=mask_inf).compressed()
 
         # Choose entries at random
         rng = default_rng(seed_dict[self.cmp_name])
         ix_list = rng.integers(low=0, high=len(good_magnorm), size=self.n_seds)
         gal_chosen = [good_gal_id[i] for i in ix_list]
-        # magnorm will either always be 1 or will be calculated per galaxy
-        # magnorm_chosen = [magnorm[i] for i in ix_list]
         sed_chosen = [good_sed[i] for i in ix_list]
         orig_magnorm_chosen = [good_magnorm[i] for i in ix_list]
+        redshift_chosen = [good_redshift[i] for i in ix_list]
         our_magnorm = []
+        our_magnorm_adjust = []
         orig_sed_file = []
         tp_sed_file = []
 
@@ -255,7 +281,12 @@ class Cmp(object):
             # Form output path
             filename = f'{self.cmp_name}_random_sed_{self.hp}_{i}.txt'
             outpath = os.path.join(self.output_dir, filename)
-            our_magnorm.append(self._write_sed(outpath, sed_chosen[i], self.bins))
+
+            (our_mag, our_mag_adjust) = self._write_sed(outpath, sed_chosen[i], self.bins,
+                                                        good_redshift[i])
+            our_magnorm.append(our_mag)
+            our_magnorm_adjust.append(our_mag_adjust)
+
             tp_sed_file.append(outpath)
             orig_sed = self.lookup_info.get_orig_sed_file(self.cmp_name, gal_chosen[i],
                                                           min_ix=ix_list[i])
@@ -264,6 +295,6 @@ class Cmp(object):
             print_dated_msg(f'Wrote file {i}')
 
         # Make summary table and write to a file
-        self._write_summary(ix_list, gal_chosen, sed_chosen,
-                            orig_magnorm_chosen, our_magnorm,
+        self._write_summary(ix_list, gal_chosen, sed_chosen, redshift_chosen,
+                            orig_magnorm_chosen, our_magnorm, our_magnorm_adjust,
                             orig_sed_file, tp_sed_file)
