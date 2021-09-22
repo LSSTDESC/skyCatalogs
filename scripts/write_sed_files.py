@@ -40,6 +40,7 @@ if __name__ == "__main__":
                         help='path to directory where files are written')
     parser.add_argument('--count-start', type=int, default='0',
                         help='initial N to use when writing files named fake_bulge_sed_HP_N.txt, fake_disk_sed_HP_N')
+    parser.add_argument('--summary-only', action='store_true', help='if used sed files will not be written, only summary')
 
     args = parser.parse_args()
     print_callinfo('write_sed_files', args)
@@ -58,8 +59,8 @@ if __name__ == "__main__":
 
     cmp_bulge = Cmp('bulge', collect, args.output_dir, args.healpix,
                     args.n_seds, bins, lookup)
-    cmp_bulge.create(args.count_start)
+    cmp_bulge.create(args.count_start, summary_only=args.summary_only)
 
     cmp_disk = Cmp('disk', collect, args.output_dir, args.healpix, args.n_seds,
                    bins, lookup)
-    cmp_disk.create(args.count_start)
+    cmp_disk.create(args.count_start, summary_only=args.summary_only)
