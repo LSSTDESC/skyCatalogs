@@ -233,9 +233,8 @@ class Cmp(object):
                                                wavelen_step=wavelen_step)
         if not summary_only:
              _write_sed_file(outpath, lmbda, f_lambda, wv_unit='nm')
-        start = min([b.start for b in bins])
+        start = (min([b.start for b in bins]))/10.0        # A to nm
         normwv_ix = int(np.floor((500 - start)/wavelen_step))
-        print(f'At index {normwv_ix} wavelen = {lmbda[normwv_ix]} value = {f_lambda[normwv_ix]}')
         return (magnorm, magnorm_adjust, f_lambda[normwv_ix])     # for now
 
     def _write_summary(self, ix, gal, sed, redshift, orig_magnorm, our_magnorm,
