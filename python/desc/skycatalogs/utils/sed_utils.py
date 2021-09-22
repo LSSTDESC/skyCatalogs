@@ -238,7 +238,7 @@ class Cmp(object):
         return (magnorm, magnorm_adjust, f_lambda[normwv_ix])     # for now
 
     def _write_summary(self, ix, gal, sed, redshift, orig_magnorm, our_magnorm,
-                       our_magnorm_adjust, orig_sed_file, norm_wv_value,
+                       our_magnorm_adjust, norm_wv_value, orig_sed_file,
                        tp_sed_file):
         # Filepath.  Use same output dir.
         print_dated_msg(f'Entered _write_summary for component {self.cmp_name}')
@@ -259,9 +259,9 @@ class Cmp(object):
         out_dict['orig_magnorm'] = orig_magnorm
         out_dict['our_magnorm'] = our_magnorm
         out_dict['our_magnorm_adjust'] = our_magnorm_adjust
-        out_dict['orig_sed_file'] = orig_sed_file
         out_dict['norm_wv_value'] = norm_wv_value
-        ##out_dict['tp_sed_file'] = tp_sed_file
+        out_dict['orig_sed_file'] = orig_sed_file
+        out_dict['tp_sed_file'] = tp_sed_file
         ##for ib in range(len(sed_col_names)):
         ##    out_dict[sed_col_names[ib]] = sed_transposed[ib]
 
