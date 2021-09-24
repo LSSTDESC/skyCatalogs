@@ -41,13 +41,15 @@ if __name__ == "__main__":
     parser.add_argument('--count-start', type=int, default='0',
                         help='initial N to use when writing files named fake_bulge_sed_HP_N.txt, fake_disk_sed_HP_N')
     parser.add_argument('--summary-only', action='store_true', help='if used sed files will not be written, only summary')
+    parser.add_argument('--tophat-scale', default='0', type=float,
+                        help='adjust scaling of tophat SED, defaults to 4.4659e13')
 
     args = parser.parse_args()
     print_callinfo('write_sed_files', args)
 
     # Get a LookupInfo object
     sed_fit_dir = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sedLookup'
-    lookup = LookupInfo(sed_fit_dir, args.healpix)
+    lookup = LookupInfo(sed_fit_dir, args.healpix, tophat_scale = args.tophat_scale)
 
     # open sky catalog,  get object list for our hp
     cat = open_catalog(args.skycatalog_config)

@@ -12,7 +12,7 @@ from desc.skycatalogs.utils.config_utils import Tophat
 from desc.skycatalogs.utils.common_utils import print_dated_msg
 import GCRCatalogs
 
-__all__ = ['SCALE_FACTOR', 'LookupInfo', 'Cmp']
+__all__ = ['LookupInfo', 'Cmp']
 
 # Can more or less use second equation under
 # https://en.wikipedia.org/wiki/AB_magnitude#Expression_in_terms_of_f%CE%BB
@@ -25,8 +25,12 @@ __all__ = ['SCALE_FACTOR', 'LookupInfo', 'Cmp']
 
 # According to
 # https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/SCHEMA.md
-# Tophat value units are 4.4659e13 W/Hz
-TOPHAT_SCALE = 4.4659e13
+# Tophat value units are 4.4659e13 W/Hz, that is
+# 10^(-48.57/2.5))*4*Pi*(10 parsec)^2.    But in order to transform to per-square-meter
+# we need to divide by 4*Pi*(10 parsec)^2.   So scale factor is just the first part
+ZERO_PT = (-48.57/2.4)
+TOPHAT_SCALE_DEF = 10**(ZERO_PT)       # about 5.78762e-21
+
 
 # Really these values should be be looked up from the galaxy catalog
 # (e.g. cosmoDC2) If the catalog is loaded with GCRCatalogs (or, I assume,
@@ -35,7 +39,8 @@ TOPHAT_SCALE = 4.4659e13
 _H0 = 71.0
 _Om0 = 0.2648
 
-def _convert_tophat_sed(a_bins, f_nu, redshift=0, wavelen_step=5.0):
+def _convert_tophat_sed(a_bins, f_nu_input, redshift=0, wavelen_step=5.0,
+                        scale=TOPHAT_SCALE_DEF):
     '''
     Given a tophat SED and redshift, produce an equivalent SED as lists of
     wavelength and f_lambda.   Also return base magnorm and magnorm adjusted
@@ -47,6 +52,7 @@ def _convert_tophat_sed(a_bins, f_nu, redshift=0, wavelen_step=5.0):
     redshift:   needed for computing distance modulus. Really should be
                 redshift_hubble
     wavelen_step:   Used for resampling
+    scale:   Multiplier for tophat SED values
 
     What to do about extrapolation?   Tophat lambdas (in nm) range from 100 to
     1740.2 + 259.6, so about 2000.
@@ -62,11 +68,14 @@ def _convert_tophat_sed(a_bins, f_nu, redshift=0, wavelen_step=5.0):
     erg / (cm**2 * s * nm)
     Also return base magnorm and final magnorm (base + distance modulus)
     '''
+    print('_convert_tophat_sed: tophat scale is ', scale)
 
     lam_a = np.array([b.start for b in a_bins])
     lam_nm = 0.1 * lam_a
     lam_width_nm = 0.1 * np.array([b.width for b in a_bins])
-    f_nu = TOPHAT_SCALE * np.array(f_nu)
+    f_nu = 1.0 * np.array(f_nu_input)
+    #print('Type of f_nu: ', type(f_nu))
+    #print('Len is: ', len(f_nu))
 
     # Convert from f_nu to f_lambda:
     # Up to a constant - universal for all SEDs - all I need to do is divide
@@ -75,9 +84,9 @@ def _convert_tophat_sed(a_bins, f_nu, redshift=0, wavelen_step=5.0):
 
     if (lam_nm[0] > lam_nm[1]):     # reverse
         lam_nm[:] = lam_nm[::-1]
-        lam_width_nm = lam_width_nm[::1]
+        #lam_width_nm = lam_width_nm[::1]
+        lam_width_nm[:] = lam_width_nm[::-1]
         f_nu[:] = f_nu[::-1]
-
 
     # Calculate magnorm.  Taken from SedFitter._create_library_one_sed in
     # sims_GCRCatSimInterface
@@ -93,7 +102,7 @@ def _convert_tophat_sed(a_bins, f_nu, redshift=0, wavelen_step=5.0):
 
     imsim_bp = Bandpass()
     imsim_bp.imsimBandpass()
-    magnorm_base = base_spec.calcMag(imsim_bp)
+    magnorm_base = base_spec.calcMag(imsim_bp)  + ZERO_PT
 
     # Now adjust for redshift,  a per-object adjustment.
     # Temporarily use redshift rather than redshift_true.  They're
@@ -143,11 +152,13 @@ class LookupInfo(object):
     '''
     Stash information from the lookup file for a particular hp which
     will be useful for Cmp class
+    Also save tophat scale
     '''
-    def __init__(self, sed_library_dir, hp):
+    def __init__(self, sed_library_dir, hp, tophat_scale=TOPHAT_SCALE_DEF):
         self.sed_lookup_file = os.path.join(sed_library_dir,
                                             f'sed_fit_{hp}.h5')
         self.cached = False
+        self.tophat_scale = tophat_scale
 
     def cache_info(self):
         if self.cached:   return
@@ -196,6 +207,7 @@ class Cmp(object):
         n_seds       int       how many SED files to write
         bins         list      list of (start, width) tuples describing bins.
         lookup_info  LookupInfo information
+
         '''
         self.cmp_name = cmp_name
 
@@ -205,6 +217,7 @@ class Cmp(object):
         self.n_seds = n_seds
         self.n_seds_done = 0
         self.bins = bins
+        self.tophat_scale = lookup_info.tophat_scale
         lookup_info.cache_info()
         self.lookup_info = lookup_info
 
@@ -230,7 +243,8 @@ class Cmp(object):
         (lmbda,f_lambda,magnorm,
          magnorm_adjust) = _convert_tophat_sed(bins, sed_list,
                                                redshift=redshift,
-                                               wavelen_step=wavelen_step)
+                                               wavelen_step=wavelen_step,
+                                               scale=self.tophat_scale)
         if not summary_only:
              _write_sed_file(outpath, lmbda, f_lambda, wv_unit='nm')
         start = (min([b.start for b in bins]))/10.0        # A to nm
@@ -244,6 +258,8 @@ class Cmp(object):
         print_dated_msg(f'Entered _write_summary for component {self.cmp_name}')
         basename_csv = f'{self.cmp_name}_sed_hp{self.hp}_summary.csv'
         outpath_csv = os.path.join(self.output_dir, basename_csv)
+        basename_csv_brief = f'{self.cmp_name}_sed_hp{self.hp}_brief.csv'
+        outpath_csv_brief = os.path.join(self.output_dir, basename_csv_brief)
         basename_pq = f'{self.cmp_name}_random_sed_hp{self.hp}_summary.parquet'
         outpath_pq = os.path.join(self.output_dir, basename_pq)
 
@@ -260,6 +276,11 @@ class Cmp(object):
         out_dict['our_magnorm'] = our_magnorm
         out_dict['our_magnorm_adjust'] = our_magnorm_adjust
         out_dict['norm_wv_value'] = norm_wv_value
+        df = pd.DataFrame(data=out_dict)
+
+        # For convenience, output text file leaving off paths
+        df.to_csv(path_or_buf=outpath_csv_brief)
+
         out_dict['orig_sed_file'] = orig_sed_file
         out_dict['tp_sed_file'] = tp_sed_file
         ##for ib in range(len(sed_col_names)):
