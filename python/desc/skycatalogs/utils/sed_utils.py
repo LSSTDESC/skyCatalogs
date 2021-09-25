@@ -49,8 +49,8 @@ def _convert_tophat_sed(a_bins, f_nu_input, redshift=0, wavelen_step=5.0,
     ----------
     a_bins: list of Tophat [tuples (start, width)] in Angstroms
     f_nu: list of values for the tophats
-    redshift:   needed for computing distance modulus. Really should be
-                redshift_hubble
+    redshift:   needed for computing distance modulus. Should be
+                cosmoDC2 redshiftHubble, named redshift_hubble in sky catalogs
     wavelen_step:   Used for resampling
     scale:   Multiplier for tophat SED values
 
@@ -70,12 +70,10 @@ def _convert_tophat_sed(a_bins, f_nu_input, redshift=0, wavelen_step=5.0,
     '''
     print('_convert_tophat_sed: tophat scale is ', scale)
 
-    lam_a = np.array([b.start for b in a_bins])
-    lam_nm = 0.1 * lam_a
+    #lam_a = np.array([b.start for b in a_bins])
+    lam_nm = 0.1 * np.array([b.start for b in a_bins])  #   * lam_a
     lam_width_nm = 0.1 * np.array([b.width for b in a_bins])
     f_nu = 1.0 * np.array(f_nu_input)
-    #print('Type of f_nu: ', type(f_nu))
-    #print('Len is: ', len(f_nu))
 
     # Convert from f_nu to f_lambda:
     # Up to a constant - universal for all SEDs - all I need to do is divide
@@ -84,7 +82,6 @@ def _convert_tophat_sed(a_bins, f_nu_input, redshift=0, wavelen_step=5.0,
 
     if (lam_nm[0] > lam_nm[1]):     # reverse
         lam_nm[:] = lam_nm[::-1]
-        #lam_width_nm = lam_width_nm[::1]
         lam_width_nm[:] = lam_width_nm[::-1]
         f_nu[:] = f_nu[::-1]
 
@@ -112,8 +109,6 @@ def _convert_tophat_sed(a_bins, f_nu_input, redshift=0, wavelen_step=5.0,
     distance_modulus = cosmo.distanceModulus(redshift=redshift)
     magnorm = magnorm_base + distance_modulus
     print(f'our base magnorm: {magnorm_base}   distmod:  {distance_modulus}  sum: {magnorm}')
-    #print(f'redshift: {redshift}')
-
     return base_spec.wavelen, base_spec.flambda, magnorm_base, magnorm
 
 def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
@@ -310,7 +305,7 @@ class Cmp(object):
         magnorm_col = self.cmp_name + '_magnorm'
         magnorm = np.array(self.coll.get_attribute(magnorm_col))
         gal_id = np.array(self.coll.get_attribute('galaxy_id'))
-        redshift = np.array(self.coll.get_attribute('redshift'))
+        redshift = np.array(self.coll.get_attribute('redshift_hubble'))
 
         # For distance modulus calculation really should use redshift_true,
         # but the difference is small. It's not currently in Sky Catalogs but

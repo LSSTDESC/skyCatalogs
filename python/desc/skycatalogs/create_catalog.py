@@ -40,6 +40,8 @@ def make_galaxy_schema():
               pa.field('dec', pa.float64() , True),
 ##                       metadata={"units" : "radians"}),
               pa.field('redshift', pa.float64(), True),
+              pa.field('redshift_hubble', pa.float64(), True),
+              pa.field('peculiar_velocity', pa.float64(), True),
               pa.field('shear_1', pa.float64(), True),
               pa.field('shear_2', pa.float64(), True),
               pa.field('convergence', pa.float64(), True),
@@ -49,7 +51,7 @@ def make_galaxy_schema():
               pa.field('size_disk_true', pa.float32(), True),
               pa.field('size_minor_disk_true', pa.float32(), True),
               pa.field('sersic_disk', pa.float32(), True),
-              pa.field('position_angle', pa.float64(), True),
+              pa.field('position_angle_unlensed', pa.float64(), True),
               pa.field('sed_val_bulge', pa.list_(pa.float64()), True),
               pa.field('sed_val_disk', pa.list_(pa.float64()), True),
               pa.field('internalAv_bulge', pa.float64(), True),
@@ -166,8 +168,8 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     stride = 1000000
 
     # to_fetch = all columns of interest in gal_cat
-    non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'shear_1',
-               'shear_2',
+    non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'redshiftHubble',
+               'peculiarVelocity', 'shear_1', 'shear_2',
                'convergence', 'position_angle_true',
                'size_bulge_true', 'size_minor_bulge_true', 'sersic_bulge',
                'size_disk_true', 'size_minor_disk_true', 'sersic_disk']
@@ -220,8 +222,6 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
         magnorm_col = 3
         bulge_magnorm = np.array(lookup['bulge_magnorm'][magnorm_col])
         disk_magnorm =  np.array(lookup['disk_magnorm'][magnorm_col])
-        #print('bulge_magnorm shape: ', bulge_magnorm.shape)
-        #print('disk_magnorm shape: ', disk_magnorm.shape)
 
     # Check that galaxies match and are ordered the same way
     cosmo_gid = np.array(df['galaxy_id'])
@@ -249,9 +249,17 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     rg_written = 0
     writer = None
 
+    # Some columns need to be renamed and, in one case, units changed
+    to_modify = ['position_angle_true', 'redshiftHubble', 'peculiarVelocity']
     while u_bnd > l_bnd:
-        out_dict = { k : df[k][l_bnd : u_bnd] for k in non_sed if k != 'position_angle_true'}
-        out_dict['position_angle'] = np.radians(df['position_angle_true'][l_bnd : u_bnd])
+        #out_dict = { k : df[k][l_bnd : u_bnd] for k in non_sed
+        #                if k != 'position_angle_true'}
+        out_dict = {k : df[k][l_bnd : u_bnd] for k in non_sed
+                    if k not in to_modify}
+        out_dict['redshift_hubble'] = df['redshiftHubble'][l_bnd : u_bnd]
+        out_dict['peculiar_velocity'] = df['peculiarVelocity'][l_bnd : u_bnd]
+        out_dict['position_angle_unlensed'] = np.radians(df['position_angle_true']
+                                                         [l_bnd : u_bnd])
         out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
         out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
         out_dict['internalAv_bulge'] = bulge_av[l_bnd : u_bnd]
@@ -267,8 +275,8 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
         out_df = pd.DataFrame.from_dict(out_dict)
         out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
         if not writer:
-            #arrow_schema = out_table.schema
-            writer = pq.ParquetWriter(os.path.join(output_dir, output_template.format(pixel)), arrow_schema)
+            writer = pq.ParquetWriter(os.path.join(
+                output_dir, output_template.format(pixel)), arrow_schema)
 
         writer.write_table(out_table)
         rg_written += 1
@@ -290,8 +298,8 @@ def create_pointsource_pixel(pixel, area_partition, output_dir, arrow_schema,
 
     if star_cat:
         # Get data for this pixel
-        cols = ','.join(['simobjid as id', 'ra', 'decl as dec', 'magNorm as magnorm',
-                         'sedFilename as sed_filepath'])
+        cols = ','.join(['simobjid as id', 'ra', 'decl as dec',
+                         'magNorm as magnorm', 'sedFilename as sed_filepath'])
         q = f'select {cols} from stars where hpid={pixel} '
         with sqlite3.connect(star_cat) as conn:
             star_df = pd.read_sql_query(q, conn)
@@ -314,7 +322,8 @@ def create_pointsource_pixel(pixel, area_partition, output_dir, arrow_schema,
         out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
         if verbose: print("created arrow table from dataframe")
 
-        writer = pq.ParquetWriter(os.path.join(output_dir, output_template.format(pixel)), arrow_schema)
+        writer = pq.ParquetWriter(os.path.join(
+            output_dir, output_template.format(pixel)), arrow_schema)
         writer.write_table(out_table)
 
         writer.close()
@@ -425,7 +434,8 @@ if __name__ == "__main__":
     out_dir = os.path.join(os.getenv('SCRATCH'), 'desc', 'skycatalogs', 'test')
     parser.add_argument('--output-dir', help='directory for output files',
                         default=out_dir)
-    parser.add_argument('--verbose', help='print more output if true', action='store_true')
+    parser.add_argument('--verbose', help='print more output if true',
+                        action='store_true')
     args = parser.parse_args()
 
     print_callinfo('create_catalog', args)
@@ -436,10 +446,12 @@ if __name__ == "__main__":
     print('Starting with healpix pixel ', parts[0])
     if not args.no_galaxies:
         print("Creating galaxy catalogs")
-        create_galaxy_catalog(parts, area_partition, output_dir=output_dir, verbose=args.verbose)
+        create_galaxy_catalog(parts, area_partition, output_dir=output_dir,
+                              verbose=args.verbose)
 
     if args.pointsource:
         print("Creating point source catalogs")
-        create_pointsource_catalog(parts, area_partition, output_dir=output_dir, verbose=args.verbose)
+        create_pointsource_catalog(parts, area_partition, output_dir=output_dir,
+                                   verbose=args.verbose)
 
     print('All done')
