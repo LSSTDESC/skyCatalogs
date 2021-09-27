@@ -307,20 +307,6 @@ class Cmp(object):
         gal_id = np.array(self.coll.get_attribute('galaxy_id'))
         redshift = np.array(self.coll.get_attribute('redshift_hubble'))
 
-        # For distance modulus calculation really should use redshift_true,
-        # but the difference is small. It's not currently in Sky Catalogs but
-        # plan to put it there, probably named redshift_hubble
-        # Meanwhile could do the following
-        # _GAL_CAT = 'cosmoDC2_v1.1.4_image'
-        # cosmodc2 = GCRCatalogs.load_catalog(_GAL_CAT)
-        # cosmo_df = cosmodc2.get_quantities(['galaxy_id', 'redshift_true'],
-        #                        native_filters=f'healpix_pixel=={self.hp}')
-        # for i in range(len(gal_id)):
-        #     assert cosmo_df['galaxy_id'][i] == gal_id[i]
-        # print(f'Up to len Sky Catalog for hp {self.hp} Sky Catalog and cosmoDC2 match')
-        # redshift_true = cosmo_df['redshift_true'][:len(gal_id)]
-
-        # mask off anything with magnorm infinite
         mask_inf = np.isinf(magnorm)
         good_sed = ma.array(sed, mask=mask_inf).compressed()
         good_gal_id = ma.array(gal_id, mask=mask_inf).compressed()

@@ -186,8 +186,9 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     def _sed_disk_key(s):
         return int(re.match(tophat_disk_re, s)['start'])
 
-    sed_bulge_names.sort(key=_sed_bulge_key, reverse=True)
-    sed_disk_names.sort(key=_sed_disk_key, reverse=True)
+    # Sort into increaing order by start wavelength
+    sed_bulge_names.sort(key=_sed_bulge_key)
+    sed_disk_names.sort(key=_sed_disk_key)
 
     #Fetch the data
     to_fetch = non_sed + sed_bulge_names + sed_disk_names
