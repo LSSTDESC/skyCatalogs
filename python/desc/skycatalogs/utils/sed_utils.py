@@ -43,24 +43,22 @@ def _convert_tophat_sed(a_bins, f_nu_input, redshift=0, wavelen_step=5.0,
                         scale=TOPHAT_SCALE_DEF):
     '''
     Given a tophat SED and redshift, produce an equivalent SED as lists of
-    wavelength and f_lambda.   Also return base magnorm and magnorm adjusted
-    for redshift
+    wavelength and f_lambda.
+
     Parameters
     ----------
     a_bins: list of Tophat [tuples (start, width)] in Angstroms
     f_nu: list of values for the tophats
     redshift:   needed for computing distance modulus. Should be
-                cosmoDC2 redshiftHubble, named redshift_hubble in sky catalogs
+                cosmoDC2 redshiftHubble, aka redshift_hubble in sky catalogs
     wavelen_step:   Used for resampling
-    scale:   Multiplier for tophat SED values
+    scale:   Multiplier for tophat SED values  [unused; obsolete parameter]
 
-    What to do about extrapolation?   Tophat lambdas (in nm) range from 100 to
+    What to do about extrapolation?  TH lambdas (in nm) range from 100 to
     1740.2 + 259.6, so about 2000.
     A SED file has min lambda = 9.1, max = 160000 (but starting at 20000 bins
-    are 20000 wide.     But LSST filters only cover a range comfortably within
-    [300 nm, 1100 nm] so this shouldn't be an issue.   Can just start the
-    SED file at 300 nm and run to 1100. In this case, wouldn't even use the
-    first 5 tophats or the last  4.
+    are 20000 wide.     But LSST filters only cover a range comfortably
+    within [300 nm, 1100 nm] so this shouldn't be an issue.
 
     return
     ------
@@ -68,10 +66,8 @@ def _convert_tophat_sed(a_bins, f_nu_input, redshift=0, wavelen_step=5.0,
     erg / (cm**2 * s * nm)
     Also return base magnorm and final magnorm (base + distance modulus)
     '''
-    print('_convert_tophat_sed: tophat scale is ', scale)
 
-    #lam_a = np.array([b.start for b in a_bins])
-    lam_nm = 0.1 * np.array([b.start for b in a_bins])  #   * lam_a
+    lam_nm = 0.1 * np.array([b.start + 0.5 * b.width for b in a_bins])
     lam_width_nm = 0.1 * np.array([b.width for b in a_bins])
     f_nu = 1.0 * np.array(f_nu_input)
 
@@ -79,7 +75,7 @@ def _convert_tophat_sed(a_bins, f_nu_input, redshift=0, wavelen_step=5.0,
     # Up to a constant - universal for all SEDs - all I need to do is divide
     # by lambda^2
     # But I'll let Sed class do ithis instead
-
+    # In earlier versions tophats were in decreasing lambda order
     if (lam_nm[0] > lam_nm[1]):     # reverse
         lam_nm[:] = lam_nm[::-1]
         lam_width_nm[:] = lam_width_nm[::-1]
@@ -90,21 +86,19 @@ def _convert_tophat_sed(a_bins, f_nu_input, redshift=0, wavelen_step=5.0,
     lam_min = lam_nm[0]
     lam_max = lam_nm[-1] + lam_width_nm[-1]
     base_spec = Sed(wavelen=lam_nm, fnu=f_nu)
-    print(f'lam_min: {lam_min}  lam_max: {lam_max} wavelen_step: {wavelen_step}')
-    base_spec.resampleSED(wavelen_min=lam_min, wavelen_max=lam_max,
-                          wavelen_step=wavelen_step)
 
-    print('resampled len: ', len(base_spec.wavelen))
-    print(f'min and max: {base_spec.wavelen[0]}  {base_spec.wavelen[-1]}')
 
+    # print(f'lam_min: {lam_min}  lam_max: {lam_max} wavelen_step: {wavelen_step}')
+    # base_spec.resampleSED(wavelen_min=lam_min, wavelen_max=lam_max,
+    #                       wavelen_step=wavelen_step)
+
+    # print('resampled len: ', len(base_spec.wavelen))
+    # print(f'min and max: {base_spec.wavelen[0]}  {base_spec.wavelen[-1]}')
     imsim_bp = Bandpass()
     imsim_bp.imsimBandpass()
     magnorm_base = base_spec.calcMag(imsim_bp)  + ZERO_PT
 
     # Now adjust for redshift,  a per-object adjustment.
-    # Temporarily use redshift rather than redshift_true.  They're
-    # not very different
-
     cosmo = CosmologyObject(H0=_H0, Om0=_Om0)
     distance_modulus = cosmo.distanceModulus(redshift=redshift)
     magnorm = magnorm_base + distance_modulus
@@ -139,7 +133,6 @@ def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
         f.write(header)
         for i in range(len(wv)):
             line = '{:8.2f}  {:g}\n'.format(wv[i], f_lambda[i])
-            #line = f'{wv[i]}   {f_lambda[i]}\n'
             f.write(line)
     f.close()
 
@@ -243,8 +236,12 @@ class Cmp(object):
         if not summary_only:
              _write_sed_file(outpath, lmbda, f_lambda, wv_unit='nm')
         start = (min([b.start for b in bins]))/10.0        # A to nm
-        normwv_ix = int(np.floor((500 - start)/wavelen_step))
+        #normwv_ix = int(np.floor((500 - start)/wavelen_step))
+        # with no resampling, wavelen_step isn't used.
+        # 14th top hat is the one containing 500 nm
+        normwv_ix = 13
         return (magnorm, magnorm_adjust, f_lambda[normwv_ix])     # for now
+
 
     def _write_summary(self, ix, gal, sed, redshift, orig_magnorm, our_magnorm,
                        our_magnorm_adjust, norm_wv_value, orig_sed_file,
