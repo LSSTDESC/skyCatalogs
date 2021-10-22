@@ -31,7 +31,7 @@ MW_extinction_bands = {'MW_av_lsst_u' : 4.145, 'MW_av_lsst_g' : 3.237,
                        'MW_av_lsst_r' : 2.273, 'MW_av_lsst_i' : 1.684,
                        'MW_av_lsst_z' : 1.323, 'MW_av_lsst_y' : 1.088}
 
-# Unused for now.  This schema is not the same as the one taken from the data,
+# This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
 def make_galaxy_schema():
     fields = [pa.field('galaxy_id', pa.int64()),
@@ -161,8 +161,8 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     # Filename templates: input (sedLookup) and our output.  Hardcode for now.
     sedLookup_template = 'sed_fit_{}.h5'
     output_template = 'galaxy_{}.parquet'
-    tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
-    tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
+    tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge_no_host_extinction'
+    tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk_no_host_extinction'
 
     # Number of rows to include in a row group
     stride = 1000000
@@ -176,9 +176,9 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     # Find all the tophat sed numbers
     q = gal_cat.list_all_quantities()
     sed_bulge_names = [i for i in q if (i.startswith('sed') and
-                                         i.endswith('bulge'))]
+                                         i.endswith('bulge_no_host_extinction'))]
     sed_disk_names = [i for i in q if (i.startswith('sed') and
-                                        i.endswith('disk'))]
+                                        i.endswith('disk_no_host_extinction'))]
 
     #Sort sed columns by start value, descending
     def _sed_bulge_key(s):
