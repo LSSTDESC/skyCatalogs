@@ -5,6 +5,12 @@ from desc.skycatalogs.skyCatalogs import *
 from desc.skycatalogs.utils.sed_utils import Cmp, LookupInfo
 from desc.skycatalogs.utils.common_utils import *
 from desc.skycatalogs.utils.config_utils import *
+from desc.skycatalogs.utils.mag_norm import MagNorm
+
+
+# For cosmology constants
+import GCRCatalogs
+import pyccl as ccl
 
 if __name__ == "__main__":
     '''
@@ -40,18 +46,22 @@ if __name__ == "__main__":
                         help='path to directory where files are written')
     parser.add_argument('--count-start', type=int, default='0',
                         help='initial N to use when writing files named fake_bulge_sed_HP_N.txt, fake_disk_sed_HP_N')
+    parser.add_argument('--cosmology-input-catalog', default='cosmoDC2_v1.1.4_image', help='GCR-registered catalog containing cosmology constants')
     parser.add_argument('--summary-only', action='store_true', help='if used sed files will not be written, only summary')
-    ####parser.add_argument('--tophat-scale', default='0', type=float,
-    ####                    help='adjust scaling of tophat SED, defaults to 4.4659e13')
 
     args = parser.parse_args()
     print_callinfo('write_sed_files', args)
 
     # Get a LookupInfo object
     sed_fit_dir = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sedLookup'
-    ##lookup = LookupInfo(sed_fit_dir, args.healpix, tophat_scale = args.tophat_scale)
-    ##  Currently tophat_scale isn't used
-    lookup = LookupInfo(sed_fit_dir, args.healpix, tophat_scale = 0)
+    lookup = LookupInfo(sed_fit_dir, args.healpix)
+
+    # Make a MagNorm object.  Requires cosmology constants
+    catalog = GCRCatalogs.load_catalog(args.cosmology_input_catalog)
+    mag_norm_f = MagNorm(Omega_c=catalog.cosmology.Om0,
+                         Omega_b=catalog.cosmology.Ob0, h=catalog.cosmology.h,
+                         sigma8=catalog.cosmology.sigma8,
+                         n_s=catalog.cosmology.n_s)
 
     # open sky catalog,  get object list for our hp
     cat = open_catalog(args.skycatalog_config)
@@ -62,9 +72,9 @@ if __name__ == "__main__":
     collect = obj_list.get_collections()[0]
 
     cmp_bulge = Cmp('bulge', collect, args.output_dir, args.healpix,
-                    args.n_seds, bins, lookup)
+                    args.n_seds, bins, lookup, mag_norm_f)
     cmp_bulge.create(args.count_start, summary_only=args.summary_only)
 
     cmp_disk = Cmp('disk', collect, args.output_dir, args.healpix, args.n_seds,
-                   bins, lookup)
+                   bins, lookup, mag_norm_f)
     cmp_disk.create(args.count_start, summary_only=args.summary_only)

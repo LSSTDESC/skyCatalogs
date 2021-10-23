@@ -7,7 +7,8 @@ import pandas as pd
 import numpy as np
 import numpy.ma as ma
 from numpy.random import default_rng
-from lsst.sims.photUtils import Sed, Bandpass, CosmologyObject
+from lsst.sims.photUtils import Sed, Bandpass
+#from lsst.sims.photUtils import Sed, Bandpass, CosmologyObject
 from desc.skycatalogs.utils.config_utils import Tophat
 from desc.skycatalogs.utils.common_utils import print_dated_msg
 import GCRCatalogs
@@ -23,87 +24,73 @@ __all__ = ['LookupInfo', 'Cmp']
 ##### SCALE_FACTOR = 6.7129e-4
 # or just let Sed class convert f_nu to f_lambda
 
-# According to
-# https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/SCHEMA.md
-# Tophat value units are 4.4659e13 W/Hz, that is
-# 10^(-48.57/2.5))*4*Pi*(10 parsec)^2.    But in order to transform to per-square-meter
-# we need to divide by 4*Pi*(10 parsec)^2.   So scale factor is just the first part
-ZERO_PT = (-48.57/2.4)
-TOPHAT_SCALE_DEF = 10**(ZERO_PT)       # about 5.78762e-21
+# Index for tophat bin containing 500 nm
+NORMWV_IX = 13
 
-
-# Really these values should be be looked up from the galaxy catalog
-# (e.g. cosmoDC2) If the catalog is loaded with GCRCatalogs (or, I assume,
-# just opened with standard  hdf5 open), use
-# cat.cosmology.H0.value and cat.cosmology.Om0
-_H0 = 71.0
-_Om0 = 0.2648
-
-def _convert_tophat_sed(a_bins, f_nu_input, redshift=0, wavelen_step=5.0,
-                        scale=TOPHAT_SCALE_DEF):
+def _convert_tophat_sed(a_bins, f_nu_input, mag_norm, redshift=0,
+                        wavelen_step=5.0):
     '''
     Given a tophat SED and redshift, produce an equivalent SED as lists of
-    wavelength and f_lambda.
+    wavelength and f_lambda. Also compute magnorm
 
     Parameters
     ----------
     a_bins: list of Tophat [tuples (start, width)] in Angstroms
     f_nu: list of values for the tophats
+    mag_norm: an instance of MagNorm
     redshift:   needed for computing distance modulus. Should be
                 cosmoDC2 redshiftHubble, aka redshift_hubble in sky catalogs
     wavelen_step:   Used for resampling
     scale:   Multiplier for tophat SED values  [unused; obsolete parameter]
 
-    What to do about extrapolation?  TH lambdas (in nm) range from 100 to
-    1740.2 + 259.6, so about 2000.
-    A SED file has min lambda = 9.1, max = 160000 (but starting at 20000 bins
-    are 20000 wide.     But LSST filters only cover a range comfortably
-    within [300 nm, 1100 nm] so this shouldn't be an issue.
-
     return
     ------
     arrays lambda, f_lambda where lambda is in nm and f_lambda is in
     erg / (cm**2 * s * nm)
-    Also return base magnorm and final magnorm (base + distance modulus)
+    Also return final magnorm (including redshift adjustment) and f_nu value
+    at 500 nm
     '''
 
     lam_nm = 0.1 * np.array([b.start + 0.5 * b.width for b in a_bins])
     lam_width_nm = 0.1 * np.array([b.width for b in a_bins])
     f_nu = 1.0 * np.array(f_nu_input)
+    val_500nm = f_nu[NORMWV_IX]
 
     # Convert from f_nu to f_lambda:
-    # Up to a constant - universal for all SEDs - all I need to do is divide
-    # by lambda^2
-    # But I'll let Sed class do ithis instead
     # In earlier versions tophats were in decreasing lambda order
     if (lam_nm[0] > lam_nm[1]):     # reverse
         lam_nm[:] = lam_nm[::-1]
         lam_width_nm[:] = lam_width_nm[::-1]
         f_nu[:] = f_nu[::-1]
 
-    # Calculate magnorm.  Taken from SedFitter._create_library_one_sed in
-    # sims_GCRCatSimInterface
     lam_min = lam_nm[0]
     lam_max = lam_nm[-1] + lam_width_nm[-1]
-    base_spec = Sed(wavelen=lam_nm, fnu=f_nu)
 
+    # Keep the same step function but use fine bins instead of the
+    # original tophat widths.
+    fine_width = 0.1     # nm
+    n_bins = int((lam_max - lam_min) / fine_width)
+    lam_fine = np.empty(n_bins)
+    f_nu_fine = np.empty(n_bins)
+    boundaries = list(lam_nm)
+    boundaries.append(lam_max)
+    b_ix = 0
+    for i in range(n_bins):
+        lam_fine[i] = lam_min + fine_width * i
+        if (lam_fine[i] > boundaries[b_ix + 1]) :
+            b_ix = b_ix + 1
+        f_nu_fine[i] = f_nu[b_ix]
 
-    # print(f'lam_min: {lam_min}  lam_max: {lam_max} wavelen_step: {wavelen_step}')
-    # base_spec.resampleSED(wavelen_min=lam_min, wavelen_max=lam_max,
-    #                       wavelen_step=wavelen_step)
+    base_spec = Sed(wavelen=lam_fine, fnu=f_nu_fine)
 
-    # print('resampled len: ', len(base_spec.wavelen))
-    # print(f'min and max: {base_spec.wavelen[0]}  {base_spec.wavelen[-1]}')
-    imsim_bp = Bandpass()
-    imsim_bp.imsimBandpass()
-    magnorm_base = base_spec.calcMag(imsim_bp)  + ZERO_PT
+    # Normalize so flambda value at 500 nm is 1.0
+    nm500_ix = int((500 - lam_min) / fine_width) + 1
+    print(f'At index {nm500_ix} wavelen is {base_spec.wavelen[nm500_ix]}')
+    print(f'base_spec.flambda is {base_spec.flambda[nm500_ix]}')
+    flambda_norm = base_spec.flambda / base_spec.flambda[nm500_ix]
 
-    # Now adjust for redshift,  a per-object adjustment.
-    cosmo = CosmologyObject(H0=_H0, Om0=_Om0)
-    distance_modulus = cosmo.distanceModulus(redshift=redshift)
-    magnorm = magnorm_base + distance_modulus
-    print(f'our base magnorm: {magnorm_base}   distmod:  {distance_modulus}  sum: {magnorm}')
-    return base_spec.wavelen, base_spec.flambda, magnorm_base, magnorm
+    return base_spec.wavelen, flambda_norm, mag_norm(f_nu[NORMWV_IX],
+                                                          redshift), val_500nm
 
 def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
     '''
@@ -118,7 +105,6 @@ def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
     wv_unit        String describing units for first column
     f_lambda_unit  String describing units for second column
     '''
-
     header = '#  '
     if wv_unit:
         header += wv_unit + ' '
@@ -142,11 +128,10 @@ class LookupInfo(object):
     will be useful for Cmp class
     Also save tophat scale
     '''
-    def __init__(self, sed_library_dir, hp, tophat_scale=TOPHAT_SCALE_DEF):
+    def __init__(self, sed_library_dir, hp):
         self.sed_lookup_file = os.path.join(sed_library_dir,
                                             f'sed_fit_{hp}.h5')
         self.cached = False
-        self.tophat_scale = tophat_scale
 
     def cache_info(self):
         if self.cached:   return
@@ -183,7 +168,7 @@ class Cmp(object):
     Handle writing of SED files and booking for either disk or bulge
     '''
     def __init__(self, cmp_name, obj_coll, output_dir, hp, n_seds, bins,
-                 lookup_info):
+                 lookup_info, mag_norm_f):
         '''
         Parameters
         ----------
@@ -194,7 +179,8 @@ class Cmp(object):
         hp           int       in case we decide to embed in output filename
         n_seds       int       how many SED files to write
         bins         list      list of (start, width) tuples describing bins.
-        lookup_info  LookupInfo information
+        lookup_info  LookupInfo information pertaining to a particular hp
+        mag_norm_f   MagNorm   Used for computing mag norm
 
         '''
         self.cmp_name = cmp_name
@@ -205,9 +191,9 @@ class Cmp(object):
         self.n_seds = n_seds
         self.n_seds_done = 0
         self.bins = bins
-        self.tophat_scale = lookup_info.tophat_scale
         lookup_info.cache_info()
         self.lookup_info = lookup_info
+        self.mag_norm_f = mag_norm_f
 
     def _write_sed(self, outpath, sed_list, bins, redshift,
                    wavelen_step=5.0, summary_only=False):
@@ -224,28 +210,22 @@ class Cmp(object):
 
         Return
         ------
-        (magnorm, magnorm_adjust, norm_wv_value)  first is computed base magnorm
-                   the second has been adjusted for redshift.
-                   norm_wv_value is the sed value at or near 500 nm
+        (magnorm, val_500nm)  magnorm is our computed magnorm value,
+                   including adjustment for redshift.
+                   val_500nm is the sed value at or near 500 nm
         '''
-        (lmbda,f_lambda,magnorm,
-         magnorm_adjust) = _convert_tophat_sed(bins, sed_list,
-                                               redshift=redshift,
-                                               wavelen_step=wavelen_step,
-                                               scale=self.tophat_scale)
+        (lmbda, f_lambda,
+         magnorm, val_500nm) = _convert_tophat_sed(bins, sed_list,
+                                                       self.mag_norm_f,
+                                                       redshift=redshift,
+                                                       wavelen_step=wavelen_step)
         if not summary_only:
              _write_sed_file(outpath, lmbda, f_lambda, wv_unit='nm')
         start = (min([b.start for b in bins]))/10.0        # A to nm
-        #normwv_ix = int(np.floor((500 - start)/wavelen_step))
-        # with no resampling, wavelen_step isn't used.
-        # 14th top hat is the one containing 500 nm
-        normwv_ix = 13
-        return (magnorm, magnorm_adjust, f_lambda[normwv_ix])     # for now
-
+        return (magnorm, val_500nm)     # for now
 
     def _write_summary(self, ix, gal, sed, redshift, orig_magnorm, our_magnorm,
-                       our_magnorm_adjust, norm_wv_value, orig_sed_file,
-                       tp_sed_file):
+                       val_500nm, orig_sed_file, tp_sed_file):
         # Filepath.  Use same output dir.
         print_dated_msg(f'Entered _write_summary for component {self.cmp_name}')
         basename_csv = f'{self.cmp_name}_sed_hp{self.hp}_summary.csv'
@@ -255,19 +235,13 @@ class Cmp(object):
         basename_pq = f'{self.cmp_name}_random_sed_hp{self.hp}_summary.parquet'
         outpath_pq = os.path.join(self.output_dir, basename_pq)
 
-        # transpose SEDs
-        ##sed_transposed = [[row[i] for row in sed] for i in range(len(sed[0]))]
-        # form column names
-        ##sed_col_names = [f'bin_{b.start}_{b.width}' for b in self.bins]
-
         out_dict = {}
         out_dict['chosen_ix'] = ix
         out_dict['gal_id'] = gal
         out_dict['redshift'] = redshift
         out_dict['orig_magnorm'] = orig_magnorm
         out_dict['our_magnorm'] = our_magnorm
-        out_dict['our_magnorm_adjust'] = our_magnorm_adjust
-        out_dict['norm_wv_value'] = norm_wv_value
+        out_dict['val_500nm'] = val_500nm
         df = pd.DataFrame(data=out_dict)
 
         # For convenience, output text file leaving off paths
@@ -275,8 +249,6 @@ class Cmp(object):
 
         out_dict['orig_sed_file'] = orig_sed_file
         out_dict['tp_sed_file'] = tp_sed_file
-        ##for ib in range(len(sed_col_names)):
-        ##    out_dict[sed_col_names[ib]] = sed_transposed[ib]
 
         df = pd.DataFrame(data=out_dict)
         df.to_csv(path_or_buf=outpath_csv)
@@ -297,6 +269,9 @@ class Cmp(object):
         seed_dict['disk'] = 890123 + 2 * self.hp
 
         print_dated_msg(f'Cmp.create called for component  {self.cmp_name}')
+        #  Really it should have _no_host_extinction suffix but for
+        #  now schema is not using it
+        ####sed_col = 'sed_val_' + self.cmp_name + '_no_host_extinction'
         sed_col = 'sed_val_' + self.cmp_name
         sed = np.array(self.coll.get_attribute(sed_col))
         magnorm_col = self.cmp_name + '_magnorm'
@@ -318,8 +293,7 @@ class Cmp(object):
         orig_magnorm_chosen = [good_magnorm[i] for i in ix_list]
         redshift_chosen = [good_redshift[i] for i in ix_list]
         our_magnorm = []
-        our_magnorm_adjust = []
-        norm_wv_value = []
+        val_500nm = []
         orig_sed_file = []
         tp_sed_file = []
 
@@ -329,12 +303,11 @@ class Cmp(object):
             filename = f'{self.cmp_name}_random_sed_{self.hp}_{i}.txt'
             outpath = os.path.join(self.output_dir, filename)
 
-            (our_mag, our_mag_adjust,
-             nm500) = self._write_sed(outpath, sed_chosen[i], self.bins,
-                                      redshift_chosen[i], summary_only=summary_only)
+            (our_mag, nm500) = self._write_sed(outpath, sed_chosen[i],
+                                               self.bins, redshift_chosen[i],
+                                               summary_only=summary_only)
             our_magnorm.append(our_mag)
-            our_magnorm_adjust.append(our_mag_adjust)
-            norm_wv_value.append(nm500)
+            val_500nm.append(nm500)
 
             tp_sed_file.append(outpath)
             orig_sed = self.lookup_info.get_orig_sed_file(self.cmp_name,
@@ -346,5 +319,5 @@ class Cmp(object):
 
         # Make summary table and write to a file
         self._write_summary(ix_list, gal_chosen, sed_chosen, redshift_chosen,
-                            orig_magnorm_chosen, our_magnorm, our_magnorm_adjust,
-                            norm_wv_value, orig_sed_file, tp_sed_file)
+                            orig_magnorm_chosen, our_magnorm,
+                            val_500nm, orig_sed_file, tp_sed_file)
