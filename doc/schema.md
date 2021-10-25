@@ -25,8 +25,8 @@ This draft only includes bulge and disk.  Some fields will be added for knots.  
 | internalRv_bulge | R8 | |
 | internalAv_disk | R8 | |
 | internalRv_disk | R8 | |
-| bulge_magnorm | R8 | |
-| disk_magnorm | R8 | |
+| bulge_magnorm | R8 | currently unused with tophat SEDs |
+| disk_magnorm | R8 | currently unused with tophat SEDs |
 | MW_rv | R4 |  |
 | MW_av_lsst_u | R4 | |
 | MW_av_lsst_g | R4 | |
@@ -47,8 +47,9 @@ draft assumes stars and SNe only.
 | ra | R8 | |
 | dec | R8 | |
 | host galaxy id | bigint | Only include column if we want it for SNe  |
-| mag norm | R | |
+| mag norm | R8 | |
 | sed filepath | string | relative to $SIMS_SED_LIBRARY_DIR |
+| MW_rv | R4 |  |
 | MW_av_lsst_u | R4 | per-band extinction value for this ra, dec |
 | MW_av_lsst_g | R4 | |
 | MW_av_lsst_r | R4 | |

@@ -13,6 +13,7 @@ from desc.skycatalogs.readers import ParquetReader
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
 
+
 Box = namedtuple('Box', ['ra_min', 'ra_max', 'dec_min', 'dec_max'])
 
 # radius is measured in arcseconds
@@ -55,7 +56,7 @@ class SkyCatalog(object):
     point sources, SSOs
 
     '''
-    def __init__(self, config, mp=False):
+    def __init__(self, config, mp=False, verbose=False):
         '''
         Parameters
         ----------
@@ -74,6 +75,7 @@ class SkyCatalog(object):
         # create an empty dict for
         # per-HEALpix pixel information and so forth.
 
+        self.verbose = verbose
         self._validate_config()
 
         # Outer dict: hpid for key. Value is another dict
@@ -160,8 +162,9 @@ class SkyCatalog(object):
         # Take intersection of obj_type_list and available object types
         # Determine healpix intersecting the region
 
-        print("Region ", region)
-        print("obj_type_set ", obj_type_set)
+        if self.verbose:
+            print("Region ", region)
+            print("obj_type_set ", obj_type_set)
         if self._config['area_partition']['type'] == 'healpix':
             hps = self.get_hps_by_region(region)
 
@@ -206,7 +209,8 @@ class SkyCatalog(object):
         object_list = ObjectList()
 
         G_COLUMNS = ['galaxy_id', 'ra', 'dec']
-        print('Working on healpix pixel ', hp)
+        if self.verbose:
+            print('Working on healpix pixel ', hp)
 
         obj_types = obj_type_set
         if obj_types is None:

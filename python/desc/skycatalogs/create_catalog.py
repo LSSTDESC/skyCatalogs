@@ -1,5 +1,6 @@
 import os
 import re
+import math
 import argparse
 import numpy as np
 import pandas as pd
@@ -30,7 +31,7 @@ MW_extinction_bands = {'MW_av_lsst_u' : 4.145, 'MW_av_lsst_g' : 3.237,
                        'MW_av_lsst_r' : 2.273, 'MW_av_lsst_i' : 1.684,
                        'MW_av_lsst_z' : 1.323, 'MW_av_lsst_y' : 1.088}
 
-# Unused for now.  This schema is not the same as the one taken from the data,
+# This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
 def make_galaxy_schema():
     fields = [pa.field('galaxy_id', pa.int64()),
@@ -39,6 +40,8 @@ def make_galaxy_schema():
               pa.field('dec', pa.float64() , True),
 ##                       metadata={"units" : "radians"}),
               pa.field('redshift', pa.float64(), True),
+              pa.field('redshift_hubble', pa.float64(), True),
+              pa.field('peculiar_velocity', pa.float64(), True),
               pa.field('shear_1', pa.float64(), True),
               pa.field('shear_2', pa.float64(), True),
               pa.field('convergence', pa.float64(), True),
@@ -48,9 +51,11 @@ def make_galaxy_schema():
               pa.field('size_disk_true', pa.float32(), True),
               pa.field('size_minor_disk_true', pa.float32(), True),
               pa.field('sersic_disk', pa.float32(), True),
-              pa.field('position_angle', pa.float64(), True),
-              pa.field('sed_val_bulge', pa.list_(pa.float64()), True),
-              pa.field('sed_val_disk', pa.list_(pa.float64()), True),
+              pa.field('position_angle_unlensed', pa.float64(), True),
+              pa.field('sed_val_bulge_no_host_extinction',
+                       pa.list_(pa.float64()), True),
+              pa.field('sed_val_disk_no_host_extinction',
+                       pa.list_(pa.float64()), True),
               pa.field('internalAv_bulge', pa.float64(), True),
               pa.field('internalRv_bulge', pa.float64(), True),
               pa.field('internalAv_disk', pa.float64(), True),
@@ -94,7 +99,7 @@ def make_star_schema():
 
 def create_galaxy_catalog(parts, area_partition, output_dir=None,
                           galaxy_truth=None, sedLookup_dir=None,
-                          output_type='parquet'):
+                          output_type='parquet', verbose=False):
     """
     Parameters
     ----------
@@ -148,34 +153,34 @@ def create_galaxy_catalog(parts, area_partition, output_dir=None,
         print("Starting on pixel ", p)
         print_date()
         create_galaxy_pixel(p, area_partition, output_dir, gal_cat, lookup,
-                            arrow_schema, output_type)
+                            arrow_schema, output_type, verbose)
         print("completed pixel ", p)
         print_date()
 
 def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
-                        arrow_schema, output_type='parquet'):
+                        arrow_schema, output_type='parquet', verbose=False):
 
     # Filename templates: input (sedLookup) and our output.  Hardcode for now.
     sedLookup_template = 'sed_fit_{}.h5'
     output_template = 'galaxy_{}.parquet'
-    tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
-    tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
+    tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge_no_host_extinction'
+    tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk_no_host_extinction'
 
     # Number of rows to include in a row group
     stride = 1000000
 
     # to_fetch = all columns of interest in gal_cat
-    non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'shear_1',
-               'shear_2',
+    non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'redshiftHubble',
+               'peculiarVelocity', 'shear_1', 'shear_2',
                'convergence', 'position_angle_true',
                'size_bulge_true', 'size_minor_bulge_true', 'sersic_bulge',
                'size_disk_true', 'size_minor_disk_true', 'sersic_disk']
     # Find all the tophat sed numbers
     q = gal_cat.list_all_quantities()
     sed_bulge_names = [i for i in q if (i.startswith('sed') and
-                                         i.endswith('bulge'))]
+                                         i.endswith('bulge_no_host_extinction'))]
     sed_disk_names = [i for i in q if (i.startswith('sed') and
-                                        i.endswith('disk'))]
+                                        i.endswith('disk_no_host_extinction'))]
 
     #Sort sed columns by start value, descending
     def _sed_bulge_key(s):
@@ -183,8 +188,9 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     def _sed_disk_key(s):
         return int(re.match(tophat_disk_re, s)['start'])
 
-    sed_bulge_names.sort(key=_sed_bulge_key, reverse=True)
-    sed_disk_names.sort(key=_sed_disk_key, reverse=True)
+    # Sort into increaing order by start wavelength
+    sed_bulge_names.sort(key=_sed_bulge_key)
+    sed_disk_names.sort(key=_sed_disk_key)
 
     #Fetch the data
     to_fetch = non_sed + sed_bulge_names + sed_disk_names
@@ -219,8 +225,6 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
         magnorm_col = 3
         bulge_magnorm = np.array(lookup['bulge_magnorm'][magnorm_col])
         disk_magnorm =  np.array(lookup['disk_magnorm'][magnorm_col])
-        print('bulge_magnorm shape: ', bulge_magnorm.shape)
-        print('disk_magnorm shape: ', disk_magnorm.shape)
 
     # Check that galaxies match and are ordered the same way
     cosmo_gid = np.array(df['galaxy_id'])
@@ -239,7 +243,7 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     MW_av_columns = make_MW_extinction(df['ra'], df['dec'],
                                        MW_rv_constant,MW_extinction_bands)
     #MW_av = 2.742 * ebv_raw
-    print("Made extinction")
+    if verbose: print("Made extinction")
 
     #  Write row groups of size stride (or less) until input is exhausted
     total_row = lookup_gid.shape[0] - 1
@@ -248,11 +252,19 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
     rg_written = 0
     writer = None
 
+    # Some columns need to be renamed and, in one case, units changed
+    to_modify = ['position_angle_true', 'redshiftHubble', 'peculiarVelocity']
     while u_bnd > l_bnd:
-        out_dict = { k : df[k][l_bnd : u_bnd] for k in non_sed if k != 'position_angle_true'}
-        out_dict['position_angle'] = np.radians(df['position_angle_true'][l_bnd : u_bnd])
-        out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
-        out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
+        #out_dict = { k : df[k][l_bnd : u_bnd] for k in non_sed
+        #                if k != 'position_angle_true'}
+        out_dict = {k : df[k][l_bnd : u_bnd] for k in non_sed
+                    if k not in to_modify}
+        out_dict['redshift_hubble'] = df['redshiftHubble'][l_bnd : u_bnd]
+        out_dict['peculiar_velocity'] = df['peculiarVelocity'][l_bnd : u_bnd]
+        out_dict['position_angle_unlensed'] = np.radians(df['position_angle_true']
+                                                         [l_bnd : u_bnd])
+        out_dict['sed_val_bulge_no_host_extinction'] = bulge_seds[l_bnd : u_bnd]
+        out_dict['sed_val_disk_no_host_extinction'] = disk_seds[l_bnd : u_bnd]
         out_dict['internalAv_bulge'] = bulge_av[l_bnd : u_bnd]
         out_dict['internalRv_bulge'] = bulge_rv[l_bnd : u_bnd]
         out_dict['internalAv_disk'] = disk_av[l_bnd : u_bnd]
@@ -266,8 +278,8 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
         out_df = pd.DataFrame.from_dict(out_dict)
         out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
         if not writer:
-            #arrow_schema = out_table.schema
-            writer = pq.ParquetWriter(os.path.join(output_dir, output_template.format(pixel)), arrow_schema)
+            writer = pq.ParquetWriter(os.path.join(
+                output_dir, output_template.format(pixel)), arrow_schema)
 
         writer.write_table(out_table)
         rg_written += 1
@@ -275,12 +287,12 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
         u_bnd = min(l_bnd + stride, total_row)
 
     writer.close()
-    print("# row groups written: ", rg_written)
+    if verbose: print("# row groups written: ", rg_written)
 
 
 def create_pointsource_pixel(pixel, area_partition, output_dir, arrow_schema,
                              star_cat=None, sn_cat=None,
-                             output_type='parquet'):
+                             output_type='parquet', verbose=False):
     if not star_cat and not sn_cat:
         print("no point source inputs specified")
         return
@@ -289,8 +301,8 @@ def create_pointsource_pixel(pixel, area_partition, output_dir, arrow_schema,
 
     if star_cat:
         # Get data for this pixel
-        cols = ','.join(['simobjid as id', 'ra', 'decl as dec', 'magNorm as magnorm',
-                         'sedFilename as sed_filepath'])
+        cols = ','.join(['simobjid as id', 'ra', 'decl as dec',
+                         'magNorm as magnorm', 'sedFilename as sed_filepath'])
         q = f'select {cols} from stars where hpid={pixel} '
         with sqlite3.connect(star_cat) as conn:
             star_df = pd.read_sql_query(q, conn)
@@ -311,9 +323,10 @@ def create_pointsource_pixel(pixel, area_partition, output_dir, arrow_schema,
             #star_df[k] = v[l_bnd : u_bnd]
             star_df[k] = v
         out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
-        print("created arrow table from dataframe")
+        if verbose: print("created arrow table from dataframe")
 
-        writer = pq.ParquetWriter(os.path.join(output_dir, output_template.format(pixel)), arrow_schema)
+        writer = pq.ParquetWriter(os.path.join(
+            output_dir, output_template.format(pixel)), arrow_schema)
         writer.write_table(out_table)
 
         writer.close()
@@ -354,7 +367,7 @@ def make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
 
 def create_pointsource_catalog(parts, area_partition, output_dir=None,
                                star_truth=None, sne_truth=None,
-                               output_type='parquet'):
+                               output_type='parquet', verbose=False):
 
     """
     Parameters
@@ -368,6 +381,7 @@ def create_pointsource_catalog(parts, area_partition, output_dir=None,
     star_truth      Where to find star parameters. If None, omit stars
     sne_truth       Where to find SNe parameters.  If None, omit SNe
     output_type     A format.  For now only parquet is supported
+    verbose         Print informational messages
 
     Might want to add a way to specify template for output file name
 
@@ -390,12 +404,14 @@ def create_pointsource_catalog(parts, area_partition, output_dir=None,
     #  Need a way to indicate which object types to include; deal with that
     #  later.  For now, default is stars only.  Use default star parameter file.
     for p in parts:
-        print("Point sources. Starting on pixel ", p)
-        print_date()
+        if verbose:
+            print("Point sources. Starting on pixel ", p)
+            print_date()
         create_pointsource_pixel(p, area_partition, output_dir, arrow_schema,
                                  star_cat=_star_db)
-        print("completed pixel ", p)
-        print_date()
+        if verbose:
+            print("completed pixel ", p)
+            print_date()
 
 # Try it out
 # Note: root dir for SED files is $SIMS_SED_LIBRARY_DIR, defined by
@@ -411,7 +427,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='''
       Create Sky Catalogs. By default create a galaxy catalog for a
-      single healpix pixel''')
+      single healpix pixel''', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--pointsource', action='store_true',
                         help='if used, create point source catalog(s)')
     parser.add_argument('--no-galaxies', action='store_true',
@@ -421,6 +437,8 @@ if __name__ == "__main__":
     out_dir = os.path.join(os.getenv('SCRATCH'), 'desc', 'skycatalogs', 'test')
     parser.add_argument('--output-dir', help='directory for output files',
                         default=out_dir)
+    parser.add_argument('--verbose', help='print more output if true',
+                        action='store_true')
     args = parser.parse_args()
 
     print_callinfo('create_catalog', args)
@@ -431,10 +449,12 @@ if __name__ == "__main__":
     print('Starting with healpix pixel ', parts[0])
     if not args.no_galaxies:
         print("Creating galaxy catalogs")
-        create_galaxy_catalog(parts, area_partition, output_dir=output_dir)
+        create_galaxy_catalog(parts, area_partition, output_dir=output_dir,
+                              verbose=args.verbose)
 
     if args.pointsource:
         print("Creating point source catalogs")
-        create_pointsource_catalog(parts, area_partition, output_dir=output_dir)
+        create_pointsource_catalog(parts, area_partition, output_dir=output_dir,
+                                   verbose=args.verbose)
 
     print('All done')

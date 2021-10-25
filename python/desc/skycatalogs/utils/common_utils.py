@@ -4,7 +4,7 @@ Utilities for top-level scripts
 from datetime import datetime as dt
 import sys
 
-__all__ = ['print_callinfo', 'print_date', 'TIME_TO_SECOND_FMT']
+__all__ = ['print_callinfo', 'print_date', 'print_dated_msg', 'TIME_TO_SECOND_FMT']
 
 TIME_TO_SECOND_FMT = '%Y-%m-%d %H:%M:%S'
 
@@ -35,3 +35,12 @@ def print_date(to_second=True, file=None):
         print(dt.now().strftime(TIME_TO_SECOND_FMT), file=file, flush=True)
     else:
         print(dt.now(), file=file, flush=True)
+def print_dated_msg(msg, to_second=True, file=None):
+    """
+    Print current time (by default only to nearest second) and flush output
+    Print to file if supplied, else to std.out
+    """
+    if to_second:
+        print(dt.now().strftime(TIME_TO_SECOND_FMT), ' ', msg,  file=file, flush=True)
+    else:
+        print(dt.now(), ' ', msg, file=file, flush=True)
