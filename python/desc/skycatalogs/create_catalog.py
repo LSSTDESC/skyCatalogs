@@ -52,8 +52,10 @@ def make_galaxy_schema():
               pa.field('size_minor_disk_true', pa.float32(), True),
               pa.field('sersic_disk', pa.float32(), True),
               pa.field('position_angle_unlensed', pa.float64(), True),
-              pa.field('sed_val_bulge', pa.list_(pa.float64()), True),
-              pa.field('sed_val_disk', pa.list_(pa.float64()), True),
+              pa.field('sed_val_bulge_no_host_extinction',
+                       pa.list_(pa.float64()), True),
+              pa.field('sed_val_disk_no_host_extinction',
+                       pa.list_(pa.float64()), True),
               pa.field('internalAv_bulge', pa.float64(), True),
               pa.field('internalRv_bulge', pa.float64(), True),
               pa.field('internalAv_disk', pa.float64(), True),
@@ -261,8 +263,8 @@ def create_galaxy_pixel(pixel, area_partition, output_dir, gal_cat, lookup_dir,
         out_dict['peculiar_velocity'] = df['peculiarVelocity'][l_bnd : u_bnd]
         out_dict['position_angle_unlensed'] = np.radians(df['position_angle_true']
                                                          [l_bnd : u_bnd])
-        out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
-        out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
+        out_dict['sed_val_bulge_no_host_extinction'] = bulge_seds[l_bnd : u_bnd]
+        out_dict['sed_val_disk_no_host_extinction'] = disk_seds[l_bnd : u_bnd]
         out_dict['internalAv_bulge'] = bulge_av[l_bnd : u_bnd]
         out_dict['internalRv_bulge'] = bulge_rv[l_bnd : u_bnd]
         out_dict['internalAv_disk'] = disk_av[l_bnd : u_bnd]

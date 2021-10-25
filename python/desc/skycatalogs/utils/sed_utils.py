@@ -85,8 +85,8 @@ def _convert_tophat_sed(a_bins, f_nu_input, mag_norm, redshift=0,
 
     # Normalize so flambda value at 500 nm is 1.0
     nm500_ix = int((500 - lam_min) / fine_width) + 1
-    print(f'At index {nm500_ix} wavelen is {base_spec.wavelen[nm500_ix]}')
-    print(f'base_spec.flambda is {base_spec.flambda[nm500_ix]}')
+    #print(f'At index {nm500_ix} wavelen is {base_spec.wavelen[nm500_ix]}')
+    #print(f'base_spec.flambda is {base_spec.flambda[nm500_ix]}')
     flambda_norm = base_spec.flambda / base_spec.flambda[nm500_ix]
 
     return base_spec.wavelen, flambda_norm, mag_norm(f_nu[NORMWV_IX],
@@ -271,8 +271,8 @@ class Cmp(object):
         print_dated_msg(f'Cmp.create called for component  {self.cmp_name}')
         #  Really it should have _no_host_extinction suffix but for
         #  now schema is not using it
-        ####sed_col = 'sed_val_' + self.cmp_name + '_no_host_extinction'
-        sed_col = 'sed_val_' + self.cmp_name
+        sed_col = 'sed_val_' + self.cmp_name + '_no_host_extinction'
+        ###sed_col = 'sed_val_' + self.cmp_name
         sed = np.array(self.coll.get_attribute(sed_col))
         magnorm_col = self.cmp_name + '_magnorm'
         magnorm = np.array(self.coll.get_attribute(magnorm_col))
