@@ -254,6 +254,7 @@ class Cmp(object):
 
         out_dict['orig_sed_file'] = orig_sed_file
         out_dict['tp_sed_file'] = tp_sed_file
+        out_dict['tp_vals'] = sed
 
         df = pd.DataFrame(data=out_dict)
         df.to_csv(path_or_buf=outpath_csv)
