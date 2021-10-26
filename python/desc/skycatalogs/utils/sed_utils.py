@@ -7,28 +7,20 @@ import pandas as pd
 import numpy as np
 import numpy.ma as ma
 from numpy.random import default_rng
+
+import pyccl as ccl
+
 from lsst.sims.photUtils import Sed, Bandpass
-#from lsst.sims.photUtils import Sed, Bandpass, CosmologyObject
-from desc.skycatalogs.utils.config_utils import Tophat
 from desc.skycatalogs.utils.common_utils import print_dated_msg
 import GCRCatalogs
 
-__all__ = ['LookupInfo', 'Cmp']
-
-# Can more or less use second equation under
-# https://en.wikipedia.org/wiki/AB_magnitude#Expression_in_terms_of_f%CE%BB
-# This is almost our case except for us f_nu and f_lam are not spectral flux
-# densities; they're just "spectral flux".  So scale factor is something like
-#    (1 / (units for tophat value)) * c    (c in cm/sec I guess)
-#    (1/4.4659) * 10^(-13) * 2.99792 * 10^10  = 6.7129 * 10^(-4)
-##### SCALE_FACTOR = 6.7129e-4
-# or just let Sed class convert f_nu to f_lambda
+__all__ = ['LookupInfo', 'Cmp', 'MagNorm', 'convert_tophat_sed']
 
 # Index for tophat bin containing 500 nm
 NORMWV_IX = 13
 
-def _convert_tophat_sed(a_bins, f_nu_input, mag_norm, redshift=0,
-                        wavelen_step=5.0):
+def convert_tophat_sed(a_bins, f_nu_input, mag_norm_f, redshift=0,
+                       wavelen_step=0.1):
     '''
     Given a tophat SED and redshift, produce an equivalent SED as lists of
     wavelength and f_lambda. Also compute magnorm
@@ -37,11 +29,11 @@ def _convert_tophat_sed(a_bins, f_nu_input, mag_norm, redshift=0,
     ----------
     a_bins: list of Tophat [tuples (start, width)] in Angstroms
     f_nu: list of values for the tophats
-    mag_norm: an instance of MagNorm
+    mag_norm_f: an instance of MagNorm
     redshift:   needed for computing distance modulus. Should be
                 cosmoDC2 redshiftHubble, aka redshift_hubble in sky catalogs
-    wavelen_step:   Used for resampling
-    scale:   Multiplier for tophat SED values  [unused; obsolete parameter]
+    wavelen_step:    Re-cast tophat seds to use this bin width in nm (keeping
+                     same step function in f_nu space)
 
     return
     ------
@@ -68,15 +60,15 @@ def _convert_tophat_sed(a_bins, f_nu_input, mag_norm, redshift=0,
 
     # Keep the same step function but use fine bins instead of the
     # original tophat widths.
-    fine_width = 0.1     # nm
-    n_bins = int((lam_max - lam_min) / fine_width)
+    wavelen_step = 0.1     # nm
+    n_bins = int((lam_max - lam_min) / wavelen_step)
     lam_fine = np.empty(n_bins)
     f_nu_fine = np.empty(n_bins)
     boundaries = list(lam_nm)
     boundaries.append(lam_max)
     b_ix = 0
     for i in range(n_bins):
-        lam_fine[i] = lam_min + fine_width * i
+        lam_fine[i] = lam_min + wavelen_step * i
         if (lam_fine[i] > boundaries[b_ix + 1]) :
             b_ix = b_ix + 1
         f_nu_fine[i] = f_nu[b_ix]
@@ -84,13 +76,11 @@ def _convert_tophat_sed(a_bins, f_nu_input, mag_norm, redshift=0,
     base_spec = Sed(wavelen=lam_fine, fnu=f_nu_fine)
 
     # Normalize so flambda value at 500 nm is 1.0
-    nm500_ix = int((500 - lam_min) / fine_width) + 1
-    #print(f'At index {nm500_ix} wavelen is {base_spec.wavelen[nm500_ix]}')
-    #print(f'base_spec.flambda is {base_spec.flambda[nm500_ix]}')
+    nm500_ix = int((500 - lam_min) / wavelen_step) + 1
     flambda_norm = base_spec.flambda / base_spec.flambda[nm500_ix]
 
-    return base_spec.wavelen, flambda_norm, mag_norm(f_nu[NORMWV_IX],
-                                                          redshift), val_500nm
+    return base_spec.wavelen, flambda_norm, mag_norm_f(f_nu[NORMWV_IX],
+                                                       redshift), val_500nm
 
 def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
     '''
@@ -121,6 +111,21 @@ def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
             line = '{:8.2f}  {:g}\n'.format(wv[i], f_lambda[i])
             f.write(line)
     f.close()
+
+class MagNorm:
+    def __init__(self, Omega_c=0.2648, Omega_b=0.0448, h=0.71, sigma8=0.8,
+                 n_s=0.963):
+        self.cosmo = ccl.Cosmology(Omega_c=Omega_c, Omega_b=Omega_b, h=h,
+                                   sigma8=sigma8, n_s=n_s)
+    def dl(self, z):
+        aa = 1/(1 + z)
+        return ccl.luminosity_distance(self.cosmo, aa)*ccl.physical_constants.MPC_TO_METER
+    def __call__(self, tophat_sed_value, redshift_hubble, one_maggy=4.3442e13):
+        one_Jy = 1e-26  # W/Hz/m**2
+        Lnu = tophat_sed_value*one_maggy    # convert from maggies to W/Hz
+        Fnu = Lnu/4/np.pi/self.dl(redshift_hubble)**2
+        return -2.5*np.log10(Fnu/one_Jy) + 8.90
+
 
 class LookupInfo(object):
     '''
@@ -215,10 +220,10 @@ class Cmp(object):
                    val_500nm is the sed value at or near 500 nm
         '''
         (lmbda, f_lambda,
-         magnorm, val_500nm) = _convert_tophat_sed(bins, sed_list,
-                                                       self.mag_norm_f,
-                                                       redshift=redshift,
-                                                       wavelen_step=wavelen_step)
+         magnorm, val_500nm) = convert_tophat_sed(bins, sed_list,
+                                                  self.mag_norm_f,
+                                                  redshift=redshift,
+                                                  wavelen_step=wavelen_step)
         if not summary_only:
              _write_sed_file(outpath, lmbda, f_lambda, wv_unit='nm')
         start = (min([b.start for b in bins]))/10.0        # A to nm
