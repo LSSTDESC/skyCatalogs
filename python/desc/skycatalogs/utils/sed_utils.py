@@ -237,7 +237,7 @@ class Cmp(object):
         outpath_csv = os.path.join(self.output_dir, basename_csv)
         basename_csv_brief = f'{self.cmp_name}_sed_hp{self.hp}_brief.csv'
         outpath_csv_brief = os.path.join(self.output_dir, basename_csv_brief)
-        basename_pq = f'{self.cmp_name}_random_sed_hp{self.hp}_summary.parquet'
+        basename_pq = f'{self.cmp_name}_sed_hp{self.hp}_summary.parquet'
         outpath_pq = os.path.join(self.output_dir, basename_pq)
 
         out_dict = {}
@@ -271,14 +271,16 @@ class Cmp(object):
 
         # For debugging predictability
         seed_dict = {}
-        seed_dict['bulge'] = 135711 + 2 * self.hp
-        seed_dict['disk'] = 890123 + 2 * self.hp
+        #seed_dict['bulge'] = 135711 + 2 * self.hp
+        #seed_dict['disk'] = 890123 + 2 * self.hp
+        #  Try different seeds
+        seed_dict['bulge'] = 271423 + 2 * self.hp
+        seed_dict['disk'] = 1780247 + 2 * self.hp
 
         print_dated_msg(f'Cmp.create called for component  {self.cmp_name}')
         #  Really it should have _no_host_extinction suffix but for
         #  now schema is not using it
         sed_col = 'sed_val_' + self.cmp_name + '_no_host_extinction'
-        ###sed_col = 'sed_val_' + self.cmp_name
         sed = np.array(self.coll.get_attribute(sed_col))
         magnorm_col = self.cmp_name + '_magnorm'
         magnorm = np.array(self.coll.get_attribute(magnorm_col))
@@ -321,7 +323,8 @@ class Cmp(object):
                                                           min_ix=ix_list[i])
             orig_sed_file.append(os.path.join(sed_rootdir, orig_sed))
 
-            print_dated_msg(f'Wrote file {i}')
+            if not summary_only:
+                print_dated_msg(f'Wrote file {i}')
 
         # Make summary table and write to a file
         self._write_summary(ix_list, gal_chosen, sed_chosen, redshift_chosen,
