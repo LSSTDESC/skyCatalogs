@@ -14,7 +14,8 @@ from lsst.sims.photUtils import Sed, Bandpass
 from desc.skycatalogs.utils.common_utils import print_dated_msg
 import GCRCatalogs
 
-__all__ = ['LookupInfo', 'Cmp', 'MagNorm', 'convert_tophat_sed']
+__all__ = ['LookupInfo', 'Cmp', 'MagNorm', 'convert_tophat_sed',
+           'get_random_sed', 'NORMWV_IX']
 
 # Index for tophat bin containing 500 nm
 NORMWV_IX = 13
@@ -81,6 +82,27 @@ def convert_tophat_sed(a_bins, f_nu_input, mag_norm_f, redshift=0,
 
     return base_spec.wavelen, flambda_norm, mag_norm_f(f_nu[NORMWV_IX],
                                                        redshift), val_500nm
+
+def get_random_sed(cmp, sed_dir, n_sed, pixel=9556):
+    """
+    Select tophat seds from a known collection.
+
+    Parameters
+    ----------
+    cmp        string    One of 'bulge', 'disk'
+    sed_dir    string    Path to directory containing sed files and summary file
+    n_sed      int       Number of sources needing random seds
+    pixel      int       May be used to pick random collection to select from
+
+    Returns
+    -------
+    Parallel arrays of tophat values and filepath to equivalent file
+    """
+
+    # NYI   for now, just return something
+    tp_vals = np.empty((n_sed,), dtype=np.dtype([('tp_rep',np.float64, 30)]))
+    sed_path = np.empty((n_sed,), dtype=np.str_)
+    return tp_vals, sed_path
 
 def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
     '''

@@ -10,7 +10,6 @@ from desc.skycatalogs.utils.config_utils import *
 
 # For cosmology constants
 import GCRCatalogs
-import pyccl as ccl
 
 if __name__ == "__main__":
     '''
