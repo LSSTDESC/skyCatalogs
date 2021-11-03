@@ -74,7 +74,7 @@ def _make_galaxy_schema(random_seds=False):
               pa.field('MW_av_lsst_y', pa.float32(), True)]
     if random_seds:
         fields.append(pa.field('bulge_sed_file_path', pa.string(), True))
-        fields.append(pa.field('bulge_sed_file_path', pa.string(), True))
+        fields.append(pa.field('disk_sed_file_path', pa.string(), True))
 
     return pa.schema(fields)
 
@@ -220,6 +220,8 @@ class CatalogCreator:
                          n_s=gal_cat.cosmology.n_s)
 
         arrow_schema = _make_galaxy_schema(self._random_sed_dir)
+        #print(f'Number of columns in schema: {len(arrow_schema.names)}')
+        #print(arrow_schema.names)
 
         for p in self._parts:
             print("Starting on pixel ", p)
@@ -288,10 +290,10 @@ class CatalogCreator:
 
         if self._random_sed_dir:
             (bulge_seds, bulge_path) = get_random_sed('bulge',
-                                                      self.random_sed_dir,
+                                                      self._random_sed_dir,
                                                       len(df['galaxy_id']),
                                                       pixel=pixel)
-            (disk_seds, disk_path) = get_random_sed('disk', self.random_sed_dir,
+            (disk_seds, disk_path) = get_random_sed('disk', self._random_sed_dir,
                                                     len(df['galaxy_id']),
                                                     pixel=pixel)
         else:
@@ -350,6 +352,7 @@ class CatalogCreator:
 
         # Some columns need to be renamed and, in one case, units changed
         to_modify = ['position_angle_true', 'redshiftHubble', 'peculiarVelocity']
+        print_col = True
         while u_bnd > l_bnd:
             out_dict = {k : df[k][l_bnd : u_bnd] for k in non_sed if k not in to_modify}
             out_dict['redshift_hubble'] = df['redshiftHubble'][l_bnd : u_bnd]
@@ -368,8 +371,14 @@ class CatalogCreator:
             for k,v in  MW_av_columns.items():
                 out_dict[k] = v[l_bnd : u_bnd]
 
-            ##for kd,i in out_dict.items():
-            ##    print(f'Key={kd}, type={type(i)}, len={len(i)}')
+            if self._random_sed_dir:
+                out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]
+                out_dict['disk_sed_file_path'] = disk_path[l_bnd : u_bnd]
+
+            if print_col:
+                for kd,i in out_dict.items():
+                    print(f'Key={kd}, type={type(i)}, len={len(i)}')
+            print_col = False
             ##exit(0)                                      ######### DEBUG ONLY #######
 
             out_df = pd.DataFrame.from_dict(out_dict)

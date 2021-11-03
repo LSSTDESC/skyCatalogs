@@ -99,10 +99,28 @@ def get_random_sed(cmp, sed_dir, n_sed, pixel=9556):
     Parallel arrays of tophat values and filepath to equivalent file
     """
 
-    # NYI   for now, just return something
-    tp_vals = np.empty((n_sed,), dtype=np.dtype([('tp_rep',np.float64, 30)]))
-    sed_path = np.empty((n_sed,), dtype=np.str_)
-    return tp_vals, sed_path
+    ##tp_vals = np.empty((n_sed,), dtype=np.dtype([('tp_rep',np.float64, 30)]))
+    #sed_path = np.empty((n_sed,), dtype=np.str_)
+    sed_path = []
+    tp_vals_list = []
+
+    # read in summary file
+    summary_path = os.path.join(sed_dir, f'{cmp}_sed_hp{pixel}_summary.parquet')
+    df = pd.read_parquet(summary_path)
+
+    seed = 98765             # start with fixed seed for debugging
+    if pixel != 9556:
+        seed += 2 * pixel
+    n_random = df.shape[0]
+    rng = default_rng(seed)
+    random_ix = rng.integers(0, n_random, n_sed)
+    for i in range(n_sed):
+        #sed_path[i] = df['tp_sed_file'][random_ix[i]]
+        sed_path.append(df['tp_sed_file'][random_ix[i]])
+        tp_vals_list.append(df['tp_vals'][random_ix[i]])
+
+    #tp_vals = tp_vals_list
+    return tp_vals_list, sed_path
 
 def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
     '''

@@ -28,7 +28,7 @@ parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
 out_dir = os.path.join(os.getenv('SCRATCH'), 'desc', 'skycatalogs', 'test')
 parser.add_argument('--output-dir', help='directory for output files',
                     default=out_dir)
-parser.add_argument('--random-sed-dir',
+parser.add_argument('--random-sed-dir', default=None,
                     help='If set, use summary files in dir to find substitute SEDs for galaxies')
 parser.add_argument('--verbose', help='print more output if true',
                     action='store_true')
@@ -38,26 +38,22 @@ print_callinfo('create_sc', args)
 
 output_dir = args.output_dir
 
-rsdir = None
-if args.random_sed_dir:
-    rsdir = args.random_sed_dir
+#rsdir = None
+#if args.random_sed_dir:
+#    rsdir = args.random_sed_dir
 parts = args.pixels
 
 #creator = CatalogCreator(parts, area_partition)
 creator = CatalogCreator(parts, area_partition, output_dir=output_dir,
                          verbose=args.verbose,
-                         random_sed_dir=rsdir)
+                         random_sed_dir=args.random_sed_dir)
 print('Starting with healpix pixel ', parts[0])
 if not args.no_galaxies:
     print("Creating galaxy catalogs")
     creator.create('galaxy')
-    # create_galaxy_catalog(parts, area_partition, output_dir=output_dir,
-    #                       verbose=args.verbose, random_sed_dir=rsdir)
 
 if args.pointsource:
     print("Creating point source catalogs")
     creator.create('pointsource')
-    # create_pointsource_catalog(parts, area_partition, output_dir=output_dir,
-    #                            verbose=args.verbose)
 
 print('All done')
