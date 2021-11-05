@@ -220,8 +220,6 @@ class CatalogCreator:
                          n_s=gal_cat.cosmology.n_s)
 
         arrow_schema = _make_galaxy_schema(self._random_sed_dir)
-        #print(f'Number of columns in schema: {len(arrow_schema.names)}')
-        #print(arrow_schema.names)
 
         for p in self._parts:
             print("Starting on pixel ", p)

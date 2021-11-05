@@ -99,8 +99,6 @@ def get_random_sed(cmp, sed_dir, n_sed, pixel=9556):
     Parallel arrays of tophat values and filepath to equivalent file
     """
 
-    ##tp_vals = np.empty((n_sed,), dtype=np.dtype([('tp_rep',np.float64, 30)]))
-    #sed_path = np.empty((n_sed,), dtype=np.str_)
     sed_path = []
     tp_vals_list = []
 
@@ -115,11 +113,9 @@ def get_random_sed(cmp, sed_dir, n_sed, pixel=9556):
     rng = default_rng(seed)
     random_ix = rng.integers(0, n_random, n_sed)
     for i in range(n_sed):
-        #sed_path[i] = df['tp_sed_file'][random_ix[i]]
         sed_path.append(df['tp_sed_file'][random_ix[i]])
         tp_vals_list.append(df['tp_vals'][random_ix[i]])
 
-    #tp_vals = tp_vals_list
     return tp_vals_list, sed_path
 
 def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
