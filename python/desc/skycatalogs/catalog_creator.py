@@ -55,14 +55,14 @@ def _make_galaxy_schema(random_seds=False):
               pa.field('size_minor_disk_true', pa.float32(), True),
               pa.field('sersic_disk', pa.float32(), True),
               pa.field('position_angle_unlensed', pa.float64(), True),
-              pa.field('sed_val_bulge_no_host_extinction',
+              pa.field('sed_val_bulge',
                        pa.list_(pa.float64()), True),
-              pa.field('sed_val_disk_no_host_extinction',
+              pa.field('sed_val_disk',
                        pa.list_(pa.float64()), True),
-              pa.field('internalAv_bulge', pa.float64(), True),
-              pa.field('internalRv_bulge', pa.float64(), True),
-              pa.field('internalAv_disk', pa.float64(), True),
-              pa.field('internalRv_disk', pa.float64(), True),
+              # pa.field('internalAv_bulge', pa.float64(), True),
+              # pa.field('internalRv_bulge', pa.float64(), True),
+              # pa.field('internalAv_disk', pa.float64(), True),
+              # pa.field('internalRv_disk', pa.float64(), True),
               pa.field('bulge_magnorm', pa.float64(), True),
               pa.field('disk_magnorm', pa.float64(), True),
               pa.field('MW_rv', pa.float32(), True),
@@ -124,11 +124,10 @@ def _make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
 
     return av_dict
 
-
 class CatalogCreator:
     def __init__(self, parts, area_partition, output_dir=None, galaxy_truth=None,
                  sedLookup_dir=None, output_type='parquet', verbose=False,
-                 random_sed_dir=None):
+                 mag_cut=None, random_sed_dir=None):
         """
         Store context for catalog creation
 
@@ -144,7 +143,9 @@ class CatalogCreator:
         galaxy_truth    GCRCatalogs name for galaxy truth (e.g. cosmoDC2)
         sedLookup_dir   Where to find files with some per-galaxy information
                         relevant to finding and using appropriate SED file
+                        OBSOLETE
         output_type     A format.  For now only parquet is supported
+        mag_cut         If not None, exclude galaxies with mag > mag_cut
         random_sed_dir  Indicates special mode where tophat SEDs from cosmoDC2
                         are replaced with ones from a pre-determined sample.
                         Also implies addition of output columns to sky catalog
@@ -161,7 +162,7 @@ class CatalogCreator:
         # index into sed_names array (which is typically around a 1000 entries,
         # whereas #galaxies is of order 10 million) and so forth.
         # If multiprocessing probably should defer this to create_pixel
-        _sedLookup_dir = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sedLookup'
+        ##_sedLookup_dir = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sedLookup'
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
 
         if area_partition['type'] != 'healpix':
@@ -180,13 +181,14 @@ class CatalogCreator:
             self._output_dir = output_dir
         else:
             self._output_dir = os.path.abspath(os.curdir)
-        if not sedLookup_dir:
-            self._sedLookup_dir = _sedLookup_dir
-        else:
-            self._sedLookup_dir = sedLookup_dir
+        # if not sedLookup_dir:
+        #     self._sedLookup_dir = _sedLookup_dir
+        # else:
+        #     self._sedLookup_dir = sedLookup_dir
 
         self._output_type = output_type
         self._verbose = verbose
+        self._mag_cut = mag_cut
         self._random_sed_dir = random_sed_dir
 
     def create(self, catalog_type):
@@ -239,13 +241,19 @@ class CatalogCreator:
 
         # Filename templates: input (sedLookup) and our output.
         # Hardcode for now.
-        sedLookup_template = 'sed_fit_{}.h5'
+        ### sedLookup_template = 'sed_fit_{}.h5'
         output_template = 'galaxy_{}.parquet'
-        tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge_no_host_extinction'
-        tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk_no_host_extinction'
+        tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
+        tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
 
         # Number of rows to include in a row group
         stride = 1000000
+
+        #native_cut = "native_filters=f'healpix_pixel=={pixel}'"
+        hp_filter = [f'healpix_pixel=={pixel}']
+        if self._mag_cut:
+            r_mag_name = 'mag_r_lsst'
+            mag_cut_filter = [f'{r_mag_name} < {self._mag_cut}']
 
         # to_fetch = all columns of interest in gal_cat
         non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'redshiftHubble',
@@ -256,9 +264,9 @@ class CatalogCreator:
         # Find all the tophat sed numbers
         q = gal_cat.list_all_quantities()
         sed_bulge_names = [i for i in q if (i.startswith('sed') and
-                                            i.endswith('bulge_no_host_extinction'))]
+                                            i.endswith('bulge'))]
         sed_disk_names = [i for i in q if (i.startswith('sed') and
-                                           i.endswith('disk_no_host_extinction'))]
+                                           i.endswith('disk'))]
         #Sort sed columns by start value, descending
         def _sed_bulge_key(s):
             return int(re.match(tophat_bulge_re, s)['start'])
@@ -283,8 +291,12 @@ class CatalogCreator:
             if m:
                 tophat_parms.append((m['start'], m['width']))
 
-        df = gal_cat.get_quantities(to_fetch,
-                                    native_filters=f'healpix_pixel=={pixel}')
+        if not self._mag_cut:
+            df = gal_cat.get_quantities(to_fetch, native_filters=hp_filter)
+        else:
+            df = gal_cat.get_quantities(to_fetch + [r_mag_name],
+                                        native_filters=hp_filter,
+                                        filters=mag_cut_filter)
 
         if self._random_sed_dir:
             (bulge_seds, bulge_path) = get_random_sed('bulge',
@@ -304,31 +316,31 @@ class CatalogCreator:
         #  Compute mag_norm from TH sed and redshift
         bulge_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(bulge_seds, df['redshiftHubble']) ]
         disk_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(disk_seds, df['redshiftHubble']) ]
-        # Look up internal A_v, R_v
-        with  h5py.File(os.path.join(self._sedLookup_dir,
-                                     sedLookup_template.format(pixel))) as lookup:
-            lookup_gid = np.array(lookup['galaxy_id'])
-            bulge_av = np.array(lookup['bulge_av'])
-            bulge_rv = np.array(lookup['bulge_rv'])
-            disk_av = np.array(lookup['disk_av'])
-            disk_rv = np.array(lookup['disk_rv'])
-            # Old stuff - reading magnorm from sed fit file
-            # Note shape of bulge_magnorm, disk_magnorm is (6, #objects)
-            # Pick a middle column to use
-            # magnorm_col = 3
-            # bulge_magnorm = np.array(lookup['bulge_magnorm'][magnorm_col])
-            # disk_magnorm =  np.array(lookup['disk_magnorm'][magnorm_col])
+        # # Look up internal A_v, R_v
+        # with  h5py.File(os.path.join(self._sedLookup_dir,
+        #                              sedLookup_template.format(pixel))) as lookup:
+        #     lookup_gid = np.array(lookup['galaxy_id'])
+        #     bulge_av = np.array(lookup['bulge_av'])
+        #     bulge_rv = np.array(lookup['bulge_rv'])
+        #     disk_av = np.array(lookup['disk_av'])
+        #     disk_rv = np.array(lookup['disk_rv'])
+        #     # Old stuff - reading magnorm from sed fit file
+        #     # Note shape of bulge_magnorm, disk_magnorm is (6, #objects)
+        #     # Pick a middle column to use
+        #     # magnorm_col = 3
+        #     # bulge_magnorm = np.array(lookup['bulge_magnorm'][magnorm_col])
+        #     # disk_magnorm =  np.array(lookup['disk_magnorm'][magnorm_col])
 
-            ##  New: Compute magnorm ourselves from tophat values instead
+        #     ##  New: Compute magnorm ourselves from tophat values instead
 
-        # Check that galaxies match and are ordered the same way
-        cosmo_gid = np.array(df['galaxy_id'])
-        if cosmo_gid.shape != lookup_gid.shape:
-            print('#lookup galaxies != #cosmodc2 galaxies')
-            exit(1)
-        if not (cosmo_gid == lookup_gid).all():
-            print('lookup galaxies differ from cosmodc2 galaxies in content or ordering')
-            exit(1)
+        # # Check that galaxies match and are ordered the same way
+        # cosmo_gid = np.array(df['galaxy_id'])
+        # if cosmo_gid.shape != lookup_gid.shape:
+        #     print('#lookup galaxies != #cosmodc2 galaxies')
+        #     exit(1)
+        # if not (cosmo_gid == lookup_gid).all():
+        #     print('lookup galaxies differ from cosmodc2 galaxies in content or ordering')
+        #     exit(1)
 
         # Assume R(V) = 3.1.  Calculate A(V) from R(V), E(B-V). See "Plotting
         # Dust Maps" example in
@@ -338,12 +350,12 @@ class CatalogCreator:
         MW_av_columns = _make_MW_extinction(df['ra'], df['dec'],
                                             MW_rv_constant,
                                             _MW_extinction_bands)
-        #MW_av = 2.742 * ebv_raw
         if self._verbose: print("Made extinction")
 
         #  Write row groups of size stride (or less) until input is exhausted
-        total_row = lookup_gid.shape[0] - 1
-        u_bnd = min(stride, total_row)
+        ####total_row = lookup_gid.shape[0] - 1
+        last_row = len(df['galaxy_id']) - 1
+        u_bnd = min(stride, last_row)
         l_bnd = 0
         rg_written = 0
         writer = None
@@ -357,12 +369,12 @@ class CatalogCreator:
             out_dict['peculiar_velocity'] = df['peculiarVelocity'][l_bnd : u_bnd]
             out_dict['position_angle_unlensed'] = np.radians(df['position_angle_true']
                                                              [l_bnd : u_bnd])
-            out_dict['sed_val_bulge_no_host_extinction'] = bulge_seds[l_bnd : u_bnd]
-            out_dict['sed_val_disk_no_host_extinction'] = disk_seds[l_bnd : u_bnd]
-            out_dict['internalAv_bulge'] = bulge_av[l_bnd : u_bnd]
-            out_dict['internalRv_bulge'] = bulge_rv[l_bnd : u_bnd]
-            out_dict['internalAv_disk'] = disk_av[l_bnd : u_bnd]
-            out_dict['internalRv_disk'] = disk_rv[l_bnd : u_bnd]
+            out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
+            out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
+            #out_dict['internalAv_bulge'] = bulge_av[l_bnd : u_bnd]
+            #out_dict['internalRv_bulge'] = bulge_rv[l_bnd : u_bnd]
+            #out_dict['internalAv_disk'] = disk_av[l_bnd : u_bnd]
+            #out_dict['internalRv_disk'] = disk_rv[l_bnd : u_bnd]
             out_dict['bulge_magnorm'] = bulge_magnorm[l_bnd : u_bnd]
             out_dict['disk_magnorm'] = disk_magnorm[l_bnd : u_bnd]
             out_dict['MW_rv'] = MW_rv[l_bnd : u_bnd]
@@ -389,7 +401,7 @@ class CatalogCreator:
             writer.write_table(out_table)
             rg_written += 1
             l_bnd = u_bnd
-            u_bnd = min(l_bnd + stride, total_row)
+            u_bnd = min(l_bnd + stride, last_row)
 
         writer.close()
         if self._verbose: print("# row groups written: ", rg_written)
