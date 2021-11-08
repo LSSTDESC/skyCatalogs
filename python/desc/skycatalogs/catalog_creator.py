@@ -432,7 +432,7 @@ class CatalogCreator:
             if self._verbose:
                 print("Point sources. Starting on pixel ", p)
                 print_date()
-            create_pointsource_pixel(self, p, arrow_schema, star_cat=_star_db)
+            self.create_pointsource_pixel(p, arrow_schema, star_cat=_star_db)
             if self._verbose:
                 print("completed pixel ", p)
                 print_date()
@@ -474,7 +474,7 @@ class CatalogCreator:
             if self._verbose: print("created arrow table from dataframe")
 
             writer = pq.ParquetWriter(os.path.join(
-                output_dir, output_template.format(pixel)), arrow_schema)
+                self._output_dir, output_template.format(pixel)), arrow_schema)
             writer.write_table(out_table)
 
             writer.close()

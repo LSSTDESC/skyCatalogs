@@ -32,6 +32,10 @@ parser.add_argument('--random-sed-dir', default=None,
                     help='If set, use summary files in dir to find substitute SEDs for galaxies')
 parser.add_argument('--verbose', help='print more output if true',
                     action='store_true')
+
+parser.add_argument('--galaxy-magnitude-cut', default=None,
+                    help='If supplied exclude galaxies with magnitude above')
+
 args = parser.parse_args()
 
 print_callinfo('create_sc', args)
@@ -46,6 +50,7 @@ parts = args.pixels
 #creator = CatalogCreator(parts, area_partition)
 creator = CatalogCreator(parts, area_partition, output_dir=output_dir,
                          verbose=args.verbose,
+                         mag_cut=args.galaxy_magnitude_cut,
                          random_sed_dir=args.random_sed_dir)
 print('Starting with healpix pixel ', parts[0])
 if not args.no_galaxies:
@@ -57,3 +62,4 @@ if args.pointsource:
     creator.create('pointsource')
 
 print('All done')
+print_date()
