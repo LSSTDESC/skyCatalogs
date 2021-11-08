@@ -36,7 +36,8 @@ Galaxy object.
         return self._disk_magnorm
 
     ##### -------------------------------------------
-    # commented stuff below needs thought, likely redesign
+    # commented stuff below needs thought, likely redesign. Or, in the
+    # case of get_flux, we probably just get rid of it
 
     # def get_flux(self, date_time, band):
     #     '''

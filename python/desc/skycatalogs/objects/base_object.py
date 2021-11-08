@@ -82,21 +82,21 @@ class BaseObject(object):
     def partition_id(self):
         return self._belongs_to.partition_id
 
-    def get_flux(self, date_time, band, noMW=False):
-        '''
-        Parameters
-        ----------
-        date_time   datetime object; time at which flux is requested
-        band        specifies interval over which flux is to be integrated
-                    (and filter characteristics?)
-        noMW        If true, don't include Milky Way extinction
+    # def get_flux(self, date_time, band, noMW=False):
+    #     '''
+    #     Parameters
+    #     ----------
+    #     date_time   datetime object; time at which flux is requested
+    #     band        specifies interval over which flux is to be integrated
+    #                 (and filter characteristics?)
+    #     noMW        If true, don't include Milky Way extinction
 
-        Returns
-        -------
-        Flux of the object for specified time, band.  By default
-        include Milky Way extinction.
-        '''
-        raise NotImplementedError
+    #     Returns
+    #     -------
+    #     Flux of the object for specified time, band.  By default
+    #     include Milky Way extinction.
+    #     '''
+    #     raise NotImplementedError
 
     def get_sed(self, **kwargs):
         '''
