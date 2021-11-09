@@ -2,15 +2,14 @@ import os
 import sys
 import argparse
 from desc.skycatalogs.skyCatalogs import *
-from desc.skycatalogs.utils.sed_utils import Cmp, LookupInfo
+from desc.skycatalogs.utils.sed_utils import Cmp, LookupInfo, MagNorm
 from desc.skycatalogs.utils.common_utils import *
 from desc.skycatalogs.utils.config_utils import *
-from desc.skycatalogs.utils.mag_norm import MagNorm
+##from desc.skycatalogs.utils.mag_norm import MagNorm
 
 
 # For cosmology constants
 import GCRCatalogs
-import pyccl as ccl
 
 if __name__ == "__main__":
     '''
