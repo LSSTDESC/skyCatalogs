@@ -3,7 +3,8 @@
 catalog_name : latest
 area_partition :
   { type: healpix, ordering : ring, nside : 32}
-root_directory : /global/cscratch1/sd/jrbogart/desc/skycatalogs/to_translate
+# root_directory : /global/cscratch1/sd/jrbogart/desc/skycatalogs/to_translate
+root_directory : /global/cscratch1/sd/jrbogart/desc/skycatalogs/mag26
 SED_models :
   -
     tophat :
