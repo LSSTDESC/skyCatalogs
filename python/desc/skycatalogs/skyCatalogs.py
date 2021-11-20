@@ -49,6 +49,39 @@ def _get_intersecting_hps(hp_ordering, nside, region):
 
         return healpy.query_disc(nside, center, radius_rad, inclusive=True,
                                  nest=False)
+def _compute_mask(region, ra, dec):
+    '''
+    Compute mask according to region for provided data
+    Parameters
+    ----------
+    region         Supported shape or None
+    ra,dec         Coordinates for data to be masked
+    Returns
+    -------
+    mask of elements to be omitted
+
+    '''
+    mask = None
+    if type(region) == type(_aBox):
+        mask = np.logical_or((arrow_t['ra'] < region.ra_min),
+                             (arrow_t['ra'] > region.ra_max))
+        mask = np.logical_or(mask, (arrow_t['dec'] < region.dec_min))
+        mask = np.logical_or(mask, (arrow_t['dec'] > region.dec_max))
+    if type(region) == type(_aDisk):
+        # Change positions to 3d vectors to measure distance
+        p_vec = healpy.pixelfunc.ang2vec(arrow_t['ra'],
+                                         arrow_t['dec'],
+                                         lonlat=True)
+
+        c_vec = healpy.pixelfunc.ang1vec([region.ra],
+                                         [region.dec],
+                                         lonlat=True)[0]
+        # change disk radius to radians
+        radius_rad = (region.radius_as * units.arcsec).to_value('radian')
+        inners = [np.dot(pos, c_vec) for pos in p_vec]
+        mask = np.arccos(inners) > radius_rad
+
+    return mask
 
 class SkyCatalog(object):
     '''
@@ -84,6 +117,32 @@ class SkyCatalog(object):
         #    for 'object_types', map object type to filepath
         self._hp_info = dict()
         self._find_all_hps()
+
+    def get_config_value(self, key_path):
+        '''
+        Find value belonging to key in a config.
+        Parameters
+        ----------
+        key_path    string   of form 'a/b/c/../q' where all but last
+                             component must be a dict
+
+        Returns
+        -------
+        Value associated with key_path if config contains such a path
+        '''
+        path_items = key_path.split('/')
+        #print("path_items: ", path_items)
+        #print("All but last: ", path_items[:-1])
+        d = self._config
+        for i in path_items[:-1]:
+            #print(f'working on item {i}')
+            if not i in d:
+                raise ValueError(f'Item {i} not found')
+            #print(f'Type of d[i]: {type(d[i])} Value: {d[i]}')
+            d = d[i]
+            if not isinstance(d, dict):
+                raise ValueError(f'intermediate {d} is not a dict')
+        return d[path_items[-1]]
 
     def _validate_config(self):
         pass
@@ -209,6 +268,7 @@ class SkyCatalog(object):
         object_list = ObjectList()
 
         G_COLUMNS = ['galaxy_id', 'ra', 'dec']
+        PS_COLUMNS = ['object_type', 'id', 'ra', 'dec']
         if self.verbose:
             print('Working on healpix pixel ', hp)
 
@@ -227,8 +287,10 @@ class SkyCatalog(object):
         root_dir = self._config['root_directory']
         for ot in obj_types:
             if 'file_template' in self._config['object_types'][ot]:
+                #print(f'For obj type {ot} found file_template')
                 f = self._hp_info[hp]['object_types'][ot]
             elif 'parent' in self._config['object_types'][ot]:
+                #print(f'For obj type {ot} found parent')
                 f = self._hp_info[hp]['object_types'][obj_types[ot]['parent']]
             if f not in self._hp_info[hp]:
                 the_reader = parquet_reader.ParquetReader(os.path.join(root_dir,f), mask=None)
@@ -246,24 +308,26 @@ class SkyCatalog(object):
                 # Make a boolean array, value set to 1 for objects
                 # outside the region
                 if region is not None:
-                    if type(region) == type(_aBox):
-                        mask = np.logical_or((arrow_t['ra'] < region.ra_min),
-                                             (arrow_t['ra'] > region.ra_max))
-                        mask = np.logical_or(mask, (arrow_t['dec'] < region.dec_min))
-                        mask = np.logical_or(mask, (arrow_t['dec'] > region.dec_max))
-                    if type(region) == type(_aDisk):
-                        # Change positions to 3d vectors to measure distance
-                        p_vec = healpy.pixelfunc.ang2vec(arrow_t['ra'],
-                                                         arrow_t['dec'],
-                                                         lonlat=True)
+                    # This belongs in a separate routine
+                    mask = _compute_mask(region, arrow_t['ra'], arrow_t['dec'])
+                    # if type(region) == type(_aBox):
+                    #     mask = np.logical_or((arrow_t['ra'] < region.ra_min),
+                    #                          (arrow_t['ra'] > region.ra_max))
+                    #     mask = np.logical_or(mask, (arrow_t['dec'] < region.dec_min))
+                    #     mask = np.logical_or(mask, (arrow_t['dec'] > region.dec_max))
+                    # if type(region) == type(_aDisk):
+                    #     # Change positions to 3d vectors to measure distance
+                    #     p_vec = healpy.pixelfunc.ang2vec(arrow_t['ra'],
+                    #                                      arrow_t['dec'],
+                    #                                      lonlat=True)
 
-                        c_vec = healpy.pixelfunc.ang1vec([region.ra],
-                                                         [region.dec],
-                                                         lonlat=True)[0]
-                        # change disk radius to radians
-                        radius_rad = (region.radius_as * units.arcsec).to_value('radian')
-                        inners = [np.dot(pos, c_vec) for pos in p_vec]
-                        mask = np.arccos(inners) > radius_rad
+                    #     c_vec = healpy.pixelfunc.ang1vec([region.ra],
+                    #                                      [region.dec],
+                    #                                      lonlat=True)[0]
+                    #     # change disk radius to radians
+                    #     radius_rad = (region.radius_as * units.arcsec).to_value('radian')
+                    #     inners = [np.dot(pos, c_vec) for pos in p_vec]
+                    #     mask = np.arccos(inners) > radius_rad
 
                 else:
                     mask = None
@@ -291,9 +355,47 @@ class SkyCatalog(object):
                                                   region=region,
                                                   mask=mask,
                                                   reader=rdr)
-
-
                 object_list.append_collection(new_collection)
+
+                # Now do the same for point sources
+            if 'star' in rdr_ot[rdr]:
+                arrow_t = rdr.read_columns(PS_COLUMNS, None) # or read_row_group
+                # Make a boolean array, value set to 1 for objects
+                # outside the region
+                if region is not None:
+                    # This belongs in a separate routine
+                    mask = _compute_mask(region, arrow_t['ra'], arrow_t['dec'])
+                else:
+                    mask = None
+
+                if mask is not None:
+                    masked_ra = ma.array(arrow_t['ra'], mask=mask)
+                    #print("Masked array size: ", masked_ra.size)
+                    #print("Masked array compressed size: ", masked_ra.compressed().size)
+                    ra_compress = masked_ra.compressed()
+                    if ra_compress.size > 0:
+                        dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
+                        id_compress = ma.array(arrow_t['galaxy_id'], mask=mask).compressed()
+                    else:
+                        continue
+                else:
+                    ra_compress = arrow_t['ra']
+                    dec_compress = arrow_t['dec']
+                    id_compress = arrow_t['id']
+                    sourcetype_compress = arrow_t['object_type']
+
+                new_collection = ObjectCollection(ra_compress,
+                                                  dec_compress,
+                                                  id_compress,
+                                                  sourcetype_compress,
+                                                  hp,
+                                                  region=region,
+                                                  mask=mask,
+                                                  reader=rdr)
+                object_list.append_collection(new_collection)
+
+
+
         return object_list
 
 

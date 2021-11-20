@@ -41,6 +41,8 @@ parser.add_argument('--band', choices=['u', 'g', 'r', 'i', 'z', 'y'],
                     default='r', help='lsst band for the visit')
 parser.add_argument('--verbose', help='print more output if true',
                     action='store_true')
+parser.add_argument('--clear', help='remove any old files for this visit',
+                    action='store_true')
 
 args = parser.parse_args()
 
@@ -48,7 +50,8 @@ print_callinfo('translate_sc', args)
 
 translator = Translator(args.visit, args.config_path, args.outputdir,
                         object_types=args.object_types,
-                        band=args.band, verbose=args.verbose)
+                        band=args.band, verbose=args.verbose,
+                        clear=args.clear)
 
 if args.region:
     disk = Disk(args.region[0], args.region[1], args.region[2])

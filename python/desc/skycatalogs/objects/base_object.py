@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 import numpy as np
 import itertools
 
@@ -170,7 +170,7 @@ class ObjectCollection(Sequence):
 
     def get_attribute(self, attribute_name):
         '''
-        Retrieve a particular attribute for a source.
+        Retrieve a particular attribute for a collection
         If we already have it, just return it.  Otherwise attempt
         to fetch.   Reader should check whether the attribute actually
         exists.
@@ -180,6 +180,30 @@ class ObjectCollection(Sequence):
 
         val = self._rdr.read_columns([attribute_name], self._mask)[attribute_name]
         return val
+
+    def get_attributes(self, attribute_list):
+        '''
+        Return requested attributes as an OrderedDict. Keys are column names.
+        our mask if we have one
+        '''
+        df = self._rdr.read_columns(attribute_list, self._mask)
+        return df
+
+    def get_attributes_iterator(self, attribute_names):
+        '''
+        Return iterator for  list of attributes for a collection.  Most of
+        the work probably happens in the Parquet reader
+
+        Parameters
+        ----------
+        attribute_names  list of attribute names
+        row_group
+
+        Returns
+        -------
+        iterator which returns df for a chunk of values of the attributes
+        '''
+        pass        #    for now
 
     # implement Sequence methods
     def __contains__(self, obj):
