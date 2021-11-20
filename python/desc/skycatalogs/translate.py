@@ -29,7 +29,7 @@ def _check_file(path):
     raise ValueError(f'File for {path} already exists')
 
 def _form_star_instance_columns(band):
-    star_instance = [column_finder('prefix', _FIXED, ('object', str)),
+    star_instance = [column_finder('prefix', _FIXED, ('object', np.dtype('U6'))),
                      column_finder('uniqueId', _DATA_SOURCE, 'id'),
                      column_finder('raPhoSim', _DATA_SOURCE, 'ra'),
                      column_finder('decPhoSim', _DATA_SOURCE, 'dec'),
@@ -41,8 +41,8 @@ def _form_star_instance_columns(band):
                      column_finder('kappa', _FIXED, (0, int)),
                      column_finder('raOffset', _FIXED, (0, int)),
                      column_finder('decOffset', _FIXED, (0, int)),
-                     column_finder('spatialmodel', _FIXED, ('point',str)),
-                     column_finder('internalExtinctionModel', _FIXED, ('none', str)),
+                     column_finder('spatialmodel', _FIXED, ('point', np.dtype('U5'))),
+                     column_finder('internalExtinctionModel', _FIXED, ('none', np.dtype('U4'))),
                      column_finder('galacticExtinctionModel', _CONFIG_SOURCE,
                                    'object_types/star/MW_extinction'),
                      column_finder('galactivAv', _DATA_SOURCE,
@@ -122,8 +122,6 @@ class Translator:
         for v in handle_dict.values():
             v[1].close()
 
-####    _STAR_DATA_MAPPING = [(q.instance_name,q.source_parm) for q in _STAR_INSTANCE if q.source_type == _DATA_SOURCE]
-
     def translate_pixel(self, pixel=9556):
         '''
         Make all instance catalog entries for the healpix pixel
@@ -138,13 +136,12 @@ class Translator:
             #  Get columns from SkyCatalog
             collections = self._sky_cat.get_objects_by_hp(0, pixel,
                                                           obj_type_set=set(['star'])).get_collections()
-            print('Type of collections: ',type(collections))
-            print('Len of collections: ', len(collections))
+            #print('Len of collections: ', len(collections))
             star_collection = collections[0]
-            print('Type of star_collection', type(star_collection))
+            #print('Type of star_collection', type(star_collection))
             skydata_star = star_collection.get_attributes(star_data_columns)
             data_len = len(skydata_star['ra'])
-            print(f'skydata_star #columns: {len(skydata_star)} column length: {data_len}')
+            #print(f'skydata_star #columns: {len(skydata_star)} column length: {data_len}')
             extinction_model = self._sky_cat.get_config_value(star_config_columns['galacticExtinctionModel'])
             galacticRv = self._sky_cat.get_config_value(star_config_columns['galacticRv'])
             # Make a new ordered dict including everything
@@ -156,9 +153,6 @@ class Translator:
                     star_write[c.instance_name] = skydata_star[key_list[data_ix]]
                     data_ix = data_ix + 1
                 elif c.source_type == _FIXED:
-                    print(f'Quantity name: {c.instance_name}')
-                    print(f'Fixed data value: {c.source_parm[0]} Fixed data type: {c.source_parm[1]}')
-
                     star_write[c.instance_name] = np.full(data_len,
                                                           c.source_parm[0], dtype=c.source_parm[1])
                 else:   # _CONFIG_SOURCE.  We only have two
