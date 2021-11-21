@@ -160,7 +160,7 @@ class Translator:
                     if c.instance_name == 'galacticExtinctionModel':
                         star_write[c.instance_name] = np.full(data_len, val)
                     else:     # it's r_v
-                        star_write[c.instance_name] = np.full(data_len, int(val))
+                        star_write[c.instance_name] = np.full(data_len, float(val))
 
             _write_to_instance(self._handle_dict['star'][1], star_write, _STAR_FMT)
 
