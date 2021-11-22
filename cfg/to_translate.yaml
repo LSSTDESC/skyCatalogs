@@ -27,6 +27,13 @@ MW_extinction_values :
   a_v :
     mode : lsst_band
 
+Cosmology :
+  Omega_c : 0.2648
+  Omega_b : 0.0448
+  h : 0.71
+  sigma8 : 0.8
+  n_s : 0.963
+
 object_types :
   galaxy :
       file_template : 'galaxy_(?P<healpix>\d+).parquet'
