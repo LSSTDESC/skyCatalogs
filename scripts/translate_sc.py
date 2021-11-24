@@ -5,7 +5,6 @@ Create instance catalog(s) from a sky catalog.
 
 import os
 import argparse
-#from desc.skycatalogs.catalog_creator import CatalogCreator
 from desc.skycatalogs.utils.common_utils import print_date, print_callinfo
 from desc.skycatalogs.translate import Translator
 from desc.skycatalogs.skyCatalogs import Disk
@@ -59,15 +58,6 @@ else:
     disk = None
 
 translator.translate_visit(args.pixels, disk)
-
-# print('Starting with healpix pixel ', parts[0])
-# if not args.no_galaxies:
-#     print("Creating galaxy catalogs")
-#     creator.create('galaxy')
-
-# if args.pointsource:
-#     print("Creating point source catalogs")
-#     creator.create('pointsource')
 
 print('All done')
 print_date()

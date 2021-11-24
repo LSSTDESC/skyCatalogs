@@ -1,4 +1,6 @@
 import os
+import shutil
+import gzip
 from collections import namedtuple, OrderedDict
 import numpy as np
 import pandas as pd
@@ -158,6 +160,10 @@ class Translator:
 
         for v in handle_dict.values():
             v[1].close()
+            if  os.path.basename(v[0]).find('instcat') == -1:
+                with open(v[0], 'rb') as f_in:
+                    with gzip.open(f'{v[0]}.gz', 'wb') as f_out:
+                        shutil.copyfileobj(f_in, f_out)
 
     def translate_pixel(self, pixel=9556):
         '''
@@ -173,9 +179,7 @@ class Translator:
             #  Get columns from SkyCatalog
             collections = self._sky_cat.get_objects_by_hp(0, pixel,
                                                           obj_type_set=set(['star'])).get_collections()
-            #print('Len of collections: ', len(collections))
             star_collection = collections[0]
-            #print('Type of star_collection', type(star_collection))
             skydata_star = star_collection.get_attributes(star_data_columns)
             data_len = len(skydata_star['ra'])
 
@@ -186,15 +190,22 @@ class Translator:
                     star_write[c.instance_name] = skydata_star[c.source_parm]
                 elif c.source_type == _FIXED:
                     star_write[c.instance_name] = np.full(data_len,
-                                                          c.source_parm[0], dtype=c.source_parm[1])
-                else:   # _CONFIG_SOURCE.  We only have two
+                                                          c.source_parm[0],
+                                                          dtype=c.source_parm[1])
+                elif c.source_type == _CONFIG_SOURCE:
                     val = self._sky_cat.get_config_value(c.source_parm)
                     if c.instance_name == 'galacticExtinctionModel':
                         star_write[c.instance_name] = np.full(data_len, val)
-                    else:     # it's r_v
-                        star_write[c.instance_name] = np.full(data_len, float(val))
+                    elif c.instance_name == 'galacticRv':
+                        star_write[c.instance_name] = np.full(data_len,
+                                                              float(val))
+                    else:
+                        raise ValueError(f'unknown config src {c.instance_name}')
+                else:
+                    raise ValueError(f'unknown source type {c.source_type}')
 
-            _write_to_instance(self._handle_dict['star'][1], star_write, _STAR_FMT)
+            _write_to_instance(self._handle_dict['star'][1], star_write,
+                               _STAR_FMT)
 
             # Also write a line to the summary file
             self._handle_dict['summary'][1].write(f'includeobj star_cat_{self._visit}.txt.gz\n')
@@ -202,19 +213,17 @@ class Translator:
         if 'disk' in self._object_types or 'bulge' in self._object_types:
             self._translate_galaxy_pixel(pixel)
 
-
     def _translate_galaxy_pixel(self, pixel):
         #  Get objects from SkyCatalog.   We can use the same collection for both
         # 'disk' and 'bulge', but fetch somewhat different columns
         collections = self._sky_cat.get_objects_by_hp(0, pixel,
                                                       obj_type_set=set(['galaxy'])).get_collections()
-        #print('Len of collections: ', len(collections))
         cmp_collection = collections[0]
 
         cmps = self._object_types.intersection({'disk', 'bulge'})
         for cmp in cmps:
-            # Form relative dir name
             sed_root_relative = f'{cmp}_sed'
+            # Following is not needed since we're not writing SED files
             # sed_root = os.path.join(self._output_dir, f'{self._visit}', sed_root_relative)
             # try:
             #     os.mkdir(sed_root)
@@ -232,46 +241,50 @@ class Translator:
             skydata_cmp = cmp_collection.get_attributes(cmp_data_columns)
             data_len = len(skydata_cmp['ra'])
             cmp_write = OrderedDict()
-            data_ix = 0
-            key_list = [k for k in skydata_cmp.keys()]
             for c in cmp_instance:
                 if c.source_type == _DATA_SOURCE:
-                    cmp_write[c.instance_name] = skydata_cmp[key_list[data_ix]]
-                    data_ix = data_ix + 1
+                    cmp_write[c.instance_name] = skydata_cmp[c.source_parm]
                 elif c.source_type == _FIXED:
                     cmp_write[c.instance_name] = np.full(data_len,
-                                                          c.source_parm[0], dtype=c.source_parm[1])
-                elif c.source_type == _CONFIG_SOURCE:            # We only have three
+                                                          c.source_parm[0],
+                                                         dtype=c.source_parm[1])
+                elif c.source_type == _CONFIG_SOURCE:     # We only have three
                     val = self._sky_cat.get_config_value(c.source_parm)
                     if c.instance_name == 'galacticExtinctionModel':
                         cmp_write[c.instance_name] = np.full(data_len, val)
-                    elif c.instance_name == 'galacticRv' :     # it's r_v
-                        cmp_write[c.instance_name] = np.full(data_len, float(val))
+                    elif c.instance_name == 'galacticRv' :
+                        cmp_write[c.instance_name] = np.full(data_len,
+                                                             float(val))
                     elif c.instance_name == 'spatialmodel' :
                         cmp_write[c.instance_name] = np.full(data_len, val)
                     else:
                         raise ValueError(f'unknown config source {c.instance_name}')
                 elif c.source_type == _COMPUTE:
                     if c.instance_name == 'sedFilepath':
-                        #  Have to use both returned results; pass to sed-making routine
-                        th_sed = skydata_cmp[c.source_parm[0]]
-                        redshift_hubble = skydata_cmp[c.source_parm[1]]
-                        magnorm_f = MagNorm()         #### change to get init parms from config
-                        th_bins = self._config.get_tophat_parameters()
+                        #  Comment out code having to do with SED file creation
+                        # SED files will be written before or after instance
+                        # catalogs.  Takes too long to do on the fly
+                        # and probably only a small sample is needed.
+                        # They should go somewhere independent of visit
+                        # th_sed = skydata_cmp[c.source_parm[0]]
+                        # redshift_hubble = skydata_cmp[c.source_parm[1]]
+                        # In line below should get init parms from config
+                        # magnorm_f = MagNorm()
+                        # th_bins = self._config.get_tophat_parameters()
+
                         sed_filepaths = []
                         ####for (f_nu, r_h, g_id) in zip(th_sed, redshift_hubble, skydata_cmp['galaxy_id']):
                         for g_id in skydata_cmp['galaxy_id']:
                             fname = f'{g_id}_{cmp}_sed.txt'
 
-                            # SED files will be written before or after the instance catalogs
-                            #####wv, flambda, magnorm, val_500nm = convert_tophat_sed(th_bins, f_nu, magnorm_f, r_h)
-                            # figure out where it should go and what it should be called.
-                            # for now, put in subfolder of output, say VISIT/OBJTYPE_sed
-                            # and include object id in the filename
-                            # sedfilepath as written in the output will be relative to the
-                            # VISIT directory
+                            # wv, flambda, magnorm, val_500nm = convert_tophat_sed(th_bins, f_nu, magnorm_f, r_h)
+
+                            # Include object id in the filename
+                            # sedfilepath as written in the output will be
+                            # relative to some known directory
                             #####write_sed_file(os.path.join(sed_root, fname), wv, flambda)
-                            sed_filepaths.append(os.path.join(sed_root_relative, fname))
+                            sed_filepaths.append(os.path.join(sed_root_relative,
+                                                              fname))
                         cmp_write[c.instance_name] = np.array(sed_filepaths)
                 else:
                     raise ValueError(f'unknown column source type {c.source_type}')
