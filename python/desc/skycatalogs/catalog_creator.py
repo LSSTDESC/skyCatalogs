@@ -389,7 +389,6 @@ class CatalogCreator:
                 for kd,i in out_dict.items():
                     print(f'Key={kd}, type={type(i)}, len={len(i)}')
             print_col = False
-            ##exit(0)                                      ######### DEBUG ONLY #######
 
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)

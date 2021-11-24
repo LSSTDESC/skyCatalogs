@@ -148,14 +148,16 @@ class SkyCatalog(object):
         pass
 
     def _find_all_hps(self):
-        # for each healpix with files matching pattern in the directory,
-        # update _hp_info
-        #   self._hp_info[hpid]['files'] =
-        #     {'relpath' : the_filename, 'handle' : None}    and,
-        #  for each object_type represented in the file,
-        #   self._hp_info[hpid]['object_types'][ot] = the_filename
-        # When file is open, set handle to the Parquet file object
-        # (or perhaps something else if underlying format is not Parquet)
+        '''
+        For each healpix with files matching pattern in the directory,
+        update _hp_info as needed to keep track of all files for that healpix
+        and the object types included in those files.   Also..
+
+        Returns
+        -------
+        Set of healpix pixels with at least one file in the directory
+
+        '''
 
         cat_dir = self._config['root_directory']
 
@@ -187,9 +189,15 @@ class SkyCatalog(object):
 
     def get_hps_by_region(self, region):
         '''
+        Parameters
+        ----------
         Region can be a box (named 4-tuple (min-ra, max-ra, min-dec, max-dec))
         or a circle (named 3-tuple (ra, dec, radius))
         Catalog area partition must be by healpix
+
+        Returns
+        -------
+        Set of healpixels intersecting the region
         '''
         # If area_partition doesn't use healpix, raise exception
 
@@ -200,18 +208,23 @@ class SkyCatalog(object):
             #.intersection(self._hps.keys())
 
     def get_object_type_names(self):
+        '''
+        Returns
+        -------
+        All object type names in the catalog's config
+        '''
         return set(self._config['object_types'].keys())
 
     # Add more functions to return parts of config of possible interest
     # to user
 
-    def get_objects_by_region(self, datetime, region, obj_type_set=None):
+    def get_objects_by_region(self, region, obj_type_set=None, datetime=None):
         '''
         Parameters
         ----------
-        datetime       Python datetime object.
         region         region is a named tuple.  May be box or circle
         obj_type_set   Return only these objects. Defaults to all available
+        datetime       Python datetime object. Ignored except for SSO
 
         Returns
         -------
@@ -237,34 +250,42 @@ class SkyCatalog(object):
         for hp in hps:
             # Maybe have a multiprocessing switch? Run-time option when
             # catalog is opened?
-            c = self.get_objects_by_hp(datetime, hp, region, obj_types)
+            c = self.get_objects_by_hp(hp, region, obj_types, datetime)
             if (len(c)) > 0:
                 ###obj_colls = obj_colls + c
                 object_list.append_object_list(c)
 
         return object_list
 
-    def get_object_iterator_by_region(self, datetime, region=None,
-                                      obj_type_set=None, max_chunk=None):
+    def get_object_iterator_by_region(self, region=None, obj_type_set=None,
+                                      max_chunk=None, datetime=None):
         '''
         Parameters
         ----------
-        datetime       Python datetime object.
-        region         min & max for ra and dec
+        region         Either a box or a circle (each represented as
+                       named tuple)
         obj_type_set   Return only these objects. Defaults to all available
         max_chunk      If specified, iterator will return no more than this
                        number of objections per iteration
+        datetime       Python datetime object. Ignored for all but SSO
+
         Returns
         -------
         An iterator
         '''
-        pass
+        raise NotImplementedError('get_object_iterator_by_region not implemented yet. See get_objects_by_region instead for now')
 
-    def get_objects_by_hp(self, datetime, hp, region=None, obj_type_set=None):
+    def get_objects_by_hp(self, hp, region=None, obj_type_set=None,
+                          datetime=None):
+        '''
+        Find all object
         # Find the right Sky Catalog file or files (depends on obj_type_set)
         # Get file handle(s) and store if we don't already have it (them)
 
-        # Returns: ObjectList containing sky objects in the region and the hp
+        Returns
+        -------
+        ObjectList containing sky objects in the region and the hp
+        '''
         object_list = ObjectList()
 
         G_COLUMNS = ['galaxy_id', 'ra', 'dec']
@@ -403,8 +424,8 @@ class SkyCatalog(object):
         #    but if region cut leaves too small a list, read more rowgroups
         #    to achieve a reasonable size list (or exhaust the file)
 
-    def get_object_iterator_by_hp(self, datetime, hp, obj_type_set=None,
-                                  max_chunk=None):
+    def get_object_iterator_by_hp(self, hp, obj_type_set=None,
+                                  max_chunk=None, datetime=None):
         '''
         Parameters
         ----------
