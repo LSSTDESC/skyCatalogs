@@ -158,6 +158,13 @@ class Translator:
         else:
             self.translate_region(region)
 
+        # Write a line to the summary file for each cmp
+        for cmp in self._object_types:
+            if cmp == 'galaxy':
+                continue
+            else:
+                self._handle_dict['summary'][1].write(f'includeobj {cmp}_cat_{self._visit}.txt.gz\n')
+
         for v in handle_dict.values():
             v[1].close()
             if  os.path.basename(v[0]).find('instcat') == -1:
@@ -177,7 +184,7 @@ class Translator:
             star_config_columns = {q.instance_name : q.source_parm for q in star_instance if q.source_type == _CONFIG_SOURCE}
 
             #  Get columns from SkyCatalog
-            collections = self._sky_cat.get_objects_by_hp(0, pixel,
+            collections = self._sky_cat.get_objects_by_hp(pixel,
                                                           obj_type_set=set(['star'])).get_collections()
             star_collection = collections[0]
             skydata_star = star_collection.get_attributes(star_data_columns)
@@ -207,8 +214,6 @@ class Translator:
             _write_to_instance(self._handle_dict['star'][1], star_write,
                                _STAR_FMT)
 
-            # Also write a line to the summary file
-            self._handle_dict['summary'][1].write(f'includeobj star_cat_{self._visit}.txt.gz\n')
 
         if 'disk' in self._object_types or 'bulge' in self._object_types:
             self._translate_galaxy_pixel(pixel)
@@ -216,7 +221,7 @@ class Translator:
     def _translate_galaxy_pixel(self, pixel):
         #  Get objects from SkyCatalog.   We can use the same collection for both
         # 'disk' and 'bulge', but fetch somewhat different columns
-        collections = self._sky_cat.get_objects_by_hp(0, pixel,
+        collections = self._sky_cat.get_objects_by_hp(pixel,
                                                       obj_type_set=set(['galaxy'])).get_collections()
         cmp_collection = collections[0]
 
@@ -290,6 +295,3 @@ class Translator:
                     raise ValueError(f'unknown column source type {c.source_type}')
 
             _write_to_instance(self._handle_dict[cmp][1], cmp_write, _CMP_FMT)
-
-            # Also write a line to the summary file
-            self._handle_dict['summary'][1].write(f'includeobj {cmp}_cat_{self._visit}.txt.gz\n')
