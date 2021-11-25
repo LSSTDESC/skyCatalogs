@@ -7,6 +7,7 @@ import pandas as pd
 from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog
 from desc.skycatalogs.utils.config_utils import Config, open_config_file
 from desc.skycatalogs.utils.sed_utils import MagNorm, convert_tophat_sed, write_sed_file
+from desc.skycatalogs.utils.translate_utils import column_finder, check_file, write_to_instance
 
 '''
 Guts of the code to translate sky catalog to instance catalog(s)
@@ -22,18 +23,6 @@ _COMPUTE = 3
 _STAR_FMT = '{:s} {:d} {:.14f} {:.14f} {:.8f} {:s} {:d} {:d} {:d} {:d} {:d} {:d} {:s} {:s} {:s} {:.8f} {:f}\n'
 
 _CMP_FMT = '{:s} {:d} {:.14f} {:.14f}, {:.8f}, {:s} {:.9g} {:.9g} {:.9g} {:.9g} {:d} {:d} {:s} {:.9g} {:.9g} {:f} {:s} {:s} {:.8f} {:f}\n'
-
-column_finder = namedtuple('ColumnFinder', ['instance_name', 'source_type',
-                                            'source_parm'])
-
-def _check_file(path):
-    '''Look for a file that should not exist'''
-    try:
-        f = open(path, mode='r')
-    except FileNotFoundError as e:
-        return
-
-    raise ValueError(f'File for {path} already exists')
 
 def _form_star_instance_columns(band):
     star_instance = [column_finder('prefix', _FIXED, ('object', np.dtype('U6'))),
@@ -85,17 +74,6 @@ def _form_cmp_instance_columns(cmp, band):
                                   'MW_extinction_values/r_v/value')]
     return cmp_instance
 
-def _write_to_instance(handle, ordered_data_dict, fmt):
-    '''
-    Parameters
-    ----------
-    handle             file handle to which text will be written
-    ordered_data_dict  columns in the order they should be written
-    '''
-    col_list = [ordered_data_dict[k] for k in ordered_data_dict]
-    for row in zip(*col_list):
-        handle.write(fmt.format(*row))
-
 class Translator:
     def __init__(self, visit, config_path, output_dir, object_types, band='r',
                  verbose=False, clear=False):
@@ -137,7 +115,7 @@ class Translator:
         # Open summary file and a file for each object type.
         visit = self._visit
         summ_path = os.path.join(self._output_dir, f'{visit}/instcat_{visit}.txt')
-        if not self._clear: _check_file(summ_path)
+        if not self._clear: check_file(summ_path)
         f_summ =  open(summ_path, mode='w')
         handle_dict = {'summary' : (summ_path, f_summ)}
         for cmp in self._object_types:
@@ -148,7 +126,7 @@ class Translator:
                                      f'{visit}/{cmp}_gal_cat_{visit}.txt')
             else:
                 fpath = os.path.join(self._output_dir, f'{visit}/{cmp}_cat_{visit}.txt')
-            if not self._clear: _check_file(fpath)
+            if not self._clear: check_file(fpath)
             handle_dict[cmp] = (fpath, open(fpath, mode='w'))
         self._handle_dict = handle_dict
 
@@ -200,7 +178,7 @@ class Translator:
                                                           c.source_parm[0],
                                                           dtype=c.source_parm[1])
                 elif c.source_type == _CONFIG_SOURCE:
-                    val = self._sky_cat.get_config_value(c.source_parm)
+                    val = self._config.get_config_value(c.source_parm)
                     if c.instance_name == 'galacticExtinctionModel':
                         star_write[c.instance_name] = np.full(data_len, val)
                     elif c.instance_name == 'galacticRv':
@@ -211,7 +189,7 @@ class Translator:
                 else:
                     raise ValueError(f'unknown source type {c.source_type}')
 
-            _write_to_instance(self._handle_dict['star'][1], star_write,
+            write_to_instance(self._handle_dict['star'][1], star_write,
                                _STAR_FMT)
 
 
@@ -254,7 +232,7 @@ class Translator:
                                                           c.source_parm[0],
                                                          dtype=c.source_parm[1])
                 elif c.source_type == _CONFIG_SOURCE:     # We only have three
-                    val = self._sky_cat.get_config_value(c.source_parm)
+                    val = self._config.get_config_value(c.source_parm)
                     if c.instance_name == 'galacticExtinctionModel':
                         cmp_write[c.instance_name] = np.full(data_len, val)
                     elif c.instance_name == 'galacticRv' :
@@ -294,4 +272,4 @@ class Translator:
                 else:
                     raise ValueError(f'unknown column source type {c.source_type}')
 
-            _write_to_instance(self._handle_dict[cmp][1], cmp_write, _CMP_FMT)
+            write_to_instance(self._handle_dict[cmp][1], cmp_write, _CMP_FMT)

@@ -118,32 +118,6 @@ class SkyCatalog(object):
         self._hp_info = dict()
         self._find_all_hps()
 
-    def get_config_value(self, key_path):
-        '''
-        Find value belonging to key in a config.
-        Parameters
-        ----------
-        key_path    string   of form 'a/b/c/../q' where all but last
-                             component must be a dict
-
-        Returns
-        -------
-        Value associated with key_path if config contains such a path
-        '''
-        path_items = key_path.split('/')
-        #print("path_items: ", path_items)
-        #print("All but last: ", path_items[:-1])
-        d = self._config
-        for i in path_items[:-1]:
-            #print(f'working on item {i}')
-            if not i in d:
-                raise ValueError(f'Item {i} not found')
-            #print(f'Type of d[i]: {type(d[i])} Value: {d[i]}')
-            d = d[i]
-            if not isinstance(d, dict):
-                raise ValueError(f'intermediate {d} is not a dict')
-        return d[path_items[-1]]
-
     def _validate_config(self):
         pass
 
