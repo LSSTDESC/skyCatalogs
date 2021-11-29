@@ -7,7 +7,7 @@ import pandas as pd
 from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog
 from desc.skycatalogs.utils.config_utils import Config, open_config_file
 from desc.skycatalogs.utils.sed_utils import MagNorm, convert_tophat_sed, write_sed_file
-from desc.skycatalogs.utils.translate_utils import column_finder, check_file, write_to_instance
+from desc.skycatalogs.utils.translate_utils import column_finder, check_file, write_to_instance, SourceType
 
 '''
 Guts of the code to translate sky catalog to instance catalog(s)
@@ -15,62 +15,57 @@ Guts of the code to translate sky catalog to instance catalog(s)
 
 __all__ = ['Translator']
 
-_DATA_SOURCE = 0
-_CONFIG_SOURCE = 1
-_FIXED = 2
-_COMPUTE = 3
-
 _STAR_FMT = '{:s} {:d} {:.14f} {:.14f} {:.8f} {:s} {:d} {:d} {:d} {:d} {:d} {:d} {:s} {:s} {:s} {:.8f} {:f}\n'
 
 _CMP_FMT = '{:s} {:d} {:.14f} {:.14f}, {:.8f}, {:s} {:.9g} {:.9g} {:.9g} {:.9g} {:d} {:d} {:s} {:.9g} {:.9g} {:f} {:s} {:s} {:.8f} {:f}\n'
 
 def _form_star_instance_columns(band):
-    star_instance = [column_finder('prefix', _FIXED, ('object', np.dtype('U6'))),
-                     column_finder('uniqueId', _DATA_SOURCE, 'id'),
-                     column_finder('raPhoSim', _DATA_SOURCE, 'ra'),
-                     column_finder('decPhoSim', _DATA_SOURCE, 'dec'),
-                     column_finder('maskedMagNorm', _DATA_SOURCE, 'magnorm'),
-                     column_finder('sedFilepath',_DATA_SOURCE, 'sed_filepath'),
-                     column_finder('redshift', _FIXED, (0, int)),
-                     column_finder('gamma1', _FIXED, (0, int)),
-                     column_finder('gamma2', _FIXED, (0, int)),
-                     column_finder('kappa', _FIXED, (0, int)),
-                     column_finder('raOffset', _FIXED, (0, int)),
-                     column_finder('decOffset', _FIXED, (0, int)),
-                     column_finder('spatialmodel', _FIXED, ('point', np.dtype('U5'))),
-                     column_finder('internalExtinctionModel', _FIXED, ('none', np.dtype('U4'))),
-                     column_finder('galacticExtinctionModel', _CONFIG_SOURCE,
+    star_instance = [column_finder('prefix', SourceType.FIXED, ('object', np.dtype('U6'))),
+                     column_finder('uniqueId', SourceType.DATA, 'id'),
+                     column_finder('raPhoSim', SourceType.DATA, 'ra'),
+                     column_finder('decPhoSim', SourceType.DATA, 'dec'),
+                     column_finder('maskedMagNorm', SourceType.DATA, 'magnorm'),
+                     column_finder('sedFilepath',SourceType.DATA, 'sed_filepath'),
+                     column_finder('redshift', SourceType.FIXED, (0, int)),
+                     column_finder('gamma1', SourceType.FIXED, (0, int)),
+                     column_finder('gamma2', SourceType.FIXED, (0, int)),
+                     column_finder('kappa', SourceType.FIXED, (0, int)),
+                     column_finder('raOffset', SourceType.FIXED, (0, int)),
+                     column_finder('decOffset', SourceType.FIXED, (0, int)),
+                     column_finder('spatialmodel', SourceType.FIXED, ('point', np.dtype('U5'))),
+                     column_finder('internalExtinctionModel', SourceType.FIXED, ('none', np.dtype('U4'))),
+                     column_finder('galacticExtinctionModel', SourceType.CONFIG,
                                    'object_types/star/MW_extinction'),
-                     column_finder('galactivAv', _DATA_SOURCE,
+                     column_finder('galactivAv', SourceType.DATA,
                                    f'MW_av_lsst_{band}'),
-                     column_finder('galacticRv', _CONFIG_SOURCE,
+                     column_finder('galacticRv', SourceType.CONFIG,
                                    'MW_extinction_values/r_v/value')]
     return star_instance
 
 def _form_cmp_instance_columns(cmp, band):
-    cmp_instance = [column_finder('prefix', _FIXED, ('object', np.dtype('U6'))),
-                    column_finder('uniqueId', _DATA_SOURCE, 'galaxy_id'),
-                    column_finder('raPhoSim', _DATA_SOURCE, 'ra'),
-                    column_finder('decPhoSim', _DATA_SOURCE, 'dec'),
-                    column_finder('phoSimMagNorm', _DATA_SOURCE, f'{cmp}_magnorm'),
-                    column_finder('sedFilepath',_COMPUTE, [f'sed_val_{cmp}','redshift_hubble']),
-                    column_finder('redshift', _DATA_SOURCE, 'redshift'),
-                    column_finder('gamma1', _DATA_SOURCE, 'shear_1'),
-                    column_finder('gamma2', _DATA_SOURCE, 'shear_2'),
-                    column_finder('kappa', _DATA_SOURCE, 'convergence'),
-                    column_finder('raOffset', _FIXED, (0, int)),
-                    column_finder('decOffset', _FIXED, (0, int)),
-                    column_finder('spatialmodel', _CONFIG_SOURCE,
+    cmp_instance = [column_finder('prefix', SourceType.FIXED, ('object', np.dtype('U6'))),
+                    column_finder('uniqueId', SourceType.DATA, 'galaxy_id'),
+                    column_finder('raPhoSim', SourceType.DATA, 'ra'),
+                    column_finder('decPhoSim', SourceType.DATA, 'dec'),
+                    column_finder('phoSimMagNorm', SourceType.DATA, f'{cmp}_magnorm'),
+                    column_finder('sedFilepath',SourceType.COMPUTE, [f'sed_val_{cmp}','redshift_hubble']),
+                    column_finder('redshift', SourceType.DATA, 'redshift'),
+                    column_finder('gamma1', SourceType.DATA, 'shear_1'),
+                    column_finder('gamma2', SourceType.DATA, 'shear_2'),
+                    column_finder('kappa', SourceType.DATA, 'convergence'),
+                    column_finder('raOffset', SourceType.FIXED, (0, int)),
+                    column_finder('decOffset', SourceType.FIXED, (0, int)),
+                    column_finder('spatialmodel', SourceType.CONFIG,
                                   f'object_types/{cmp}_basic/spatial_model'),
-                    column_finder('majorAxis', _DATA_SOURCE, f'size_{cmp}_true'),
-                    column_finder('minorAxis', _DATA_SOURCE, f'size_minor_{cmp}_true'),
-                    column_finder('positionAngle', _DATA_SOURCE, 'position_angle_unlensed'),
-                    column_finder('internalExtinctionModel', _FIXED, ('none', np.dtype('U4'))),
-                    column_finder('galacticExtinctionModel', _CONFIG_SOURCE,
+                    column_finder('majorAxis', SourceType.DATA, f'size_{cmp}_true'),
+                    column_finder('minorAxis', SourceType.DATA, f'size_minor_{cmp}_true'),
+                    column_finder('positionAngle', SourceType.DATA, 'position_angle_unlensed'),
+                    column_finder('internalExtinctionModel', SourceType.FIXED, ('none', np.dtype('U4'))),
+                    column_finder('galacticExtinctionModel', SourceType.CONFIG,
                                   f'object_types/{cmp}_basic/MW_extinction'),
-                    column_finder('galactivAv', _DATA_SOURCE,
+                    column_finder('galactivAv', SourceType.DATA,
                                   f'MW_av_lsst_{band}'),
-                    column_finder('galacticRv', _CONFIG_SOURCE,
+                    column_finder('galacticRv', SourceType.CONFIG,
                                   'MW_extinction_values/r_v/value')]
     return cmp_instance
 
@@ -157,9 +152,9 @@ class Translator:
         if 'star' in self._object_types:
             star_instance = _form_star_instance_columns(self._band)
 
-            star_data_columns = [q.source_parm for q in star_instance if q.source_type == _DATA_SOURCE]
+            star_data_columns = [q.source_parm for q in star_instance if q.source_type == SourceType.DATA]
 
-            star_config_columns = {q.instance_name : q.source_parm for q in star_instance if q.source_type == _CONFIG_SOURCE}
+            star_config_columns = {q.instance_name : q.source_parm for q in star_instance if q.source_type == SourceType.CONFIG}
 
             #  Get columns from SkyCatalog
             collections = self._sky_cat.get_objects_by_hp(pixel,
@@ -171,13 +166,13 @@ class Translator:
             # Make a new ordered dict including everything
             star_write = OrderedDict()
             for c in star_instance:
-                if c.source_type == _DATA_SOURCE:
+                if c.source_type == SourceType.DATA:
                     star_write[c.instance_name] = skydata_star[c.source_parm]
-                elif c.source_type == _FIXED:
+                elif c.source_type == SourceType.FIXED:
                     star_write[c.instance_name] = np.full(data_len,
                                                           c.source_parm[0],
                                                           dtype=c.source_parm[1])
-                elif c.source_type == _CONFIG_SOURCE:
+                elif c.source_type == SourceType.CONFIG:
                     val = self._config.get_config_value(c.source_parm)
                     if c.instance_name == 'galacticExtinctionModel':
                         star_write[c.instance_name] = np.full(data_len, val)
@@ -196,6 +191,10 @@ class Translator:
         if 'disk' in self._object_types or 'bulge' in self._object_types:
             self._translate_galaxy_pixel(pixel)
 
+    def _translate_pointsource_pixel(self, pixel):
+        # Handle stars and possibly other kinds of pointsource
+        pass
+
     def _translate_galaxy_pixel(self, pixel):
         #  Get objects from SkyCatalog.   We can use the same collection for both
         # 'disk' and 'bulge', but fetch somewhat different columns
@@ -213,25 +212,25 @@ class Translator:
             # except FileExistsError as e:
             #     pass
             cmp_instance = _form_cmp_instance_columns(cmp, self._band)
-            cmp_data_columns = [q.source_parm for q in cmp_instance if q.source_type == _DATA_SOURCE]
+            cmp_data_columns = [q.source_parm for q in cmp_instance if q.source_type == SourceType.DATA]
             for q in cmp_instance:
-                if q.source_type == _COMPUTE:
+                if q.source_type == SourceType.COMPUTE:
                     cmp_data_columns.extend(q.source_parm)
-            ####cmp_data_columns.extend([q.source_parm for q in cmp_instance if q.source_type == _COMPUTE])
+            ####cmp_data_columns.extend([q.source_parm for q in cmp_instance if q.source_type == SourceType.COMPUTE])
 
-            cmp_config_columns = {q.instance_name : q.source_parm for q in cmp_instance if q.source_type == _CONFIG_SOURCE}
+            cmp_config_columns = {q.instance_name : q.source_parm for q in cmp_instance if q.source_type == SourceType.CONFIG}
 
             skydata_cmp = cmp_collection.get_attributes(cmp_data_columns)
             data_len = len(skydata_cmp['ra'])
             cmp_write = OrderedDict()
             for c in cmp_instance:
-                if c.source_type == _DATA_SOURCE:
+                if c.source_type == SourceType.DATA:
                     cmp_write[c.instance_name] = skydata_cmp[c.source_parm]
-                elif c.source_type == _FIXED:
+                elif c.source_type == SourceType.FIXED:
                     cmp_write[c.instance_name] = np.full(data_len,
                                                           c.source_parm[0],
                                                          dtype=c.source_parm[1])
-                elif c.source_type == _CONFIG_SOURCE:     # We only have three
+                elif c.source_type == SourceType.CONFIG:     # We only have three
                     val = self._config.get_config_value(c.source_parm)
                     if c.instance_name == 'galacticExtinctionModel':
                         cmp_write[c.instance_name] = np.full(data_len, val)
@@ -242,7 +241,7 @@ class Translator:
                         cmp_write[c.instance_name] = np.full(data_len, val)
                     else:
                         raise ValueError(f'unknown config source {c.instance_name}')
-                elif c.source_type == _COMPUTE:
+                elif c.source_type == SourceType.COMPUTE:
                     if c.instance_name == 'sedFilepath':
                         #  Comment out code having to do with SED file creation
                         # SED files will be written before or after instance
