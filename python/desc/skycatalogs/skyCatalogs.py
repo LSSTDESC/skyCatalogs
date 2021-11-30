@@ -44,12 +44,13 @@ def _get_intersecting_hps(hp_ordering, nside, region):
         return healpy.query_polygon(nside, vec, inclusive=True, nest=False)
     if type(region) == type(_aDisk):
         # Convert inputs to the types query_disk expects
-        center = healpy.pixelfunc.ang2vec([region.ra], [region.dec],
+        center = healpy.pixelfunc.ang2vec(region.ra, region.dec,
                                           lonlat=True)
         radius_rad = (region.radius_as * units.arcsec).to_value('radian')
 
-        return healpy.query_disc(nside, center, radius_rad, inclusive=True,
-                                 nest=False)
+        pixels = healpy.query_disc(nside, center, radius_rad, inclusive=True,
+                                   nest=False)
+        return pixels
 def _compute_mask(region, ra, dec):
     '''
     Compute mask according to region for provided data
@@ -70,13 +71,11 @@ def _compute_mask(region, ra, dec):
         mask = np.logical_or(mask, (dec > region.dec_max))
     if type(region) == type(_aDisk):
         # Change positions to 3d vectors to measure distance
-        p_vec = healpy.pixelfunc.ang2vec(arrow_t['ra'],
-                                         arrow_t['dec'],
-                                         lonlat=True)
+        p_vec = healpy.pixelfunc.ang2vec(ra, dec, lonlat=True)
 
-        c_vec = healpy.pixelfunc.ang1vec([region.ra],
-                                         [region.dec],
-                                         lonlat=True)[0]
+        c_vec = healpy.pixelfunc.ang2vec(region.ra,
+                                         region.dec,
+                                         lonlat=True)
         # change disk radius to radians
         radius_rad = (region.radius_as * units.arcsec).to_value('radian')
         inners = [np.dot(pos, c_vec) for pos in p_vec]
@@ -303,32 +302,15 @@ class SkyCatalog(object):
                 if region is not None:
                     # This belongs in a separate routine
                     mask = _compute_mask(region, arrow_t['ra'], arrow_t['dec'])
-                    # if type(region) == type(_aBox):
-                    #     mask = np.logical_or((arrow_t['ra'] < region.ra_min),
-                    #                          (arrow_t['ra'] > region.ra_max))
-                    #     mask = np.logical_or(mask, (arrow_t['dec'] < region.dec_min))
-                    #     mask = np.logical_or(mask, (arrow_t['dec'] > region.dec_max))
-                    # if type(region) == type(_aDisk):
-                    #     # Change positions to 3d vectors to measure distance
-                    #     p_vec = healpy.pixelfunc.ang2vec(arrow_t['ra'],
-                    #                                      arrow_t['dec'],
-                    #                                      lonlat=True)
-
-                    #     c_vec = healpy.pixelfunc.ang1vec([region.ra],
-                    #                                      [region.dec],
-                    #                                      lonlat=True)[0]
-                    #     # change disk radius to radians
-                    #     radius_rad = (region.radius_as * units.arcsec).to_value('radian')
-                    #     inners = [np.dot(pos, c_vec) for pos in p_vec]
-                    #     mask = np.arccos(inners) > radius_rad
 
                 else:
                     mask = None
 
                 if mask is not None:
                     masked_ra = ma.array(arrow_t['ra'], mask=mask)
-                    print("Masked array size: ", masked_ra.size)
-                    print("Masked array compressed size: ", masked_ra.compressed().size)
+                    if self.verbose:
+                        print("Masked array size: ", masked_ra.size)
+                        print("Masked array compressed size: ", masked_ra.compressed().size)
                     ra_compress = masked_ra.compressed()
                     if ra_compress.size > 0:
                         dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
