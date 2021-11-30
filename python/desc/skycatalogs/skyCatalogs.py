@@ -26,7 +26,8 @@ _aBox = Box(-1.0, 1.0, -2.0, 2.0)
 def _get_intersecting_hps(hp_ordering, nside, region):
     '''
     Given healpixel structure defined by hp_ordering and nside, find
-    all healpixels which instersect region, defined by min/max ra and dec
+    all healpixels which instersect region, where region may be either
+    a box or a disk.
     Return as some kind of iterable
     Note it's possible extra hps which don't actually intersect the region
     will be returned
@@ -63,10 +64,10 @@ def _compute_mask(region, ra, dec):
     '''
     mask = None
     if type(region) == type(_aBox):
-        mask = np.logical_or((arrow_t['ra'] < region.ra_min),
-                             (arrow_t['ra'] > region.ra_max))
-        mask = np.logical_or(mask, (arrow_t['dec'] < region.dec_min))
-        mask = np.logical_or(mask, (arrow_t['dec'] > region.dec_max))
+        mask = np.logical_or((ra < region.ra_min),
+                             (ra > region.ra_max))
+        mask = np.logical_or(mask, (dec < region.dec_min))
+        mask = np.logical_or(mask, (dec > region.dec_max))
     if type(region) == type(_aDisk):
         # Change positions to 3d vectors to measure distance
         p_vec = healpy.pixelfunc.ang2vec(arrow_t['ra'],
@@ -116,7 +117,7 @@ class SkyCatalog(object):
         #    for 'files', map filepath to handle (initially None)
         #    for 'object_types', map object type to filepath
         self._hp_info = dict()
-        self._find_all_hps()
+        hps = self._find_all_hps()
 
     def _validate_config(self):
         pass
@@ -226,7 +227,6 @@ class SkyCatalog(object):
             # catalog is opened?
             c = self.get_objects_by_hp(hp, region, obj_types, datetime)
             if (len(c)) > 0:
-                ###obj_colls = obj_colls + c
                 object_list.append_object_list(c)
 
         return object_list
@@ -282,10 +282,8 @@ class SkyCatalog(object):
         root_dir = self._config['root_directory']
         for ot in obj_types:
             if 'file_template' in self._config['object_types'][ot]:
-                #print(f'For obj type {ot} found file_template')
                 f = self._hp_info[hp]['object_types'][ot]
             elif 'parent' in self._config['object_types'][ot]:
-                #print(f'For obj type {ot} found parent')
                 f = self._hp_info[hp]['object_types'][obj_types[ot]['parent']]
             if f not in self._hp_info[hp]:
                 the_reader = parquet_reader.ParquetReader(os.path.join(root_dir,f), mask=None)
@@ -365,8 +363,6 @@ class SkyCatalog(object):
 
                 if mask is not None:
                     masked_ra = ma.array(arrow_t['ra'], mask=mask)
-                    #print("Masked array size: ", masked_ra.size)
-                    #print("Masked array compressed size: ", masked_ra.compressed().size)
                     ra_compress = masked_ra.compressed()
                     if ra_compress.size > 0:
                         dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
