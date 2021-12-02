@@ -76,10 +76,18 @@ def _compute_mask(region, ra, dec):
         c_vec = healpy.pixelfunc.ang2vec(region.ra,
                                          region.dec,
                                          lonlat=True)
-        # change disk radius to radians
         radius_rad = (region.radius_as * units.arcsec).to_value('radian')
-        inners = [np.dot(pos, c_vec) for pos in p_vec]
-        mask = np.arccos(inners) > radius_rad
+
+
+        # Rather than comparing arcs, it is equivalent to compare chords
+        # (or square of chord length)
+        diff = p_vec - c_vec
+        obj_chord_sq = np.sum(np.square(p_vec - c_vec),1)
+
+        # This is to be compared to square of chord for angle a corresponding
+        # to disk radius.  That's 4(sin(a/2)^2)
+        rad_chord_sq = 4 * np.square(np.sin(0.5 * radius_rad) )
+        mask = obj_chord_sq > rad_chord_sq
 
     return mask
 
