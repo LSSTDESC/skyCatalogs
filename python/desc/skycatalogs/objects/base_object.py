@@ -28,7 +28,7 @@ class BaseObject(object):
     Likely need a variant for SSO.
     '''
     def __init__(self, ra, dec, id, object_type, redshift=None,
-                 partition_id=None, belongs_to=None, belongs_index=None):
+                 belongs_to=None, belongs_index=None):
         '''
         Minimum information needed for static (not SSO) objects
         ra, dec needed to check for region containment
@@ -39,7 +39,6 @@ class BaseObject(object):
         self._id = id
         self._object_type = object_type
         self._redshift = redshift
-        self._partition_id = partition_id
         self._belongs_to = belongs_to
         self._belongs_index = belongs_index
 
@@ -69,34 +68,18 @@ class BaseObject(object):
             self._redshift = self._belongs_to.redshifts()[self._belongs_index]
         return self._redshift
 
-    # About to become obsolete when BaseObjectCollection is replaced
-    # by new class ObjectCollection
     @property
     def partition_id(self):
-        if not self._partition_id:
-            # Need to compute from ra, dec, but for now
-            pass
-        return self._partition_id
+        if self._belongs_to:
+            return self._belongs_to.partition_id
+        else:
+            return None
 
-    @property
-    def partition_id(self):
-        return self._belongs_to.partition_id
+    def get_attribute(self, attribute_name):
+        if not self._belongs_to:
+            raise ValueError('To fetch {attribute_name} object must be in an object collection')
 
-    # def get_flux(self, date_time, band, noMW=False):
-    #     '''
-    #     Parameters
-    #     ----------
-    #     date_time   datetime object; time at which flux is requested
-    #     band        specifies interval over which flux is to be integrated
-    #                 (and filter characteristics?)
-    #     noMW        If true, don't include Milky Way extinction
-
-    #     Returns
-    #     -------
-    #     Flux of the object for specified time, band.  By default
-    #     include Milky Way extinction.
-    #     '''
-    #     raise NotImplementedError
+        return self._belongs_to.get_attribute(attribute_name)[self._belongs_index]
 
     def get_sed(self, **kwargs):
         '''
@@ -137,8 +120,6 @@ class ObjectCollection(Sequence):
         self._rdr = reader
         self._partition_id = partition_id
         self._mask = mask
-
-        ###print(partition_id)
 
         # Maybe the following is silly and object_type should always be stored
         # as arrays
@@ -235,7 +216,6 @@ class ObjectCollection(Sequence):
         If key is a slice return a list of object
         '''
 
-        partition_id = self._partition_id
         if self._uniform_object_type:
             object_type = self._object_type_unique
         else:
@@ -243,15 +223,14 @@ class ObjectCollection(Sequence):
 
         if type(key) == type(10):
             return BaseObject(self._ra[key], self._dec[key], self._id[key],
-                              object_type, partition_id=partition_id, belongs_to=self,
+                              object_type, belongs_to=self,
                               belongs_index=key)
 
         else:
             ixdata = [i for i in range(min(key.stop,len(self._ra)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
             return [BaseObject(self._ra[i], self._dec[i], self._id[i],
-                               object_type, partition_id=partition_id,
-                               belongs_to=self, belongs_index=i)
+                               object_type, belongs_to=self, belongs_index=i)
                     for i in ixes]
 
     def get_partition_id(self):
@@ -269,13 +248,6 @@ class ObjectCollection(Sequence):
         Use object id to find the index
         '''
         return self._id.index(obj.id)
-
-    #### See get_attribute
-    # def add_columns(self, column_dict):
-    #     '''
-    #     Store more information about this collection
-    #     '''
-    #     pass
 
 LocatedCollection = namedtuple('LocatedCollection',
                                ['collection', 'first_index', 'upper_bound'])
