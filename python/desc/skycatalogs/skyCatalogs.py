@@ -415,7 +415,8 @@ def open_catalog(config_file, mp=False):
         return SkyCatalog(yaml.safe_load(f), mp)
 
 if __name__ == '__main__':
-    cfg_file = '/global/homes/j/jrbogart/Joanne_git/skyCatalogs/cfg/galaxy.yaml'
+    #cfg_file = '/global/homes/j/jrbogart/Joanne_git/skyCatalogs/cfg/galaxy.yaml'
+    cfg_file = '/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg/to_translate.yaml'
 
     # For tract 3828
     #   55.73604 < ra < 57.563452
@@ -446,16 +447,18 @@ if __name__ == '__main__':
     print("intersecting pixels are ", intersect_hps)
 
     print('Invoke get_objects_by_region with box region')
-    object_list = cat.get_objects_by_region(0, rgn,
-                                            obj_type_set=set(['galaxy']) )
+    object_list = cat.get_objects_by_region(rgn,
+                                            obj_type_set={'galaxy'} )
+    #                                        obj_type_set=set(['galaxy']) )
     # Try out get_objects_by_hp with no region
-    #colls = cat.get_objects_by_hp(0, 9812, None, set(['galaxy']) )
+    #colls = cat.get_objects_by_hp(9812, None, set(['galaxy']) )
 
     print('Number of collections returned:  ', object_list.collection_count)
 
     colls = object_list.get_collections()
     for c in colls:
-        print("For hpid ", c.get_partition_id(), "found ", len(c), " objects")
+        n_obj = len(c)
+        print("For hpid ", c.get_partition_id(), "found ", n_obj, " objects")
         print("First object: ")
         print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
               ' belongs_index=', c[0]._belongs_index)
@@ -466,14 +469,16 @@ if __name__ == '__main__':
             print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
                   o._belongs_index)
         print("Object 1000")
-        print(c[1000], '\nid=', c[1000].id, ' ra=', c[1000].ra, ' dec=',
-              c[1000].dec,
-              ' belongs_index=', c[1000]._belongs_index)
-        slice_late = c[163994:163997]
-        print('\nobjects indexed 163994 through 163996')
-        for o in slice_late:
-            print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
-                  o._belongs_index)
+        if n_obj > 1000:
+            print(c[1000], '\nid=', c[1000].id, ' ra=', c[1000].ra, ' dec=',
+                  c[1000].dec,
+                  ' belongs_index=', c[1000]._belongs_index)
+        if n_obj > 163997:
+            slice_late = c[163994:163997]
+            print('\nobjects indexed 163994 through 163996')
+            for o in slice_late:
+                print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
+                      o._belongs_index)
 
     print('Total object count: ', len(object_list))
 
