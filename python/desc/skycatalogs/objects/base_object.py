@@ -2,6 +2,8 @@ from collections.abc import Sequence
 from collections import namedtuple, OrderedDict
 import numpy as np
 import itertools
+from desc.skycatalogs.utils.translate_utils import form_object_string
+from desc.skycatalogs.utils.config_utils import Config
 
 '''
 Main object types.   There are also may be subtypes. For example,
@@ -74,6 +76,9 @@ class BaseObject(object):
             return self._belongs_to.partition_id
         else:
             return None
+    @property
+    def belongs_to(self):
+        return self._belongs_to
 
     def get_attribute(self, attribute_name):
         if not self._belongs_to:
@@ -93,6 +98,18 @@ class BaseObject(object):
         '''
         raise NotImplementedError
 
+    def get_instcat_entry(self, band = 'r', component=None):
+        '''
+        Return the string corresponding to instance catalog line
+        Parameters:
+            band       One of ['u', 'g', 'r', 'i', 'z', 'y']
+            component  Required iff the object has subcomponents (i.e.,
+                       object type is 'galaxy')
+        Returns: A string formatted like a line in an instance catalog
+        '''
+
+        return form_object_string(self, band, component)
+
 class ObjectCollection(Sequence):
     '''
     Class for collection of static objects coming from the same
@@ -100,7 +117,7 @@ class ObjectCollection(Sequence):
     Many of the methods look the same as for BaseObject but they return arrays
     rather than a single number.  There are some additional methods
     '''
-    def __init__(self, ra, dec, id, object_type, partition_id,
+    def __init__(self, ra, dec, id, object_type, partition_id, config_dict,
                  redshift=None, indexes = None, region=None, mask=None,
                  reader=None):
         '''
@@ -119,6 +136,7 @@ class ObjectCollection(Sequence):
         self._redshift = None
         self._rdr = reader
         self._partition_id = partition_id
+        self._config = Config(config_dict)
         self._mask = mask
 
         # Maybe the following is silly and object_type should always be stored
@@ -142,6 +160,10 @@ class ObjectCollection(Sequence):
     @property
     def partition_id(self):
         return self._partition_id
+
+    @property
+    def config(self):
+        return self._config
 
     def redshifts(self):
         if not self._redshift:

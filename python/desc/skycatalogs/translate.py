@@ -139,7 +139,7 @@ class Translator:
                                                       c.source_parm[0],
                                                       dtype=c.source_parm[1])
             elif c.source_type == SourceType.CONFIG:
-                val = self._config.get_config_value(c.source_parm)
+                val = self._config.get_config_value(c.source_parm[0])
                 if c.instance_name == 'galacticExtinctionModel':
                     star_write[c.instance_name] = np.full(data_len, val)
                 elif c.instance_name == 'galacticRv':
@@ -188,7 +188,7 @@ class Translator:
                                                           c.source_parm[0],
                                                          dtype=c.source_parm[1])
                 elif c.source_type == SourceType.CONFIG:     # We only have three
-                    val = self._config.get_config_value(c.source_parm)
+                    val = self._config.get_config_value(c.source_parm[0])
                     if c.instance_name == 'galacticExtinctionModel':
                         cmp_write[c.instance_name] = np.full(data_len, val)
                     elif c.instance_name == 'galacticRv' :

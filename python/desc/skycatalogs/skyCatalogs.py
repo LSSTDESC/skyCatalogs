@@ -335,6 +335,7 @@ class SkyCatalog(object):
                                                   id_compress,
                                                   'galaxy',
                                                   hp,
+                                                  self._config,
                                                   region=region,
                                                   mask=mask,
                                                   reader=rdr)
@@ -356,20 +357,23 @@ class SkyCatalog(object):
                     ra_compress = masked_ra.compressed()
                     if ra_compress.size > 0:
                         dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
-                        id_compress = ma.array(arrow_t['galaxy_id'], mask=mask).compressed()
+                        id_compress = ma.array(arrow_t['id'], mask=mask).compressed()
+                        #sourcetype_compress = ma.array(arrow_t['object_type'],
+                        #                               mask=mask).compressed()
                     else:
                         continue
                 else:
                     ra_compress = arrow_t['ra']
                     dec_compress = arrow_t['dec']
                     id_compress = arrow_t['id']
-                    sourcetype_compress = arrow_t['object_type']
+                    #sourcetype_compress = arrow_t['object_type']
 
                 new_collection = ObjectCollection(ra_compress,
                                                   dec_compress,
                                                   id_compress,
-                                                  sourcetype_compress,
+                                                  'star',
                                                   hp,
+                                                  self._config,
                                                   region=region,
                                                   mask=mask,
                                                   reader=rdr)
@@ -448,7 +452,7 @@ if __name__ == '__main__':
 
     print('Invoke get_objects_by_region with box region')
     object_list = cat.get_objects_by_region(rgn,
-                                            obj_type_set={'galaxy'} )
+                                            obj_type_set={'galaxy', 'star'} )
     #                                        obj_type_set=set(['galaxy']) )
     # Try out get_objects_by_hp with no region
     #colls = cat.get_objects_by_hp(9812, None, set(['galaxy']) )
@@ -461,18 +465,25 @@ if __name__ == '__main__':
         print("For hpid ", c.get_partition_id(), "found ", n_obj, " objects")
         print("First object: ")
         print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
-              ' belongs_index=', c[0]._belongs_index)
+              ' belongs_index=', c[0]._belongs_index,
+              ' object_type: ', c[0].object_type )
 
         print("Slice [1:3]")
         slice13 = c[1:3]
         for o in slice13:
             print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
-                  o._belongs_index)
-        print("Object 1000")
-        if n_obj > 1000:
-            print(c[1000], '\nid=', c[1000].id, ' ra=', c[1000].ra, ' dec=',
-                  c[1000].dec,
-                  ' belongs_index=', c[1000]._belongs_index)
+                  o._belongs_index,  ' object_type: ', o.object_type)
+            if o.object_type == 'star':
+                print(o.get_instcat_entry())
+            else:
+                for cmp in ['disk', 'bulge']:
+                    print(cmp)
+                    print(o.get_instcat_entry(component=cmp))
+        if n_obj > 200:
+            print("Object 200")
+            print(c[200], '\nid=', c[200].id, ' ra=', c[200].ra, ' dec=',
+                  c[200].dec,
+                  ' belongs_index=', c[200]._belongs_index)
         if n_obj > 163997:
             slice_late = c[163994:163997]
             print('\nobjects indexed 163994 through 163996')
@@ -490,8 +501,8 @@ if __name__ == '__main__':
 
     sed_bulges = colls[0].get_attribute('sed_val_bulge')
 
-    print("first bulge sed:")
-    for v in sed_bulges[0]:
-        print(v)
+    #print("first bulge sed:")
+    #for v in sed_bulges[0]:
+    #    print(v)
     #convergence = coll.get_attribute('convergence')
     #print("first convergence: ", convergence[0])

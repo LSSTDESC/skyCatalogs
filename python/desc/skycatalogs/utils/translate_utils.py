@@ -1,6 +1,9 @@
 from collections import namedtuple, OrderedDict
 from enum import Enum
 import numpy as np
+## May need to uncomment following lines
+# from desc.skycatalogs.objects.base_object import BaseObject
+# from desc.skycatalogs.utils.config_utils import
 
 __all__ = ['column_finder', 'check_file', 'write_to_instance', 'SourceType', 'STAR_FMT', 'CMP_FMT',
            'form_star_instance_column', 'form_cmp_instance_columns']
@@ -26,11 +29,11 @@ def form_star_instance_columns(band):
                      column_finder('spatialmodel', SourceType.FIXED, ('point', np.dtype('U5'))),
                      column_finder('internalExtinctionModel', SourceType.FIXED, ('none', np.dtype('U4'))),
                      column_finder('galacticExtinctionModel', SourceType.CONFIG,
-                                   'object_types/star/MW_extinction'),
+                                   ('object_types/star/MW_extinction', str)),
                      column_finder('galactivAv', SourceType.DATA,
                                    f'MW_av_lsst_{band}'),
                      column_finder('galacticRv', SourceType.CONFIG,
-                                   'MW_extinction_values/r_v/value')]
+                                   ('MW_extinction_values/r_v/value', float))]
     return star_instance
 
 def form_cmp_instance_columns(cmp, band):
@@ -47,17 +50,17 @@ def form_cmp_instance_columns(cmp, band):
                     column_finder('raOffset', SourceType.FIXED, (0, int)),
                     column_finder('decOffset', SourceType.FIXED, (0, int)),
                     column_finder('spatialmodel', SourceType.CONFIG,
-                                  f'object_types/{cmp}_basic/spatial_model'),
+                                  (f'object_types/{cmp}_basic/spatial_model', 'str')),
                     column_finder('majorAxis', SourceType.DATA, f'size_{cmp}_true'),
                     column_finder('minorAxis', SourceType.DATA, f'size_minor_{cmp}_true'),
                     column_finder('positionAngle', SourceType.DATA, 'position_angle_unlensed'),
                     column_finder('internalExtinctionModel', SourceType.FIXED, ('none', np.dtype('U4'))),
                     column_finder('galacticExtinctionModel', SourceType.CONFIG,
-                                  f'object_types/{cmp}_basic/MW_extinction'),
+                                  (f'object_types/{cmp}_basic/MW_extinction', 'str')),
                     column_finder('galactivAv', SourceType.DATA,
                                   f'MW_av_lsst_{band}'),
                     column_finder('galacticRv', SourceType.CONFIG,
-                                  'MW_extinction_values/r_v/value')]
+                                  ('MW_extinction_values/r_v/value', float))]
     return cmp_instance
 
 column_finder = namedtuple('ColumnFinder', ['instance_name', 'source_type',
@@ -92,6 +95,54 @@ def write_to_instance(handle, ordered_data_dict, fmt):
     col_list = [ordered_data_dict[k] for k in ordered_data_dict]
     for row in zip(*col_list):
         handle.write(fmt.format(*row) + '\n')
+
+def form_object_string(obj, band, component):
+    # parse columns for this object/component type
+    # fetch data and config values as needed
+    # form values into a list.
+    row = []
+
+    if obj.object_type == 'star':
+        fmt = STAR_FMT
+        columns = form_star_instance_columns(band)
+    elif obj.object_type in ['galaxy', 'disk', 'bulge']:
+        fmt = CMP_FMT
+        if obj.object_type == 'galaxy':
+            cmp = component
+        else:
+            cmp = obj.object_type
+        columns = form_cmp_instance_columns(cmp, band)
+    else:
+        raise NotImplementedError(f'translate_utils.form_object_string: Unsupported object type {obj.object_type}')
+
+    for c in columns:
+        if c.source_type == SourceType.DATA:
+            row.append(obj.get_attribute(c.source_parm))
+        elif c.source_type == SourceType.CONFIG:
+            v = obj.belongs_to.config.get_config_value(c.source_parm[0])
+            t = c.source_parm[1]
+            if str(t) in ['float', 'int']:
+                q = eval(f'{t}({v})')
+            else:
+                q = v
+            row.append(q)
+        elif c.source_type == SourceType.FIXED:
+            v = c.source_parm[0]
+            t = c.source_parm[1]
+            if str(t) in ['float', 'int']:
+                q = eval(f'{t}({v})')
+            else:
+                q = v
+            row.append(q)
+        elif c.source_type == SourceType.COMPUTE:
+            # only one is sedFilepath, and only for galaxy components
+            if c.instance_name != 'sedFilepath' or cmp not in ['disk', 'bulge']:
+                raise ValueError(f'translate_utils.form_object_string: Bad COMPUTE entry {c.instance_name} for component {cmp}')
+            row.append(f'{obj.get_attribute("galaxy_id")}_{cmp}_sed.txt')
+        else:
+            raise ValueError(f'translate_utils.form_object_string: Unknown source type {c.source_type}')
+
+    return write_to_string(row, fmt)
 
 def write_to_string(row, fmt):
     '''
