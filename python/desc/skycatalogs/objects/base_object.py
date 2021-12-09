@@ -69,7 +69,7 @@ class BaseObject(object):
         if self._redshift:        return self._redshift
         if self._belongs_to:
             #self._redshift = self._belongs_to.redshifts()[self._belongs_index]
-            self._redshift = self.get_attribute('redshift')
+            self._redshift = self.get_native_attribute('redshift')
         return self._redshift
 
     @property
@@ -82,11 +82,11 @@ class BaseObject(object):
     def belongs_to(self):
         return self._belongs_to
 
-    def get_attribute(self, attribute_name):
+    def get_native_attribute(self, attribute_name):
         if not self._belongs_to:
             raise ValueError('To fetch {attribute_name} object must be in an object collection')
 
-        vals = self._belongs_to.get_attribute(attribute_name)
+        vals = self._belongs_to.get_native_attribute(attribute_name)
         return vals[self._belongs_index]
 
     def get_sed_metadata(self, **kwargs):
@@ -127,8 +127,8 @@ class BaseObject(object):
         if component not in ['disk', 'bulge']:
             raise ValueError(f'Cannot fetch SED for component type {component}')
 
-        r = self.get_attribute('redshift_hubble')
-        th_val = self.get_attribute(f'sed_val_{component}')
+        r = self.get_native_attribute('redshift_hubble')
+        th_val = self.get_native_attribute(f'sed_val_{component}')
         mag_f = self._belongs_to.sky_catalog.mag_norm_f
         th_bins = self._belongs_to.config.get_tophat_parameters()
 
@@ -197,7 +197,7 @@ class ObjectCollection(Sequence):
     def sky_catalog(self):
         return self._sky_catalog
 
-    def get_attribute(self, attribute_name):
+    def get_native_attribute(self, attribute_name):
         '''
         Retrieve a particular attribute for a collection
         If we already have it, just return it.  Otherwise attempt
@@ -211,7 +211,7 @@ class ObjectCollection(Sequence):
         setattr(self, attribute_name, val)
         return val
 
-    def get_attributes(self, attribute_list):
+    def get_native_attributes(self, attribute_list):
         '''
         Return requested attributes as an OrderedDict. Keys are column names.
         Use our mask if we have one
@@ -219,7 +219,7 @@ class ObjectCollection(Sequence):
         df = self._rdr.read_columns(attribute_list, self._mask)
         return df
 
-    def get_attributes_iterator(self, attribute_names):
+    def get_native_attributes_iterator(self, attribute_names):
         '''
         Return iterator for  list of attributes for a collection.  Most of
         the work probably happens in the Parquet reader
@@ -332,16 +332,17 @@ class ObjectList(Sequence):
             self.append_collection(e.collection)
 
     def redshifts(self):
-        return self.get_attribute('redshift')
+        return self.get_native_attribute('redshift')
 
-    def get_attribute(self, attribute_name):
+    def get_native_attribute(self, attribute_name):
         '''
         Retrieve a particular attribute for a source.
         The work is delegated to each of the constituent collections
         '''
-        val = self._located[0].collection.get_attribute(attribute_name)
+        val = self._located[0].collection.get_native_attribute(attribute_name)
         for c in self._located[1:]:
-            val = np.append(val, c.collection.get_attribute(attribute_name))
+            val = np.append(val,
+                            c.collection.get_native_attribute(attribute_name))
 
         return val
 

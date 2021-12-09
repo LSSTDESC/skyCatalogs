@@ -114,7 +114,7 @@ def form_object_string(obj, band, component):
 
     for c in columns:
         if c.source_type == SourceType.DATA:
-            row.append(obj.get_attribute(c.source_parm))
+            row.append(obj.get_native_attribute(c.source_parm))
         elif c.source_type == SourceType.CONFIG:
             v = obj.belongs_to.config.get_config_value(c.source_parm[0])
             t = c.source_parm[1]
@@ -135,7 +135,7 @@ def form_object_string(obj, band, component):
             # only one is sedFilepath, and only for galaxy components
             if c.instance_name != 'sedFilepath' or cmp not in ['disk', 'bulge']:
                 raise ValueError(f'translate_utils.form_object_string: Bad COMPUTE entry {c.instance_name} for component {cmp}')
-            row.append(f'{obj.get_attribute("galaxy_id")}_{cmp}_sed.txt')
+            row.append(f'{obj.get_native_attribute("galaxy_id")}_{cmp}_sed.txt')
         else:
             raise ValueError(f'translate_utils.form_object_string: Unknown source type {c.source_type}')
 

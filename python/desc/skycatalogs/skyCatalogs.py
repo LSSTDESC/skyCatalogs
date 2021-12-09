@@ -518,5 +518,5 @@ if __name__ == '__main__':
     obj = object_list[0]
     print("Type of element in object_list:", type(obj))
 
-    redshift0 = object_list[0].get_attribute('redshift')
+    redshift0 = object_list[0].get_native_attribute('redshift')
     print('First redshift: ', redshift0)

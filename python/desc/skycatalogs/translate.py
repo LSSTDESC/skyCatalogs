@@ -126,7 +126,7 @@ class Translator:
         collections = self._sky_cat.get_objects_by_hp(pixel,
                                                       obj_type_set=set(['star'])).get_collections()
         star_collection = collections[0]
-        skydata_star = star_collection.get_attributes(star_data_columns)
+        skydata_star = star_collection.get_native_attributes(star_data_columns)
         data_len = len(skydata_star['ra'])
 
         # Make a new ordered dict including everything
@@ -177,7 +177,7 @@ class Translator:
 
             cmp_config_columns = {q.instance_name : q.source_parm for q in cmp_instance if q.source_type == SourceType.CONFIG}
 
-            skydata_cmp = cmp_collection.get_attributes(cmp_data_columns)
+            skydata_cmp = cmp_collection.get_native_attributes(cmp_data_columns)
             data_len = len(skydata_cmp['ra'])
             cmp_write = OrderedDict()
             for c in cmp_instance:

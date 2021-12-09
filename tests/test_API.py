@@ -18,7 +18,7 @@ class APITester(unittest.TestCase):
         '''
         Open the catalog
         '''
-        cfg_path = '/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg/mag26.yaml'
+        cfg_path = '/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg/to_translate.yaml'
         self._cat = open_catalog(cfg_path)
 
 
@@ -92,16 +92,14 @@ class APITester(unittest.TestCase):
         obj = object_list[0]
         print("Type of element in object_list:", type(obj))
 
-        redshift0 = object_list[0].redshift
+        redshift0 = object_list[0].get_native_attribute('redshift')
         print('First redshift: ', redshift0)
 
-        sed_bulges = colls[0].get_attribute('sed_val_bulge')
+        sed_bulges = colls[0].get_native_attribute('sed_val_bulge')
 
         print("first bulge sed:")
         for v in sed_bulges[0]:
             print(v)
-        #convergence = coll.get_attribute('convergence')
-        #print("first convergence: ", convergence[0])
 
 
 if __name__ == '__main__':

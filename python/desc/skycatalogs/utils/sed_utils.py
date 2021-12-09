@@ -316,11 +316,11 @@ class Cmp(object):
         #  Really it should have _no_host_extinction suffix but for
         #  now schema is not using it
         sed_col = 'sed_val_' + self.cmp_name + '_no_host_extinction'
-        sed = np.array(self.coll.get_attribute(sed_col))
+        sed = np.array(self.coll.get_native_attribute(sed_col))
         magnorm_col = self.cmp_name + '_magnorm'
-        magnorm = np.array(self.coll.get_attribute(magnorm_col))
-        gal_id = np.array(self.coll.get_attribute('galaxy_id'))
-        redshift = np.array(self.coll.get_attribute('redshift_hubble'))
+        magnorm = np.array(self.coll.get_native_attribute(magnorm_col))
+        gal_id = np.array(self.coll.get_native_attribute('galaxy_id'))
+        redshift = np.array(self.coll.get_native_attribute('redshift_hubble'))
 
         mask_inf = np.isinf(magnorm)
         good_sed = ma.array(sed, mask=mask_inf).compressed()
