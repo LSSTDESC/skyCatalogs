@@ -15,7 +15,7 @@ from desc.skycatalogs.utils.common_utils import print_dated_msg
 import GCRCatalogs
 
 __all__ = ['LookupInfo', 'Cmp', 'MagNorm', 'convert_tophat_sed',
-           'get_random_sed', 'NORMWV_IX']
+           'write_sed_file', 'get_random_sed', 'NORMWV_IX']
 
 # Index for tophat bin containing 500 nm
 NORMWV_IX = 13
@@ -34,7 +34,7 @@ def convert_tophat_sed(a_bins, f_nu_input, mag_norm_f, redshift=0,
     redshift:   needed for computing distance modulus. Should be
                 cosmoDC2 redshiftHubble, aka redshift_hubble in sky catalogs
     wavelen_step:    Re-cast tophat seds to use this bin width in nm (keeping
-                     same step function in f_nu space)
+                     same step function in f_nu space).
 
     return
     ------
@@ -61,7 +61,6 @@ def convert_tophat_sed(a_bins, f_nu_input, mag_norm_f, redshift=0,
 
     # Keep the same step function but use fine bins instead of the
     # original tophat widths.
-    wavelen_step = 0.1     # nm
     n_bins = int((lam_max - lam_min) / wavelen_step)
     lam_fine = np.empty(n_bins)
     f_nu_fine = np.empty(n_bins)
@@ -118,7 +117,7 @@ def get_random_sed(cmp, sed_dir, n_sed, pixel=9556):
 
     return tp_vals_list, sed_path
 
-def _write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
+def write_sed_file(path, wv, f_lambda, wv_unit=None, f_lambda_unit=None):
     '''
     Write a two-column text file.  First column is wavelength,
     second is luminosity value
@@ -261,7 +260,7 @@ class Cmp(object):
                                                   redshift=redshift,
                                                   wavelen_step=wavelen_step)
         if not summary_only:
-             _write_sed_file(outpath, lmbda, f_lambda, wv_unit='nm')
+             write_sed_file(outpath, lmbda, f_lambda, wv_unit='nm')
         start = (min([b.start for b in bins]))/10.0        # A to nm
         return (magnorm, val_500nm)     # for now
 
@@ -317,11 +316,11 @@ class Cmp(object):
         #  Really it should have _no_host_extinction suffix but for
         #  now schema is not using it
         sed_col = 'sed_val_' + self.cmp_name + '_no_host_extinction'
-        sed = np.array(self.coll.get_attribute(sed_col))
+        sed = np.array(self.coll.get_native_attribute(sed_col))
         magnorm_col = self.cmp_name + '_magnorm'
-        magnorm = np.array(self.coll.get_attribute(magnorm_col))
-        gal_id = np.array(self.coll.get_attribute('galaxy_id'))
-        redshift = np.array(self.coll.get_attribute('redshift_hubble'))
+        magnorm = np.array(self.coll.get_native_attribute(magnorm_col))
+        gal_id = np.array(self.coll.get_native_attribute('galaxy_id'))
+        redshift = np.array(self.coll.get_native_attribute('redshift_hubble'))
 
         mask_inf = np.isinf(magnorm)
         good_sed = ma.array(sed, mask=mask_inf).compressed()

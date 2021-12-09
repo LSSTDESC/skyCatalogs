@@ -10,6 +10,7 @@ from astropy import units
 from desc.skycatalogs.objects import *
 from desc.skycatalogs.readers import *
 from desc.skycatalogs.readers import ParquetReader
+from desc.skycatalogs.utils.sed_utils import MagNorm
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
 
@@ -26,7 +27,8 @@ _aBox = Box(-1.0, 1.0, -2.0, 2.0)
 def _get_intersecting_hps(hp_ordering, nside, region):
     '''
     Given healpixel structure defined by hp_ordering and nside, find
-    all healpixels which instersect region, defined by min/max ra and dec
+    all healpixels which instersect region, where region may be either
+    a box or a disk.
     Return as some kind of iterable
     Note it's possible extra hps which don't actually intersect the region
     will be returned
@@ -43,12 +45,52 @@ def _get_intersecting_hps(hp_ordering, nside, region):
         return healpy.query_polygon(nside, vec, inclusive=True, nest=False)
     if type(region) == type(_aDisk):
         # Convert inputs to the types query_disk expects
-        center = healpy.pixelfunc.ang2vec([region.ra], [region.dec],
+        center = healpy.pixelfunc.ang2vec(region.ra, region.dec,
                                           lonlat=True)
         radius_rad = (region.radius_as * units.arcsec).to_value('radian')
 
-        return healpy.query_disc(nside, center, radius_rad, inclusive=True,
-                                 nest=False)
+        pixels = healpy.query_disc(nside, center, radius_rad, inclusive=True,
+                                   nest=False)
+        return pixels
+def _compute_mask(region, ra, dec):
+    '''
+    Compute mask according to region for provided data
+    Parameters
+    ----------
+    region         Supported shape or None
+    ra,dec         Coordinates for data to be masked
+    Returns
+    -------
+    mask of elements to be omitted
+
+    '''
+    mask = None
+    if type(region) == type(_aBox):
+        mask = np.logical_or((ra < region.ra_min),
+                             (ra > region.ra_max))
+        mask = np.logical_or(mask, (dec < region.dec_min))
+        mask = np.logical_or(mask, (dec > region.dec_max))
+    if type(region) == type(_aDisk):
+        # Change positions to 3d vectors to measure distance
+        p_vec = healpy.pixelfunc.ang2vec(ra, dec, lonlat=True)
+
+        c_vec = healpy.pixelfunc.ang2vec(region.ra,
+                                         region.dec,
+                                         lonlat=True)
+        radius_rad = (region.radius_as * units.arcsec).to_value('radian')
+
+
+        # Rather than comparing arcs, it is equivalent to compare chords
+        # (or square of chord length)
+        diff = p_vec - c_vec
+        obj_chord_sq = np.sum(np.square(p_vec - c_vec),1)
+
+        # This is to be compared to square of chord for angle a corresponding
+        # to disk radius.  That's 4(sin(a/2)^2)
+        rad_chord_sq = 4 * np.square(np.sin(0.5 * radius_rad) )
+        mask = obj_chord_sq > rad_chord_sq
+
+    return mask
 
 class SkyCatalog(object):
     '''
@@ -67,13 +109,6 @@ class SkyCatalog(object):
         self._mp = mp
         # There may be more to do at this point but not too much.
         # In particular, don't read in anything from data files
-        # One might check that the config is complete and well-formed
-        #  - for example require certain keys, such as catalog_name,
-        #  data_file_type, area_parition, root_directory, object_types -
-        # to exist, and check that that the data directory (value of
-        # root_directory) exists.
-        # create an empty dict for
-        # per-HEALpix pixel information and so forth.
 
         self.verbose = verbose
         self._validate_config()
@@ -83,20 +118,47 @@ class SkyCatalog(object):
         #    for 'files', map filepath to handle (initially None)
         #    for 'object_types', map object type to filepath
         self._hp_info = dict()
-        self._find_all_hps()
+        hps = self._find_all_hps()
 
+        try:
+            c_parms = config['Cosmology']
+            self._magnorm_f = MagNorm(**c_parms)
+        except KeyError as k:
+            self._magnorm_f = MagNorm()
+
+    @property
+    def mag_norm_f(self):
+        '''
+        Return function object used to calculate mag_norm
+        '''
+        return self._magnorm_f
+
+    @property
+    def raw_config(self):
+        '''
+        Return config, typically uploaded from yaml.
+        '''
+        return self._config
+
+    # One might check that the config is complete and well-formed
+    #  - for example require certain keys, such as catalog_name,
+    #  data_file_type, area_parition, root_directory, object_types -
+    # to exist, and check that that the data directory (value of
+    # root_directory) exists.
     def _validate_config(self):
         pass
 
     def _find_all_hps(self):
-        # for each healpix with files matching pattern in the directory,
-        # update _hp_info
-        #   self._hp_info[hpid]['files'] =
-        #     {'relpath' : the_filename, 'handle' : None}    and,
-        #  for each object_type represented in the file,
-        #   self._hp_info[hpid]['object_types'][ot] = the_filename
-        # When file is open, set handle to the Parquet file object
-        # (or perhaps something else if underlying format is not Parquet)
+        '''
+        For each healpix with files matching pattern in the directory,
+        update _hp_info as needed to keep track of all files for that healpix
+        and the object types included in those files.   Also..
+
+        Returns
+        -------
+        Set of healpix pixels with at least one file in the directory
+
+        '''
 
         cat_dir = self._config['root_directory']
 
@@ -128,9 +190,15 @@ class SkyCatalog(object):
 
     def get_hps_by_region(self, region):
         '''
+        Parameters
+        ----------
         Region can be a box (named 4-tuple (min-ra, max-ra, min-dec, max-dec))
         or a circle (named 3-tuple (ra, dec, radius))
         Catalog area partition must be by healpix
+
+        Returns
+        -------
+        Set of healpixels intersecting the region
         '''
         # If area_partition doesn't use healpix, raise exception
 
@@ -141,18 +209,23 @@ class SkyCatalog(object):
             #.intersection(self._hps.keys())
 
     def get_object_type_names(self):
+        '''
+        Returns
+        -------
+        All object type names in the catalog's config
+        '''
         return set(self._config['object_types'].keys())
 
     # Add more functions to return parts of config of possible interest
     # to user
 
-    def get_objects_by_region(self, datetime, region, obj_type_set=None):
+    def get_objects_by_region(self, region, obj_type_set=None, datetime=None):
         '''
         Parameters
         ----------
-        datetime       Python datetime object.
         region         region is a named tuple.  May be box or circle
         obj_type_set   Return only these objects. Defaults to all available
+        datetime       Python datetime object. Ignored except for SSO
 
         Returns
         -------
@@ -178,37 +251,45 @@ class SkyCatalog(object):
         for hp in hps:
             # Maybe have a multiprocessing switch? Run-time option when
             # catalog is opened?
-            c = self.get_objects_by_hp(datetime, hp, region, obj_types)
+            c = self.get_objects_by_hp(hp, region, obj_types, datetime)
             if (len(c)) > 0:
-                ###obj_colls = obj_colls + c
                 object_list.append_object_list(c)
 
         return object_list
 
-    def get_object_iterator_by_region(self, datetime, region=None,
-                                      obj_type_set=None, max_chunk=None):
+    def get_object_iterator_by_region(self, region=None, obj_type_set=None,
+                                      max_chunk=None, datetime=None):
         '''
         Parameters
         ----------
-        datetime       Python datetime object.
-        region         min & max for ra and dec
+        region         Either a box or a circle (each represented as
+                       named tuple)
         obj_type_set   Return only these objects. Defaults to all available
         max_chunk      If specified, iterator will return no more than this
                        number of objections per iteration
+        datetime       Python datetime object. Ignored for all but SSO
+
         Returns
         -------
         An iterator
         '''
-        pass
+        raise NotImplementedError('get_object_iterator_by_region not implemented yet. See get_objects_by_region instead for now')
 
-    def get_objects_by_hp(self, datetime, hp, region=None, obj_type_set=None):
+    def get_objects_by_hp(self, hp, region=None, obj_type_set=None,
+                          datetime=None):
+        '''
+        Find all object
         # Find the right Sky Catalog file or files (depends on obj_type_set)
         # Get file handle(s) and store if we don't already have it (them)
 
-        # Returns: ObjectList containing sky objects in the region and the hp
+        Returns
+        -------
+        ObjectList containing sky objects in the region and the hp
+        '''
         object_list = ObjectList()
 
         G_COLUMNS = ['galaxy_id', 'ra', 'dec']
+        PS_COLUMNS = ['object_type', 'id', 'ra', 'dec']
         if self.verbose:
             print('Working on healpix pixel ', hp)
 
@@ -246,32 +327,17 @@ class SkyCatalog(object):
                 # Make a boolean array, value set to 1 for objects
                 # outside the region
                 if region is not None:
-                    if type(region) == type(_aBox):
-                        mask = np.logical_or((arrow_t['ra'] < region.ra_min),
-                                             (arrow_t['ra'] > region.ra_max))
-                        mask = np.logical_or(mask, (arrow_t['dec'] < region.dec_min))
-                        mask = np.logical_or(mask, (arrow_t['dec'] > region.dec_max))
-                    if type(region) == type(_aDisk):
-                        # Change positions to 3d vectors to measure distance
-                        p_vec = healpy.pixelfunc.ang2vec(arrow_t['ra'],
-                                                         arrow_t['dec'],
-                                                         lonlat=True)
-
-                        c_vec = healpy.pixelfunc.ang1vec([region.ra],
-                                                         [region.dec],
-                                                         lonlat=True)[0]
-                        # change disk radius to radians
-                        radius_rad = (region.radius_as * units.arcsec).to_value('radian')
-                        inners = [np.dot(pos, c_vec) for pos in p_vec]
-                        mask = np.arccos(inners) > radius_rad
+                    # This belongs in a separate routine
+                    mask = _compute_mask(region, arrow_t['ra'], arrow_t['dec'])
 
                 else:
                     mask = None
 
                 if mask is not None:
                     masked_ra = ma.array(arrow_t['ra'], mask=mask)
-                    print("Masked array size: ", masked_ra.size)
-                    print("Masked array compressed size: ", masked_ra.compressed().size)
+                    if self.verbose:
+                        print("Masked array size: ", masked_ra.size)
+                        print("Masked array compressed size: ", masked_ra.compressed().size)
                     ra_compress = masked_ra.compressed()
                     if ra_compress.size > 0:
                         dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
@@ -288,21 +354,56 @@ class SkyCatalog(object):
                                                   id_compress,
                                                   'galaxy',
                                                   hp,
+                                                  self,
                                                   region=region,
                                                   mask=mask,
                                                   reader=rdr)
-
-
                 object_list.append_collection(new_collection)
+
+                # Now do the same for point sources
+            if 'star' in rdr_ot[rdr]:
+                arrow_t = rdr.read_columns(PS_COLUMNS, None) # or read_row_group
+                # Make a boolean array, value set to 1 for objects
+                # outside the region
+                if region is not None:
+                    # This belongs in a separate routine
+                    mask = _compute_mask(region, arrow_t['ra'], arrow_t['dec'])
+                else:
+                    mask = None
+
+                if mask is not None:
+                    masked_ra = ma.array(arrow_t['ra'], mask=mask)
+                    ra_compress = masked_ra.compressed()
+                    if ra_compress.size > 0:
+                        dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
+                        id_compress = ma.array(arrow_t['id'], mask=mask).compressed()
+                    else:
+                        continue
+                else:
+                    ra_compress = arrow_t['ra']
+                    dec_compress = arrow_t['dec']
+                    id_compress = arrow_t['id']
+
+                new_collection = ObjectCollection(ra_compress,
+                                                  dec_compress,
+                                                  id_compress,
+                                                  'star',
+                                                  hp,
+                                                  self,
+                                                  region=region,
+                                                  mask=mask,
+                                                  reader=rdr)
+                object_list.append_collection(new_collection)
+
+
+
         return object_list
 
-
-        # For generator version, do this a row group at a time
-        #    but if region cut leaves too small a list, read more rowgroups
-        #    to achieve a reasonable size list (or exhaust the file)
-
-    def get_object_iterator_by_hp(self, datetime, hp, obj_type_set=None,
-                                  max_chunk=None):
+    # For generator version, do this a row group at a time
+    #    but if region cut leaves too small a list, read more rowgroups
+    #    to achieve a reasonable size list (or exhaust the file)
+    def get_object_iterator_by_hp(self, hp, obj_type_set=None,
+                                  max_chunk=None, datetime=None):
         '''
         Parameters
         ----------
@@ -332,7 +433,7 @@ def open_catalog(config_file, mp=False):
         return SkyCatalog(yaml.safe_load(f), mp)
 
 if __name__ == '__main__':
-    cfg_file = '/global/homes/j/jrbogart/Joanne_git/skyCatalogs/cfg/galaxy.yaml'
+    cfg_file = '/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg/to_translate.yaml'
 
     # For tract 3828
     #   55.73604 < ra < 57.563452
@@ -355,6 +456,8 @@ if __name__ == '__main__':
     dec_min_small = -36.2
     dec_max_small = -36.0
 
+    sed_fmt = 'lambda: {:.1f}  f_lambda: {:g}'
+
     rgn = Box(ra_min_small, ra_max_small, dec_min_small, dec_max_small)
 
     intersect_hps = _get_intersecting_hps('ring', 32, rgn)
@@ -363,47 +466,57 @@ if __name__ == '__main__':
     print("intersecting pixels are ", intersect_hps)
 
     print('Invoke get_objects_by_region with box region')
-    object_list = cat.get_objects_by_region(0, rgn,
-                                            obj_type_set=set(['galaxy']) )
+    object_list = cat.get_objects_by_region(rgn,
+                                            obj_type_set={'galaxy', 'star'} )
+    #                                        obj_type_set=set(['galaxy']) )
     # Try out get_objects_by_hp with no region
-    #colls = cat.get_objects_by_hp(0, 9812, None, set(['galaxy']) )
+    #colls = cat.get_objects_by_hp(9812, None, set(['galaxy']) )
 
     print('Number of collections returned:  ', object_list.collection_count)
 
     colls = object_list.get_collections()
     for c in colls:
-        print("For hpid ", c.get_partition_id(), "found ", len(c), " objects")
+        n_obj = len(c)
+        print("For hpid ", c.get_partition_id(), "found ", n_obj, " objects")
         print("First object: ")
         print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
-              ' belongs_index=', c[0]._belongs_index)
+              ' belongs_index=', c[0]._belongs_index,
+              ' object_type: ', c[0].object_type )
 
         print("Slice [1:3]")
         slice13 = c[1:3]
         for o in slice13:
             print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
-                  o._belongs_index)
-        print("Object 1000")
-        print(c[1000], '\nid=', c[1000].id, ' ra=', c[1000].ra, ' dec=',
-              c[1000].dec,
-              ' belongs_index=', c[1000]._belongs_index)
-        slice_late = c[163994:163997]
-        print('\nobjects indexed 163994 through 163996')
-        for o in slice_late:
-            print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
-                  o._belongs_index)
+                  o._belongs_index,  ' object_type: ', o.object_type)
+            print(o.object_type)
+            if o.object_type == 'star':
+                print(o.get_instcat_entry())
+            else:
+                for cmp in ['disk', 'bulge']:
+                    print(cmp)
+                    print(o.get_instcat_entry(component=cmp))
+                    (lmbda, f_lambda, magnorm) = o.get_sed(cmp)
+                    print('magnorm: ', magnorm)
+                    if magnorm < 1000:
+                        for i in range(30):
+                            print(sed_fmt.format(lmbda[i], f_lambda[i]))
+
+        if n_obj > 200:
+            print("Object 200")
+            print(c[200], '\nid=', c[200].id, ' ra=', c[200].ra, ' dec=',
+                  c[200].dec,
+                  ' belongs_index=', c[200]._belongs_index)
+        if n_obj > 163997:
+            slice_late = c[163994:163997]
+            print('\nobjects indexed 163994 through 163996')
+            for o in slice_late:
+                print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
+                      o._belongs_index)
 
     print('Total object count: ', len(object_list))
 
     obj = object_list[0]
     print("Type of element in object_list:", type(obj))
 
-    redshift0 = object_list[0].redshift
+    redshift0 = object_list[0].get_native_attribute('redshift')
     print('First redshift: ', redshift0)
-
-    sed_bulges = colls[0].get_attribute('sed_val_bulge')
-
-    print("first bulge sed:")
-    for v in sed_bulges[0]:
-        print(v)
-    #convergence = coll.get_attribute('convergence')
-    #print("first convergence: ", convergence[0])

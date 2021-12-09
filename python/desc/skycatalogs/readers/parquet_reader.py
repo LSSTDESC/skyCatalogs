@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import pyarrow as pa
 import pyarrow.parquet as pq
 import numpy as np
@@ -18,6 +19,9 @@ class ParquetReader:
         self._meta = pq.read_metadata(filepath)
         self._schema = pq.read_schema(filepath)
         self._columns = set(self._schema.names)
+        #  To support iterator also save # row groups, length of each.
+        #  If mask, must be able to get slices corresponding to the different
+        #  row groups
         self._open()
 
     def _open(self):
@@ -39,18 +43,18 @@ class ParquetReader:
         Parameters
         -----------
         cols       list of column names belonging to the file
-        apply_mask if True and mask has been set, return compressed array
+        mask       if not None, use it and return compressed array
 
         Returns
         -------
-        dict where keys are column names, values are numpy arrays
+        OrdereDict where keys are column names, values are numpy arrays
         '''
 
         if not set(cols).issubset(self._columns):
             # raise exception?   For now, just
             return None
 
-        d = dict()
+        d = OrderedDict()
         if not self._pqfile:
             self._open()
         tbl = self._pqfile.read(columns = cols)
