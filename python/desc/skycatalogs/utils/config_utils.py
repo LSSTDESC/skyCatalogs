@@ -67,14 +67,10 @@ class Config(object):
         Value associated with key_path if config contains such a path
         '''
         path_items = key_path.split('/')
-        #print("path_items: ", path_items)
-        #print("All but last: ", path_items[:-1])
         d = self._cfg
         for i in path_items[:-1]:
-            #print(f'working on item {i}')
             if not i in d:
                 raise ValueError(f'Item {i} not found')
-            #print(f'Type of d[i]: {type(d[i])} Value: {d[i]}')
             d = d[i]
             if not isinstance(d, dict):
                 raise ValueError(f'intermediate {d} is not a dict')

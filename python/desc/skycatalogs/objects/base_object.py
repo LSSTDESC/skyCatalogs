@@ -4,6 +4,7 @@ import numpy as np
 import itertools
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
+from desc.skycatalogs.utils.sed_utils import convert_tophat_sed
 
 '''
 Main object types.   There are also may be subtypes. For example,
@@ -67,7 +68,8 @@ class BaseObject(object):
     def redshift(self):
         if self._redshift:        return self._redshift
         if self._belongs_to:
-            self._redshift = self._belongs_to.redshifts()[self._belongs_index]
+            #self._redshift = self._belongs_to.redshifts()[self._belongs_index]
+            self._redshift = self.get_attribute('redshift')
         return self._redshift
 
     @property
@@ -84,13 +86,8 @@ class BaseObject(object):
         if not self._belongs_to:
             raise ValueError('To fetch {attribute_name} object must be in an object collection')
 
-        return self._belongs_to.get_attribute(attribute_name)[self._belongs_index]
-
-    def get_sed(self, **kwargs):
-        '''
-        For galaxies may want to specify subcomponent(s)
-        '''
-        raise NotImplementedError
+        vals = self._belongs_to.get_attribute(attribute_name)
+        return vals[self._belongs_index]
 
     def get_sed_metadata(self, **kwargs):
         '''
@@ -110,6 +107,36 @@ class BaseObject(object):
 
         return form_object_string(self, band, component)
 
+    def get_sed(self, component, resolution=1.0):
+        '''
+        Return sed and mag_norm for a galaxy component
+        Parameters
+        ----------
+        component    one of 'bulge', 'disk' for now. Other components
+                     may be supported
+        resolution   desired resolution of lambda in nanometers
+
+        Returns
+        -------
+        A triple (lambda, f_lambda, mag_norm) where the first two are
+                 parallel floating point arrays and the last is a scalar.
+                 lambda is in nm.   f_lambda is in erg/(cm**2 * s * nm)
+        '''
+        if self._object_type != 'galaxy':
+            raise ValueError('get_sed function only available for galaxy components')
+        if component not in ['disk', 'bulge']:
+            raise ValueError(f'Cannot fetch SED for component type {component}')
+
+        r = self.get_attribute('redshift_hubble')
+        th_val = self.get_attribute(f'sed_val_{component}')
+        mag_f = self._belongs_to.sky_catalog.mag_norm_f
+        th_bins = self._belongs_to.config.get_tophat_parameters()
+
+        lmbda,f_lambda,mag_norm,f_nu500 = convert_tophat_sed(th_bins, th_val,
+                                          mag_f, wavelen_step=resolution)
+        return lmbda, f_lambda, mag_norm
+
+
 class ObjectCollection(Sequence):
     '''
     Class for collection of static objects coming from the same
@@ -117,26 +144,32 @@ class ObjectCollection(Sequence):
     Many of the methods look the same as for BaseObject but they return arrays
     rather than a single number.  There are some additional methods
     '''
-    def __init__(self, ra, dec, id, object_type, partition_id, config_dict,
-                 redshift=None, indexes = None, region=None, mask=None,
-                 reader=None):
+    def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
+                 region=None, mask=None, reader=None):
         '''
         Minimum information needed for static objects.
-        (Not sure redshift is necessary.  reader even less likely)
-
+        specified, has already been used by the caller to generate mask.
         ra, dec, id must be array-like.
         object_type  may be either single value or array-like.
         partition_id (e.g. healpix id)
+        sky_catalog instance of SkyCatalog class
+        (redshift should probably be ditched; no need for it)
+        (similarly for region with current code structure. Information
+        needed is encoded in mask)
+        mask  indices to be masked off, e.g. because region does not
+              include the entire healpix pixel
         All arrays must be the same length
+
 
         '''
         self._ra = np.array(ra)
         self._dec = np.array(dec)
         self._id = np.array(id)
-        self._redshift = None
         self._rdr = reader
         self._partition_id = partition_id
-        self._config = Config(config_dict)
+        self._sky_catalog = sky_catalog   # might not need this
+        self._config = Config(sky_catalog.raw_config)
+        self._mag_norm_f = sky_catalog.mag_norm_f
         self._mask = mask
 
         # Maybe the following is silly and object_type should always be stored
@@ -150,11 +183,6 @@ class ObjectCollection(Sequence):
             self._object_type_unique = object_type
             self._uniform_object_type = True
 
-        if isinstance(redshift, list):
-            self._redshifts = np.array(redshift)
-        else:
-            self._redshifts = redshift
-
         self._region = region
 
     @property
@@ -165,11 +193,9 @@ class ObjectCollection(Sequence):
     def config(self):
         return self._config
 
-    def redshifts(self):
-        if not self._redshift:
-            # read from our file
-            self._redshift = self.get_attribute('redshift')
-        return self._redshift
+    @property
+    def sky_catalog(self):
+        return self._sky_catalog
 
     def get_attribute(self, attribute_name):
         '''
@@ -182,12 +208,13 @@ class ObjectCollection(Sequence):
         if val is not None: return val
 
         val = self._rdr.read_columns([attribute_name], self._mask)[attribute_name]
+        setattr(self, attribute_name, val)
         return val
 
     def get_attributes(self, attribute_list):
         '''
         Return requested attributes as an OrderedDict. Keys are column names.
-        our mask if we have one
+        Use our mask if we have one
         '''
         df = self._rdr.read_columns(attribute_list, self._mask)
         return df

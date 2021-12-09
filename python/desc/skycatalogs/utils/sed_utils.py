@@ -34,7 +34,7 @@ def convert_tophat_sed(a_bins, f_nu_input, mag_norm_f, redshift=0,
     redshift:   needed for computing distance modulus. Should be
                 cosmoDC2 redshiftHubble, aka redshift_hubble in sky catalogs
     wavelen_step:    Re-cast tophat seds to use this bin width in nm (keeping
-                     same step function in f_nu space)
+                     same step function in f_nu space).
 
     return
     ------
@@ -61,7 +61,6 @@ def convert_tophat_sed(a_bins, f_nu_input, mag_norm_f, redshift=0,
 
     # Keep the same step function but use fine bins instead of the
     # original tophat widths.
-    wavelen_step = 0.1     # nm
     n_bins = int((lam_max - lam_min) / wavelen_step)
     lam_fine = np.empty(n_bins)
     f_nu_fine = np.empty(n_bins)

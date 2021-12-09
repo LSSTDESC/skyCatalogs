@@ -10,6 +10,7 @@ from astropy import units
 from desc.skycatalogs.objects import *
 from desc.skycatalogs.readers import *
 from desc.skycatalogs.readers import ParquetReader
+from desc.skycatalogs.utils.sed_utils import MagNorm
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
 
@@ -108,13 +109,6 @@ class SkyCatalog(object):
         self._mp = mp
         # There may be more to do at this point but not too much.
         # In particular, don't read in anything from data files
-        # One might check that the config is complete and well-formed
-        #  - for example require certain keys, such as catalog_name,
-        #  data_file_type, area_parition, root_directory, object_types -
-        # to exist, and check that that the data directory (value of
-        # root_directory) exists.
-        # create an empty dict for
-        # per-HEALpix pixel information and so forth.
 
         self.verbose = verbose
         self._validate_config()
@@ -126,6 +120,31 @@ class SkyCatalog(object):
         self._hp_info = dict()
         hps = self._find_all_hps()
 
+        try:
+            c_parms = config['Cosmology']
+            self._magnorm_f = MagNorm(**c_parms)
+        except KeyError as k:
+            self._magnorm_f = MagNorm()
+
+    @property
+    def mag_norm_f(self):
+        '''
+        Return function object used to calculate mag_norm
+        '''
+        return self._magnorm_f
+
+    @property
+    def raw_config(self):
+        '''
+        Return config, typically uploaded from yaml.
+        '''
+        return self._config
+
+    # One might check that the config is complete and well-formed
+    #  - for example require certain keys, such as catalog_name,
+    #  data_file_type, area_parition, root_directory, object_types -
+    # to exist, and check that that the data directory (value of
+    # root_directory) exists.
     def _validate_config(self):
         pass
 
@@ -335,7 +354,7 @@ class SkyCatalog(object):
                                                   id_compress,
                                                   'galaxy',
                                                   hp,
-                                                  self._config,
+                                                  self,
                                                   region=region,
                                                   mask=mask,
                                                   reader=rdr)
@@ -358,22 +377,19 @@ class SkyCatalog(object):
                     if ra_compress.size > 0:
                         dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
                         id_compress = ma.array(arrow_t['id'], mask=mask).compressed()
-                        #sourcetype_compress = ma.array(arrow_t['object_type'],
-                        #                               mask=mask).compressed()
                     else:
                         continue
                 else:
                     ra_compress = arrow_t['ra']
                     dec_compress = arrow_t['dec']
                     id_compress = arrow_t['id']
-                    #sourcetype_compress = arrow_t['object_type']
 
                 new_collection = ObjectCollection(ra_compress,
                                                   dec_compress,
                                                   id_compress,
                                                   'star',
                                                   hp,
-                                                  self._config,
+                                                  self,
                                                   region=region,
                                                   mask=mask,
                                                   reader=rdr)
@@ -383,11 +399,9 @@ class SkyCatalog(object):
 
         return object_list
 
-
-        # For generator version, do this a row group at a time
-        #    but if region cut leaves too small a list, read more rowgroups
-        #    to achieve a reasonable size list (or exhaust the file)
-
+    # For generator version, do this a row group at a time
+    #    but if region cut leaves too small a list, read more rowgroups
+    #    to achieve a reasonable size list (or exhaust the file)
     def get_object_iterator_by_hp(self, hp, obj_type_set=None,
                                   max_chunk=None, datetime=None):
         '''
@@ -419,7 +433,6 @@ def open_catalog(config_file, mp=False):
         return SkyCatalog(yaml.safe_load(f), mp)
 
 if __name__ == '__main__':
-    #cfg_file = '/global/homes/j/jrbogart/Joanne_git/skyCatalogs/cfg/galaxy.yaml'
     cfg_file = '/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg/to_translate.yaml'
 
     # For tract 3828
@@ -442,6 +455,8 @@ if __name__ == '__main__':
     ra_max_small = 56.1
     dec_min_small = -36.2
     dec_max_small = -36.0
+
+    sed_fmt = 'lambda: {:.1f}  f_lambda: {:g}'
 
     rgn = Box(ra_min_small, ra_max_small, dec_min_small, dec_max_small)
 
@@ -473,12 +488,19 @@ if __name__ == '__main__':
         for o in slice13:
             print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
                   o._belongs_index,  ' object_type: ', o.object_type)
+            print(o.object_type)
             if o.object_type == 'star':
                 print(o.get_instcat_entry())
             else:
                 for cmp in ['disk', 'bulge']:
                     print(cmp)
                     print(o.get_instcat_entry(component=cmp))
+                    (lmbda, f_lambda, magnorm) = o.get_sed(cmp)
+                    print('magnorm: ', magnorm)
+                    if magnorm < 1000:
+                        for i in range(30):
+                            print(sed_fmt.format(lmbda[i], f_lambda[i]))
+
         if n_obj > 200:
             print("Object 200")
             print(c[200], '\nid=', c[200].id, ' ra=', c[200].ra, ' dec=',
@@ -496,13 +518,5 @@ if __name__ == '__main__':
     obj = object_list[0]
     print("Type of element in object_list:", type(obj))
 
-    redshift0 = object_list[0].redshift
+    redshift0 = object_list[0].get_attribute('redshift')
     print('First redshift: ', redshift0)
-
-    sed_bulges = colls[0].get_attribute('sed_val_bulge')
-
-    #print("first bulge sed:")
-    #for v in sed_bulges[0]:
-    #    print(v)
-    #convergence = coll.get_attribute('convergence')
-    #print("first convergence: ", convergence[0])
