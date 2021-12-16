@@ -295,7 +295,7 @@ class SkyCatalog(object):
 
         obj_types = obj_type_set
         if obj_types is None:
-            obj_types = self._config['object_types'].keys()
+            obj_types = self._config['object_types']
         else:
             parents = set()
             for ot in obj_types:
