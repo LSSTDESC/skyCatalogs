@@ -133,7 +133,7 @@ class BaseObject(object):
         th_bins = self._belongs_to.config.get_tophat_parameters()
 
         lmbda,f_lambda,mag_norm,f_nu500 = convert_tophat_sed(th_bins, th_val,
-                                          mag_f, wavelen_step=resolution)
+                                          mag_f, redshift=r, wavelen_step=resolution)
         return lmbda, f_lambda, mag_norm
 
 
