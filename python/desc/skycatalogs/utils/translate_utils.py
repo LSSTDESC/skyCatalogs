@@ -8,7 +8,7 @@ __all__ = ['column_finder', 'check_file', 'write_to_instance', 'SourceType', 'ST
 
 STAR_FMT = '{:s} {:d} {:.14f} {:.14f} {:.8f} {:s} {:d} {:d} {:d} {:d} {:d} {:d} {:s} {:s} {:s} {:.8f} {:f}'
 
-CMP_FMT = '{:s} {:d} {:.14f} {:.14f}, {:.8f} {:s} {:.9g} {:.9g} {:.9g} {:.9g} {:d} {:d} {:s} {:.9g} {:.9g} {:f} {:s} {:s} {:.8f} {:f}'
+CMP_FMT = '{:s} {:d} {:.14f} {:.14f} {:.8f} {:s} {:.9g} {:.9g} {:.9g} {:.9g} {:d} {:d} {:s} {:.9g} {:.9g} {:f} {:s} {:s} {:.8f} {:f}'
 
 def form_star_instance_columns(band):
     star_instance = [column_finder('prefix', SourceType.FIXED, ('object', np.dtype('U6'))),
