@@ -310,7 +310,7 @@ class SkyCatalog(object):
             if 'file_template' in self._config['object_types'][ot]:
                 f = self._hp_info[hp]['object_types'][ot]
             elif 'parent' in self._config['object_types'][ot]:
-                f = self._hp_info[hp]['object_types'][obj_types[ot]['parent']]
+                f = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
             if f not in self._hp_info[hp]:
                 the_reader = parquet_reader.ParquetReader(os.path.join(root_dir,f), mask=None)
                 self._hp_info[hp][f] = the_reader
@@ -466,8 +466,8 @@ if __name__ == '__main__':
     print("intersecting pixels are ", intersect_hps)
 
     print('Invoke get_objects_by_region with box region')
-    object_list = cat.get_objects_by_region(rgn,
-                                            obj_type_set={'galaxy', 'star'} )
+    object_list = cat.get_objects_by_region(rgn)
+                                            ##### temporary obj_type_set={'galaxy', 'star'} )
     #                                        obj_type_set=set(['galaxy']) )
     # Try out get_objects_by_hp with no region
     #colls = cat.get_objects_by_hp(9812, None, set(['galaxy']) )

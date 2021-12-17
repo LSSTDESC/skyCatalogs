@@ -10,7 +10,6 @@ from numpy.random import default_rng
 
 import pyccl as ccl
 
-from lsst.sims.photUtils import Sed, Bandpass
 from desc.skycatalogs.utils.common_utils import print_dated_msg
 import GCRCatalogs
 
@@ -73,14 +72,15 @@ def convert_tophat_sed(a_bins, f_nu_input, mag_norm_f, redshift=0,
             b_ix = b_ix + 1
         f_nu_fine[i] = f_nu[b_ix]
 
-    base_spec = Sed(wavelen=lam_fine, fnu=f_nu_fine)
+    # Convert fnu to flambda, ignoring constant factors.
+    flambda = f_nu_fine/lam_fine**2
 
     # Normalize so flambda value at 500 nm is 1.0
     nm500_ix = int((500 - lam_min) / wavelen_step) + 1
-    flambda_norm = base_spec.flambda / base_spec.flambda[nm500_ix]
+    flambda_norm = flambda / flambda[nm500_ix]
 
-    return base_spec.wavelen, flambda_norm, mag_norm_f(f_nu[NORMWV_IX],
-                                                       redshift), val_500nm
+    return lam_fine, flambda_norm, mag_norm_f(f_nu[NORMWV_IX],
+                                             redshift), val_500nm
 
 def get_random_sed(cmp, sed_dir, n_sed, pixel=9556):
     """
