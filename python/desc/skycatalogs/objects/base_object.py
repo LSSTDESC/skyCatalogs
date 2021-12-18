@@ -82,6 +82,19 @@ class BaseObject(object):
     def belongs_to(self):
         return self._belongs_to
 
+
+    @property
+    def native_columns(self):
+        '''
+        Return set of all columns stored for this object.
+        May not include quantities which are constant for all objects
+        of this type
+        '''
+        if self._belongs_to:
+            return self._belongs_to.native_columns
+        else:
+            return None
+
     def get_native_attribute(self, attribute_name):
         if not self._belongs_to:
             raise ValueError('To fetch {attribute_name} object must be in an object collection')
@@ -197,6 +210,15 @@ class ObjectCollection(Sequence):
     def sky_catalog(self):
         return self._sky_catalog
 
+    @property
+    def native_columns(self):
+        '''
+        Return set of all columns stored for objects in this collection
+        May not include quantities which are constant for all objects
+        of this type
+        '''
+        return self._rdr.columns
+
     def get_native_attribute(self, attribute_name):
         '''
         Retrieve a particular attribute for a collection
@@ -207,7 +229,10 @@ class ObjectCollection(Sequence):
         val = getattr(self, attribute_name, None)
         if val is not None: return val
 
-        val = self._rdr.read_columns([attribute_name], self._mask)[attribute_name]
+        d = self._rdr.read_columns([attribute_name], self._mask)
+        if not d:
+            return None
+        val = d[attribute_name]
         setattr(self, attribute_name, val)
         return val
 
