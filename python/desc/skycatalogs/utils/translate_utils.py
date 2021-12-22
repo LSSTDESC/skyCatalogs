@@ -8,7 +8,7 @@ __all__ = ['column_finder', 'check_file', 'write_to_instance', 'SourceType', 'ST
 
 STAR_FMT = '{:s} {:d} {:.14f} {:.14f} {:.8f} {:s} {:d} {:d} {:d} {:d} {:d} {:d} {:s} {:s} {:s} {:.8f} {:f}'
 
-CMP_FMT = '{:s} {:d} {:.14f} {:.14f} {:.8f} {:s} {:.9g} {:.9g} {:.9g} {:.9g} {:d} {:d} {:s} {:.9g} {:.9g} {:f} {:s} {:s} {:.8f} {:f}'
+CMP_FMT = '{:s} {:d} {:.14f} {:.14f} {:.8f} {:s} {:.9g} {:.9g} {:.9g} {:.9g} {:d} {:d} {:s} {:.9g} {:.9g} {:f} {:.0f} {:s} {:s} {:.8f} {:f}'
 
 def form_star_instance_columns(band):
     star_instance = [column_finder('prefix', SourceType.FIXED, ('object', np.dtype('U6'))),
@@ -51,6 +51,7 @@ def form_cmp_instance_columns(cmp, band):
                     column_finder('majorAxis', SourceType.DATA, f'size_{cmp}_true'),
                     column_finder('minorAxis', SourceType.DATA, f'size_minor_{cmp}_true'),
                     column_finder('positionAngle', SourceType.DATA, 'position_angle_unlensed'),
+                    column_finder('sindex', SourceType.DATA, f'sersic_{cmp}'),
                     column_finder('internalExtinctionModel', SourceType.FIXED, ('none', np.dtype('U4'))),
                     column_finder('galacticExtinctionModel', SourceType.CONFIG,
                                   (f'object_types/{cmp}_basic/MW_extinction', 'str')),
