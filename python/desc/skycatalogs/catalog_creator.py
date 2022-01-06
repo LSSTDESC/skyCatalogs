@@ -11,7 +11,7 @@ import sqlite3
 import GCRCatalogs
 import pyccl as ccl
 from desc.skycatalogs.utils.common_utils import print_date
-from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX
+from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
@@ -346,7 +346,6 @@ class CatalogCreator:
 
         # Some columns need to be renamed and, in one case, units changed
         to_modify = ['position_angle_true', 'redshiftHubble', 'peculiarVelocity']
-        print_col = True
         while u_bnd > l_bnd:
             out_dict = {k : df[k][l_bnd : u_bnd] for k in non_sed if k not in to_modify}
             out_dict['redshift_hubble'] = df['redshiftHubble'][l_bnd : u_bnd]
@@ -365,7 +364,7 @@ class CatalogCreator:
                 out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]
                 out_dict['disk_sed_file_path'] = disk_path[l_bnd : u_bnd]
 
-            if print_col:
+            if self._verbose:
                 for kd,i in out_dict.items():
                     print(f'Key={kd}, type={type(i)}, len={len(i)}')
             print_col = False
@@ -432,6 +431,8 @@ class CatalogCreator:
             q = f'select {cols} from stars where hpid={pixel} '
             with sqlite3.connect(star_cat) as conn:
                 star_df = pd.read_sql_query(q, conn)
+
+            star_df['sed_filepath'] = get_star_sed_path(star_df['sed_filepath'])
 
             nobj = len(star_df['id'])
             print(f"Found {nobj} stars")
