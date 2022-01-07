@@ -1,7 +1,10 @@
 from collections.abc import Sequence
 from collections import namedtuple, OrderedDict
+import os
+import gzip
 import numpy as np
 import itertools
+import warnings
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
 from desc.skycatalogs.utils.sed_utils import convert_tophat_sed
@@ -82,6 +85,19 @@ class BaseObject(object):
     def belongs_to(self):
         return self._belongs_to
 
+
+    @property
+    def native_columns(self):
+        '''
+        Return set of all columns stored for this object.
+        May not include quantities which are constant for all objects
+        of this type
+        '''
+        if self._belongs_to:
+            return self._belongs_to.native_columns
+        else:
+            return None
+
     def get_native_attribute(self, attribute_name):
         if not self._belongs_to:
             raise ValueError('To fetch {attribute_name} object must be in an object collection')
@@ -107,14 +123,15 @@ class BaseObject(object):
 
         return form_object_string(self, band, component)
 
-    def get_sed(self, component, resolution=1.0):
+    def get_sed(self, component=None, resolution=None):
         '''
-        Return sed and mag_norm for a galaxy component
+        Return sed and mag_norm for a galaxy component or for a star
         Parameters
         ----------
         component    one of 'bulge', 'disk' for now. Other components
-                     may be supported
-        resolution   desired resolution of lambda in nanometers
+                     may be supported.  Ignored for stars
+        resolution   desired resolution of lambda in nanometers. Ignored
+                     for stars; defaults to 1.0 for galaxy components
 
         Returns
         -------
@@ -122,8 +139,37 @@ class BaseObject(object):
                  parallel floating point arrays and the last is a scalar.
                  lambda is in nm.   f_lambda is in erg/(cm**2 * s * nm)
         '''
+
+        if self._object_type == 'star':
+            # read in the file; return data from it. Arguments are ignored
+            if component:
+                warnings.warn(f'get_sed: component argument ignored for object type {self._object_type}')
+            if resolution:
+                warnings.warn(f'get_sed: resolution argument ignored for object type {self._object_type}')
+            mag_norm = self.get_native_attribute('magnorm')
+            fpath = os.path.join(os.getenv('SIMS_SED_LIBRARY_DIR'),
+                                 self.get_native_attribute('sed_filepath'))
+            lmbda = []
+            f_lambda = []
+            with gzip.open(fpath, mode='rt') as f:
+                ln = (f.readline()).strip()
+                while ln:
+                    if len(ln) == 0:
+                        ln = (f.readline()).strip()
+                        continue
+                    if ln[0] == '#':
+                        ln = (f.readline()).strip()
+                        continue
+                    atoms = ln.split()
+                    lmbda.append(float(atoms[0]))
+                    f_lambda.append(float(atoms[1]))
+                    ln = (f.readline()).strip()
+            return lmbda, f_lambda, mag_norm
+
         if self._object_type != 'galaxy':
-            raise ValueError('get_sed function only available for galaxy components')
+            raise ValueError('get_sed function only available for stars and galaxy components')
+        if not resolution:
+            resolution = 1.0
         if component not in ['disk', 'bulge']:
             raise ValueError(f'Cannot fetch SED for component type {component}')
 
@@ -197,6 +243,15 @@ class ObjectCollection(Sequence):
     def sky_catalog(self):
         return self._sky_catalog
 
+    @property
+    def native_columns(self):
+        '''
+        Return set of all columns stored for objects in this collection
+        May not include quantities which are constant for all objects
+        of this type
+        '''
+        return self._rdr.columns
+
     def get_native_attribute(self, attribute_name):
         '''
         Retrieve a particular attribute for a collection
@@ -207,7 +262,10 @@ class ObjectCollection(Sequence):
         val = getattr(self, attribute_name, None)
         if val is not None: return val
 
-        val = self._rdr.read_columns([attribute_name], self._mask)[attribute_name]
+        d = self._rdr.read_columns([attribute_name], self._mask)
+        if not d:
+            return None
+        val = d[attribute_name]
         setattr(self, attribute_name, val)
         return val
 

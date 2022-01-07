@@ -37,6 +37,9 @@ class ParquetReader:
         if self._pqfile:
             pass
 
+    @property
+    def columns(self):
+        return self._columns
 
     def read_columns(self, cols, mask):
         '''
@@ -51,7 +54,9 @@ class ParquetReader:
         '''
 
         if not set(cols).issubset(self._columns):
+            unknown = set(columns) - self._columns
             # raise exception?   For now, just
+            print(f'Unknown column or columns {unknown}')
             return None
 
         d = OrderedDict()

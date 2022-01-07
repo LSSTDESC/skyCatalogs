@@ -28,11 +28,9 @@ parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
 out_dir = os.path.join(os.getenv('SCRATCH'), 'desc', 'skycatalogs', 'test')
 parser.add_argument('--output-dir', help='directory for output files',
                     default=out_dir)
-parser.add_argument('--random-sed-dir', default=None,
-                    help='If set, use summary files in dir to find substitute SEDs for galaxies')
+parser.add_argument('--sed-subdir', help='subdirectory to prepend to paths of galaxy SEDs as written to the sky catalog', default='galaxyTopHatSED')
 parser.add_argument('--verbose', help='print more output if true',
                     action='store_true')
-
 parser.add_argument('--galaxy-magnitude-cut', default=None,
                     help='If supplied exclude galaxies with magnitude above')
 
@@ -42,16 +40,13 @@ print_callinfo('create_sc', args)
 
 output_dir = args.output_dir
 
-#rsdir = None
-#if args.random_sed_dir:
-#    rsdir = args.random_sed_dir
+
 parts = args.pixels
 
-#creator = CatalogCreator(parts, area_partition)
 creator = CatalogCreator(parts, area_partition, output_dir=output_dir,
                          verbose=args.verbose,
                          mag_cut=args.galaxy_magnitude_cut,
-                         random_sed_dir=args.random_sed_dir)
+                         sed_subdir=args.sed_subdir)
 print('Starting with healpix pixel ', parts[0])
 if not args.no_galaxies:
     print("Creating galaxy catalogs")

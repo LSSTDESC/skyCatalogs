@@ -25,7 +25,7 @@ class APITester(unittest.TestCase):
     def tearDown(self):
         pass                  # nothing to do
 
-    def testAPI(self):
+    def testAPI_region(self):
         '''
         Should be broken down into separate small tests
         '''
@@ -101,6 +101,46 @@ class APITester(unittest.TestCase):
         for v in sed_bulges[0]:
             print(v)
 
+
+    def testAPI_hp(self):
+        '''
+        Try with and without specified object types
+        '''
+        def print_from_objects(label, obj_list):
+            '''
+        Print out information from supplied object list, accessed
+        both from list and from collections it comes from
+        Parameters
+        ----------
+        label      string       Identify the list
+        list       an object list returned by .get_objects_by...
+        '''
+            print(label)
+            colls = obj_list.get_collections()
+
+            print(f'Total objects: {len(obj_list)}  # collections {len(colls)}')
+            obj0 = obj_list[0]
+            obj0c0 = colls[0][0]
+            native_columns = obj0.native_columns
+            for att in ['object_type', 'redshift', 'id', 'galaxy_id']:
+                print(f'Getting attribute {att}')
+                if att in native_columns:
+                    v0 = (obj_list[0]).get_native_attribute(att)
+                    v0c0 = (colls[0][0]).get_native_attribute(att)
+                    print(f'For attribute {att} obj_list 1st value: {v0}; coll 1st value: {v0c0}')
+                else:
+                    print(f'No native attribute {att} for this object')
+        ####   end of included function for printing
+
+        hp = 9556
+
+        cat = self._cat
+        obj_types = {'galaxy'}
+        specified = cat.get_objects_by_hp(hp, region=None, obj_type_set=obj_types)
+        print_from_objects(f'From hp {hp} with object types {str(obj_types)}', specified)
+
+        none_specified = cat.get_objects_by_hp(hp)
+        print_from_objects(f'From hp {hp}, no specified object types', none_specified)
 
 if __name__ == '__main__':
     unittest.main()

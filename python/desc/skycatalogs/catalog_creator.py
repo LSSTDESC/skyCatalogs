@@ -11,7 +11,7 @@ import sqlite3
 import GCRCatalogs
 import pyccl as ccl
 from desc.skycatalogs.utils.common_utils import print_date
-from desc.skycatalogs.utils.sed_utils import MagNorm, get_random_sed, NORMWV_IX
+from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
@@ -36,7 +36,7 @@ _MW_extinction_bands = {'MW_av_lsst_u' : 4.145, 'MW_av_lsst_g' : 3.237,
 
 # This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
-def _make_galaxy_schema(random_seds=False):
+def _make_galaxy_schema(sed_subdir=False):
     fields = [pa.field('galaxy_id', pa.int64()),
               pa.field('ra', pa.float64() , True),
 ##                       metadata={"units" : "radians"}),
@@ -72,7 +72,7 @@ def _make_galaxy_schema(random_seds=False):
               pa.field('MW_av_lsst_i', pa.float32(), True),
               pa.field('MW_av_lsst_z', pa.float32(), True),
               pa.field('MW_av_lsst_y', pa.float32(), True)]
-    if random_seds:
+    if sed_subdir:
         fields.append(pa.field('bulge_sed_file_path', pa.string(), True))
         fields.append(pa.field('disk_sed_file_path', pa.string(), True))
 
@@ -124,10 +124,28 @@ def _make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
 
     return av_dict
 
+def _generate_sed_path(ids, subdir, cmp):
+    '''
+    Generate paths (e.g. relative to SIMS_SED_LIBRARY_DIR) for galaxy component
+    SED files
+    Parameters
+    ----------
+    ids        list of galaxy ids
+    subdir    user-supplied part of path
+    cmp      component for which paths should be generated
+
+    returns
+    -------
+    A list of strings.  The entries in the list have the form
+    <subdir>/<cmp>_<id>.txt
+    '''
+    r = [f'{subdir}/{cmp}_{id}.txt' for id in ids]
+    return r
+
 class CatalogCreator:
     def __init__(self, parts, area_partition, output_dir=None, galaxy_truth=None,
                  sedLookup_dir=None, output_type='parquet', verbose=False,
-                 mag_cut=None, random_sed_dir=None):
+                 mag_cut=None,  sed_subdir='galaxyTopHatSED'):
         """
         Store context for catalog creation
 
@@ -146,11 +164,7 @@ class CatalogCreator:
                         OBSOLETE
         output_type     A format.  For now only parquet is supported
         mag_cut         If not None, exclude galaxies with mag > mag_cut
-        random_sed_dir  Indicates special mode where tophat SEDs from cosmoDC2
-                        are replaced with ones from a pre-determined sample.
-                        Also implies addition of output columns to sky catalog
-                        which contain paths to equivalent sed file for each
-                        galaxy component with substituted SED.
+        sed_subdir      In instcat entry, prepend this value to SED filename
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -189,7 +203,7 @@ class CatalogCreator:
         self._output_type = output_type
         self._verbose = verbose
         self._mag_cut = mag_cut
-        self._random_sed_dir = random_sed_dir
+        self._sed_subdir = sed_subdir
 
     def create(self, catalog_type):
         """
@@ -221,7 +235,7 @@ class CatalogCreator:
                          sigma8=gal_cat.cosmology.sigma8,
                          n_s=gal_cat.cosmology.n_s)
 
-        arrow_schema = _make_galaxy_schema(self._random_sed_dir)
+        arrow_schema = _make_galaxy_schema(self._sed_subdir)
 
         for p in self._parts:
             print("Starting on pixel ", p)
@@ -278,10 +292,7 @@ class CatalogCreator:
         sed_disk_names.sort(key=_sed_disk_key)
 
         #Fetch the data
-        if not self._random_sed_dir:
-            to_fetch = non_sed + sed_bulge_names + sed_disk_names
-        else:
-            to_fetch = non_sed
+        to_fetch = non_sed + sed_bulge_names + sed_disk_names
 
         # Save the 'start' and 'width' values; they'll be needed for our output
         # config.  Though we only need to do this once, not once per pixel
@@ -298,49 +309,23 @@ class CatalogCreator:
                                         native_filters=hp_filter,
                                         filters=mag_cut_filter)
 
-        if self._random_sed_dir:
-            (bulge_seds, bulge_path) = get_random_sed('bulge',
-                                                      self._random_sed_dir,
-                                                      len(df['galaxy_id']),
-                                                      pixel=pixel)
-            (disk_seds, disk_path) = get_random_sed('disk', self._random_sed_dir,
-                                                    len(df['galaxy_id']),
-                                                    pixel=pixel)
-        else:
-            # Re-form sed columns into two arrays
-            bulge_seds = (np.array([df[sbn] for sbn in sed_bulge_names]).T).tolist()
-            disk_seds = (np.array([df[sdn] for sdn in sed_disk_names]).T).tolist()
-            #bulge_seds = np.array([df[sbn] for sbn in sed_bulge_names])
-            #disk_seds = np.array([df[sdn] for sdn in sed_disk_names])
+        if self._sed_subdir:
+            #  Generate full paths for disk and bulge SED files, even though
+            #  we don't actually write the files here
+            # Name of file can be <galaxy_id>_<cmp>.txt
+            # prepend subdirectory supplied as command-line arg.
+            bulge_path = _generate_sed_path(df['galaxy_id'], self._sed_subdir,
+                                            'bulge')
+            disk_path =  _generate_sed_path(df['galaxy_id'], self._sed_subdir,
+                                            'disk')
+        # Re-form sed columns into two arrays
+        bulge_seds = (np.array([df[sbn] for sbn in sed_bulge_names]).T).tolist()
+        disk_seds = (np.array([df[sdn] for sdn in sed_disk_names]).T).tolist()
 
         #  Compute mag_norm from TH sed and redshift
         bulge_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(bulge_seds, df['redshiftHubble']) ]
         disk_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(disk_seds, df['redshiftHubble']) ]
-        # # Look up internal A_v, R_v
-        # with  h5py.File(os.path.join(self._sedLookup_dir,
-        #                              sedLookup_template.format(pixel))) as lookup:
-        #     lookup_gid = np.array(lookup['galaxy_id'])
-        #     bulge_av = np.array(lookup['bulge_av'])
-        #     bulge_rv = np.array(lookup['bulge_rv'])
-        #     disk_av = np.array(lookup['disk_av'])
-        #     disk_rv = np.array(lookup['disk_rv'])
-        #     # Old stuff - reading magnorm from sed fit file
-        #     # Note shape of bulge_magnorm, disk_magnorm is (6, #objects)
-        #     # Pick a middle column to use
-        #     # magnorm_col = 3
-        #     # bulge_magnorm = np.array(lookup['bulge_magnorm'][magnorm_col])
-        #     # disk_magnorm =  np.array(lookup['disk_magnorm'][magnorm_col])
-
-        #     ##  New: Compute magnorm ourselves from tophat values instead
-
-        # # Check that galaxies match and are ordered the same way
-        # cosmo_gid = np.array(df['galaxy_id'])
-        # if cosmo_gid.shape != lookup_gid.shape:
-        #     print('#lookup galaxies != #cosmodc2 galaxies')
-        #     exit(1)
-        # if not (cosmo_gid == lookup_gid).all():
-        #     print('lookup galaxies differ from cosmodc2 galaxies in content or ordering')
-        #     exit(1)
+        #  Compute magnorm ourselves from tophat values
 
         # Assume R(V) = 3.1.  Calculate A(V) from R(V), E(B-V). See "Plotting
         # Dust Maps" example in
@@ -353,7 +338,6 @@ class CatalogCreator:
         if self._verbose: print("Made extinction")
 
         #  Write row groups of size stride (or less) until input is exhausted
-        ####total_row = lookup_gid.shape[0] - 1
         last_row = len(df['galaxy_id']) - 1
         u_bnd = min(stride, last_row)
         l_bnd = 0
@@ -362,7 +346,6 @@ class CatalogCreator:
 
         # Some columns need to be renamed and, in one case, units changed
         to_modify = ['position_angle_true', 'redshiftHubble', 'peculiarVelocity']
-        print_col = True
         while u_bnd > l_bnd:
             out_dict = {k : df[k][l_bnd : u_bnd] for k in non_sed if k not in to_modify}
             out_dict['redshift_hubble'] = df['redshiftHubble'][l_bnd : u_bnd]
@@ -371,21 +354,17 @@ class CatalogCreator:
                                                              [l_bnd : u_bnd])
             out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
             out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
-            #out_dict['internalAv_bulge'] = bulge_av[l_bnd : u_bnd]
-            #out_dict['internalRv_bulge'] = bulge_rv[l_bnd : u_bnd]
-            #out_dict['internalAv_disk'] = disk_av[l_bnd : u_bnd]
-            #out_dict['internalRv_disk'] = disk_rv[l_bnd : u_bnd]
             out_dict['bulge_magnorm'] = bulge_magnorm[l_bnd : u_bnd]
             out_dict['disk_magnorm'] = disk_magnorm[l_bnd : u_bnd]
             out_dict['MW_rv'] = MW_rv[l_bnd : u_bnd]
             for k,v in  MW_av_columns.items():
                 out_dict[k] = v[l_bnd : u_bnd]
 
-            if self._random_sed_dir:
+            if self._sed_subdir:
                 out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]
                 out_dict['disk_sed_file_path'] = disk_path[l_bnd : u_bnd]
 
-            if print_col:
+            if self._verbose:
                 for kd,i in out_dict.items():
                     print(f'Key={kd}, type={type(i)}, len={len(i)}')
             print_col = False
@@ -452,6 +431,8 @@ class CatalogCreator:
             q = f'select {cols} from stars where hpid={pixel} '
             with sqlite3.connect(star_cat) as conn:
                 star_df = pd.read_sql_query(q, conn)
+
+            star_df['sed_filepath'] = get_star_sed_path(star_df['sed_filepath'])
 
             nobj = len(star_df['id'])
             print(f"Found {nobj} stars")
