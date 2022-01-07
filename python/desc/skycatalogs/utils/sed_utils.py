@@ -140,7 +140,7 @@ def get_star_sed_path(filename, name_to_folder=_standard_dict):
         m = None
         matched = False
         for k,v in compiled.items():
-            f = f.lstrip()
+            f = f.strip()
             m = k.match(f)
             if m:
                 p = os.path.join(v, f)
