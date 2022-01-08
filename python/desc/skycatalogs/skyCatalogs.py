@@ -528,6 +528,19 @@ if __name__ == '__main__':
     obj = object_list[0]
     print("Type of element in object_list:", type(obj))
 
-    redshift0 = object_list[0].get_native_attribute('redshift')
     if object_list[0].object_type == 'galaxy':
+        redshift0 = object_list[0].get_native_attribute('redshift')
         print('First redshift: ', redshift0)
+
+
+    sum = 0
+    for obj in object_list:
+        sum = sum + 1
+        if sum > 7216:
+            print("Sum is now ", sum)
+            print("obj id: ", obj.id)
+        if sum > 7220:
+            break
+
+    print(f'Object list len:  {len(object_list)}')
+    print(f'Objects found with "in":  {sum}')
