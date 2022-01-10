@@ -459,7 +459,6 @@ class ObjectList(Sequence):
         to_return = None
         for e in self._located:
             if start >= e.first_index and start < e.upper_bound:
-                my_element = e
                 rel_first_index = start - e.first_index
                 if one_only:
                     return e.collection[rel_first_index]
@@ -474,9 +473,9 @@ class ObjectList(Sequence):
                     return to_return
                 else:
                     if to_return:
-                        to_return += e.collection[slice(rel_first_index, None)]
+                        to_return += e.collection[slice(rel_first_index, len(e.collection))]
                     else:
-                        to_return = e.collection[slice(rel_first_index, None)]
+                        to_return = e.collection[slice(rel_first_index, len(e.collection))]
                     start = e.upper_bound
 
         if to_return:

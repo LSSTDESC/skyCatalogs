@@ -495,10 +495,10 @@ if __name__ == '__main__':
                 print('For star magnorm: ', magnorm)
                 if magnorm < 1000:
                     print('Length of sed: ', len(lmbda))
-                    for i in range(30):
+                    for i in range(10):
                         print(sed_fmt.format(lmbda[i], f_lambda[i]))
                     mid = int(len(lmbda)/2)
-                    for i in range(mid-10, mid+10):
+                    for i in range(mid-5, mid+5):
                         print("ix=",i,"  ", sed_fmt.format(lmbda[i], f_lambda[i]))
 
             else:
@@ -508,7 +508,7 @@ if __name__ == '__main__':
                     (lmbda, f_lambda, magnorm) = o.get_sed(cmp)
                     print('magnorm: ', magnorm)
                     if magnorm < 1000:
-                        for i in range(30):
+                        for i in range(10):
                             print(sed_fmt.format(lmbda[i], f_lambda[i]))
 
         if n_obj > 200:
@@ -544,3 +544,13 @@ if __name__ == '__main__':
 
     print(f'Object list len:  {len(object_list)}')
     print(f'Objects found with "in":  {sum}')
+
+    segment = object_list[2:5]
+    print('Information for slice 2:5 ')
+    for o in segment:
+        print(f'object {o.id} of type {o.object_type} belongs to collection {o._belongs_to}')
+
+    print('\nInformation for slice 285:300')
+    segment = object_list[285:300]
+    for o in segment:
+        print(f'object {o.id} of type {o.object_type} belongs to collection {o._belongs_to}')
