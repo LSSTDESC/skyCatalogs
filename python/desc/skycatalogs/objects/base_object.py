@@ -426,16 +426,9 @@ class ObjectList(Sequence):
         ----------
         obj can be an (object id) or of type BaseObject
         '''
-        if type(obj) == type(10):
-            id = obj
-        else:
-            if isinstance(obj, BaseObject):
-                id = obj.id
-            else:
-                raise TypeError
 
         for e in self._located:
-            if id in e.collection._id:
+            if obj in e.collection:
                 return True
 
         return False
@@ -443,7 +436,7 @@ class ObjectList(Sequence):
     def __len__(self):
         return self._total_len
 
-    #     Remainder needs work
+    #     Remainder may need work
 
     #def __iter__(self):   Standard impl based on __getitem__ should be ok??
     #def __reversed__(self):   Default implementation ok??
@@ -463,20 +456,29 @@ class ObjectList(Sequence):
         else:
             start = key.start
 
-        to_return = []
+        to_return = None
         for e in self._located:
             if start >= e.first_index and start < e.upper_bound:
-                my_element = e
                 rel_first_index = start - e.first_index
                 if one_only:
                     return e.collection[rel_first_index]
                 if key.stop < e.upper_bound:
                     rel_stop_ix = key.stop - e.first_index
-                    to_return += e.collection[slice(rel_first_index,
-                                                    rel_stop_ix)]
+                    if to_return:
+                        to_return += e.collection[slice(rel_first_index,
+                                                        rel_stop_ix)]
+                    else:
+                        to_return = e.collection[slice(rel_first_index,
+                                                       rel_stop_ix)]
                     return to_return
                 else:
-                    to_return += e.collection[slice(rel_first_index, None)]
+                    if to_return:
+                        to_return += e.collection[slice(rel_first_index, len(e.collection))]
+                    else:
+                        to_return = e.collection[slice(rel_first_index, len(e.collection))]
                     start = e.upper_bound
 
-        return to_return
+        if to_return:
+            return to_return
+        else:
+            raise IndexError
