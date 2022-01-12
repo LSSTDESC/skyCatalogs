@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Sequence, Iterable
 from collections import namedtuple, OrderedDict
 import os
 import gzip
@@ -71,7 +71,6 @@ class BaseObject(object):
     def redshift(self):
         if self._redshift:        return self._redshift
         if self._belongs_to:
-            #self._redshift = self._belongs_to.redshifts()[self._belongs_index]
             self._redshift = self.get_native_attribute('redshift')
         return self._redshift
 
@@ -319,8 +318,10 @@ class ObjectCollection(Sequence):
         '''
         Parameters
         ----------
-        If key is an int return a single base object
-        If key is a slice return a list of object
+        If key is an int (or int-like) return a single base object
+        If key is a slice return a list of objects
+        If key is a tuple where key[0] is iterable of int-like,
+           return a list of objects
         '''
 
         if self._uniform_object_type:
@@ -328,17 +329,24 @@ class ObjectCollection(Sequence):
         else:
             object_type = self._object_types[key]
 
-        if type(key) == type(10):
+        if isinstance(key, int) or isinstance(key, np.int64):
             return BaseObject(self._ra[key], self._dec[key], self._id[key],
                               object_type, belongs_to=self,
                               belongs_index=key)
 
-        else:
+        elif type(key) == slice:
             ixdata = [i for i in range(min(key.stop,len(self._ra)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
             return [BaseObject(self._ra[i], self._dec[i], self._id[i],
                                object_type, belongs_to=self, belongs_index=i)
                     for i in ixes]
+
+        elif type(key) == tuple and isinstance(key[0], Iterable):
+            #  check it's a list of int-like?
+            return [BaseObject(self._ra[i], self._dec[i], self._id[i],
+                               object_type, belongs_to=self, belongs_index=i)
+                    for i in key[0]]
+
 
     def get_partition_id(self):
         return self._partition_id
@@ -436,8 +444,6 @@ class ObjectList(Sequence):
     def __len__(self):
         return self._total_len
 
-    #     Remainder may need work
-
     #def __iter__(self):   Standard impl based on __getitem__ should be ok??
     #def __reversed__(self):   Default implementation ok??
 
@@ -448,37 +454,46 @@ class ObjectList(Sequence):
         If key is an int return a single base object
         If key is a slice return a list of object
         '''
-        one_only =  type(key) == type(10)
+        one_only = isinstance(key, int) or isinstance(key, np.int64)
+        is_slice = type(key) == slice
+        is_list = type(key) == tuple and isinstance(key[0], Iterable)
 
-        my_element = None
         if one_only:
             start = key
-        else:
+        elif is_slice:
             start = key.start
+        elif is_list:
+            start_ix = 0
+            key_list = key[0]
+            start = key_list[start_ix]
+        else:
+            raise ValueError(f'Unknown key type {type(key)}')
 
-        to_return = None
+        to_return = []
         for e in self._located:
             if start >= e.first_index and start < e.upper_bound:
                 rel_first_index = start - e.first_index
                 if one_only:
                     return e.collection[rel_first_index]
-                if key.stop < e.upper_bound:
-                    rel_stop_ix = key.stop - e.first_index
-                    if to_return:
+                if is_slice:
+                    if key.stop < e.upper_bound:
+                        rel_stop_ix = key.stop - e.first_index
                         to_return += e.collection[slice(rel_first_index,
                                                         rel_stop_ix)]
+                        return to_return
                     else:
-                        to_return = e.collection[slice(rel_first_index,
-                                                       rel_stop_ix)]
-                    return to_return
-                else:
-                    if to_return:
                         to_return += e.collection[slice(rel_first_index, len(e.collection))]
-                    else:
-                        to_return = e.collection[slice(rel_first_index, len(e.collection))]
                     start = e.upper_bound
+                if is_list:
+                    sub = [elem - e.first_index for elem in key_list if elem >= e.first_index and elem < e.upper_bound]
+                    to_return += e.collection[(sub,)]
 
-        if to_return:
+                    start_ix +=len(sub)
+                    if start_ix >= len(key_list):
+                        break
+                    start = key_list[start_ix]
+
+        if len(to_return):
             return to_return
         else:
             raise IndexError
