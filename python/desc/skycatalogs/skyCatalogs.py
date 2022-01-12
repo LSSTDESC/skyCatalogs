@@ -554,3 +554,15 @@ if __name__ == '__main__':
     segment = object_list[285:300]
     for o in segment:
         print(f'object {o.id} of type {o.object_type} belongs to collection {o._belongs_to}')
+
+    #ixes = ([3,5,8],)
+    ixes = (np.array([3,5,8, 300, 303]),)
+    print(f'\nObjects with indexes {ixes[0]}')
+    for o in object_list[ixes]:
+        print(o.id)
+    print(f'\nObjects in slice [3:9]')
+    for o in object_list[3:9]:
+        print(o.id)
+    print(f'\nObjects in slice [300:304]')
+    for o in object_list[300:304]:
+        print(o.id)
