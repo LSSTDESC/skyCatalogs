@@ -343,16 +343,18 @@ class CatalogCreator:
                                             'disk')
 
         if self._knots:
-            print('self._knots: ', self._knots)
             # adjust disk sed; create knots sed
             eps = np.finfo(np.float32).eps
             mag_mask = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut,0, 1)
+            if self._verbose:
+                print("Count of mags <=  cut (so adjustment performed: ",
+                      np.count_nonzero(mag_mask))
+
             for d_name, k_name in zip(sed_disk_names, sed_knot_names):
                 df[k_name] = mag_mask * np.clip(df['knots_flux_ratio'], None, 1-eps) * df[d_name]
                 #df[d_name] = df[d_name] -  df[k_name]
                 df[d_name] = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 1,
                                       np.clip(1 - df['knots_flux_ratio'], eps, None)) * df[d_name]
-
         # Re-form sed columns into two arrays
         bulge_seds = (np.array([df[sbn] for sbn in sed_bulge_names]).T).tolist()
         disk_seds = (np.array([df[sdn] for sdn in sed_disk_names]).T).tolist()
