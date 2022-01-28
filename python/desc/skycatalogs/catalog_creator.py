@@ -82,6 +82,7 @@ def _make_galaxy_schema(sed_subdir=False, knots=True):
         ### n_knots?  - should be a new field.  When writing out instcat
         ### entry it will take the place of "sersic index"
         fields.append(pa.field('n_knots', pa.float32(), True))
+        fields.append(pa.field('knots_magnorm', pa.float64(), True))
 
     if sed_subdir:
         fields.append(pa.field('bulge_sed_file_path', pa.string(), True))
@@ -361,11 +362,10 @@ class CatalogCreator:
         if self._knots:
             knots_seds = (np.array([df[kdn] for kdn in sed_knot_names]).T).tolist()
 
-        ##### TODO:    do we need separate knot magnorm?
         #  Compute mag_norm from TH sed and redshift
         bulge_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(bulge_seds, df['redshiftHubble']) ]
         disk_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(disk_seds, df['redshiftHubble']) ]
-        #  Compute magnorm ourselves from tophat values
+        knots_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(knots_seds, df['redshiftHubble']) ]
 
         # Assume R(V) = 3.1.  Calculate A(V) from R(V), E(B-V). See "Plotting
         # Dust Maps" example in
@@ -403,6 +403,7 @@ class CatalogCreator:
             if self._knots:
                 out_dict['sed_val_knots'] = knots_seds[l_bnd : u_bnd]
                 out_dict['n_knots'] = df['n_knots'][l_bnd : u_bnd]
+                out_dict['knots_magnorm'] = knots_magnorm[l_bnd : u_bnd]
 
             if self._sed_subdir:
                 out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]

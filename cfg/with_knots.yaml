@@ -4,7 +4,7 @@ catalog_name : latest
 area_partition :
   { type: healpix, ordering : ring, nside : 32}
 # root_directory : /global/cscratch1/sd/jrbogart/desc/skycatalogs/to_translate
-root_directory : /global/cscratch1/sd/jrbogart/desc/skycatalogs/mag26
+root_directory : /global/cscratch1/sd/jrbogart/desc/skycatalogs/mag26_knots
 SED_models :
   -
     tophat :
@@ -43,10 +43,9 @@ object_types :
         bulge : required
         disk  : required
         knots : optional
-      attribute_aliases
+      attribute_aliases :
         size_knots_true : size_disk_true
         size_minor_knots_true : size_minor_disk_true
-        knots_magnorm : disk_magnorm
   bulge_basic :
       subtype : bulge
       parent : galaxy
