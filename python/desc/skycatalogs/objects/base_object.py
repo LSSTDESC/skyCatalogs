@@ -88,12 +88,22 @@ class BaseObject(object):
     @property
     def native_columns(self):
         '''
-        Return set of all columns stored for this object.
+        Return set of all columns stored in parquet file for this object.
         May not include quantities which are constant for all objects
         of this type
         '''
         if self._belongs_to:
             return self._belongs_to.native_columns
+        else:
+            return None
+
+    @property
+    def subcomponents(self):
+        '''
+        Return list of all subcomponents (or None)
+        '''
+        if self._belongs_to:
+            return self._belongs_to.subcomponents
         else:
             return None
 
@@ -119,7 +129,9 @@ class BaseObject(object):
                        object type is 'galaxy')
         Returns: A string formatted like a line in an instance catalog
         '''
-
+        if self.object_type == 'galaxay':
+            if component not in self.subcomponents:
+                return ''
         return form_object_string(self, band, component)
 
     def get_sed(self, component=None, resolution=None):
@@ -127,7 +139,7 @@ class BaseObject(object):
         Return sed and mag_norm for a galaxy component or for a star
         Parameters
         ----------
-        component    one of 'bulge', 'disk' for now. Other components
+        component    one of 'bulge', 'disk', 'knots' for now. Other components
                      may be supported.  Ignored for stars
         resolution   desired resolution of lambda in nanometers. Ignored
                      for stars; defaults to 1.0 for galaxy components
@@ -169,11 +181,13 @@ class BaseObject(object):
             raise ValueError('get_sed function only available for stars and galaxy components')
         if not resolution:
             resolution = 1.0
-        if component not in ['disk', 'bulge']:
+        if component not in ['disk', 'bulge', 'knots']:
             raise ValueError(f'Cannot fetch SED for component type {component}')
 
-        r = self.get_native_attribute('redshift_hubble')
         th_val = self.get_native_attribute(f'sed_val_{component}')
+        if  th_val is None:   #  values for this component are not in the file
+            raise ValueError(f'{component} not part of this catalog')
+        r = self.get_native_attribute('redshift_hubble')
         mag_f = self._belongs_to.sky_catalog.mag_norm_f
         th_bins = self._belongs_to.config.get_tophat_parameters()
 
@@ -250,6 +264,19 @@ class ObjectCollection(Sequence):
         of this type
         '''
         return self._rdr.columns
+
+    @property
+    def subcomponents(self):
+        '''
+        Return list of all subcomponents for objects in this collection.
+        Only galaxies have subcomponents
+        '''
+        subs = []
+        if self._object_type_unique == 'galaxy':
+            for s in ['bulge', 'disk', 'knots']:
+                if f'sed_val_{s}' in self.native_columns:
+                    subs.append(s)
+        return subs
 
     def get_native_attribute(self, attribute_name):
         '''

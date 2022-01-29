@@ -33,7 +33,39 @@ def form_star_instance_columns(band):
                                    ('MW_extinction_values/r_v/value', float))]
     return star_instance
 
+def _form_knots_instance_columns(cmp, band):
+    cmp_instance = [column_finder('prefix', SourceType.FIXED, ('object', np.dtype('U6'))),
+                    column_finder('uniqueId', SourceType.COMPUTE, ['galaxy_id', f'{cmp}']),
+                    column_finder('raPhoSim', SourceType.DATA, 'ra'),
+                    column_finder('decPhoSim', SourceType.DATA, 'dec'),
+                    column_finder('phoSimMagNorm', SourceType.DATA, 'knots_magnorm'),
+                    column_finder('sedFilepath',SourceType.COMPUTE, [f'sed_val_{cmp}','redshift_hubble']),
+                    column_finder('redshift', SourceType.DATA, 'redshift'),
+                    column_finder('gamma1', SourceType.DATA, 'shear_1'),
+                    column_finder('gamma2', SourceType.DATA, 'shear_2'),
+                    column_finder('kappa', SourceType.DATA, 'convergence'),
+                    column_finder('raOffset', SourceType.FIXED, (0, int)),
+                    column_finder('decOffset', SourceType.FIXED, (0, int)),
+                    column_finder('spatialmodel', SourceType.CONFIG,
+                                  (f'object_types/{cmp}_basic/spatial_model', 'str')),
+                    column_finder('majorAxis', SourceType.DATA, 'size_disk_true'),
+                    column_finder('minorAxis', SourceType.DATA, 'size_minor_disk_true'),
+                    column_finder('positionAngle', SourceType.DATA, 'position_angle_unlensed'),
+                    column_finder('sindex', SourceType.DATA, 'n_knots'),
+                    column_finder('internalExtinctionModel', SourceType.FIXED, ('none', np.dtype('U4'))),
+                    column_finder('galacticExtinctionModel', SourceType.CONFIG,
+                                  (f'object_types/{cmp}_basic/MW_extinction', 'str')),
+                    column_finder('galactivAv', SourceType.DATA,
+                                  f'MW_av_lsst_{band}'),
+                    column_finder('galacticRv', SourceType.CONFIG,
+                                  ('MW_extinction_values/r_v/value', float))]
+    return cmp_instance
+
+###
 def form_cmp_instance_columns(cmp, band):
+    if cmp == 'knots':
+        return _form_knots_instance_columns(cmp, band)
+
     cmp_instance = [column_finder('prefix', SourceType.FIXED, ('object', np.dtype('U6'))),
                     column_finder('uniqueId', SourceType.COMPUTE, ['galaxy_id', f'{cmp}']),
                     column_finder('raPhoSim', SourceType.DATA, 'ra'),
@@ -61,6 +93,7 @@ def form_cmp_instance_columns(cmp, band):
                                   ('MW_extinction_values/r_v/value', float))]
     return cmp_instance
 
+###
 column_finder = namedtuple('ColumnFinder', ['instance_name', 'source_type',
                                             'source_parm'])
 SourceType = Enum('SourceType', 'DATA CONFIG FIXED COMPUTE')
@@ -134,7 +167,7 @@ def form_object_string(obj, band, component):
             row.append(q)
         elif c.source_type == SourceType.COMPUTE:
             # only one is sedFilepath, and only for galaxy components
-            if c.instance_name not in ['sedFilepath', 'uniqueId'] or cmp not in ['disk', 'bulge']:
+            if c.instance_name not in ['sedFilepath', 'uniqueId'] or cmp not in ['disk', 'bulge', 'knots']:
                 raise ValueError(f'translate_utils.form_object_string: Bad COMPUTE entry {c.instance_name} for component {cmp}')
             if c.instance_name == 'sedFilepath':
                 row.append(f'{obj.get_native_attribute("galaxy_id")}_{cmp}_sed.txt')

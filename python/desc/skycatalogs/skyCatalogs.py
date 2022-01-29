@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import yaml
 from collections import namedtuple
@@ -433,7 +434,13 @@ def open_catalog(config_file, mp=False):
         return SkyCatalog(yaml.safe_load(f), mp)
 
 if __name__ == '__main__':
-    cfg_file = '/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg/to_translate.yaml'
+    cfg_file_name = 'to_translate.yaml'
+
+    if len(sys.argv) > 1:
+        cfg_file_name = sys.argv[1]
+    cfg_file = os.path.join('/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg',
+                            cfg_file_name)
+    ##cfg_file = '/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg/to_translate.yaml'
 
     # For tract 3828
     #   55.73604 < ra < 57.563452
@@ -502,14 +509,15 @@ if __name__ == '__main__':
                         print("ix=",i,"  ", sed_fmt.format(lmbda[i], f_lambda[i]))
 
             else:
-                for cmp in ['disk', 'bulge']:
+                for cmp in ['disk', 'bulge', 'knots']:
                     print(cmp)
-                    print(o.get_instcat_entry(component=cmp))
-                    (lmbda, f_lambda, magnorm) = o.get_sed(cmp)
-                    print('magnorm: ', magnorm)
-                    if magnorm < 1000:
-                        for i in range(10):
-                            print(sed_fmt.format(lmbda[i], f_lambda[i]))
+                    if cmp in o.subcomponents:
+                        print(o.get_instcat_entry(component=cmp))
+                        (lmbda, f_lambda, magnorm) = o.get_sed(cmp)
+                        print('magnorm: ', magnorm)
+                        if magnorm < 1000:
+                            for i in range(10):
+                                print(sed_fmt.format(lmbda[i], f_lambda[i]))
 
         if n_obj > 200:
             print("Object 200")

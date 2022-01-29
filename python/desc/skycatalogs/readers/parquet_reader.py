@@ -54,7 +54,7 @@ class ParquetReader:
         '''
 
         if not set(cols).issubset(self._columns):
-            unknown = set(columns) - self._columns
+            unknown = set(cols) - self._columns
             # raise exception?   For now, just
             print(f'Unknown column or columns {unknown}')
             return None

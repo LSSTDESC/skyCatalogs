@@ -36,7 +36,7 @@ _MW_extinction_bands = {'MW_av_lsst_u' : 4.145, 'MW_av_lsst_g' : 3.237,
 
 # This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
-def _make_galaxy_schema(sed_subdir=False):
+def _make_galaxy_schema(sed_subdir=False, knots=True):
     fields = [pa.field('galaxy_id', pa.int64()),
               pa.field('ra', pa.float64() , True),
 ##                       metadata={"units" : "radians"}),
@@ -59,10 +59,6 @@ def _make_galaxy_schema(sed_subdir=False):
                        pa.list_(pa.float64()), True),
               pa.field('sed_val_disk',
                        pa.list_(pa.float64()), True),
-              # pa.field('internalAv_bulge', pa.float64(), True),
-              # pa.field('internalRv_bulge', pa.float64(), True),
-              # pa.field('internalAv_disk', pa.float64(), True),
-              # pa.field('internalRv_disk', pa.float64(), True),
               pa.field('bulge_magnorm', pa.float64(), True),
               pa.field('disk_magnorm', pa.float64(), True),
               pa.field('MW_rv', pa.float32(), True),
@@ -72,10 +68,28 @@ def _make_galaxy_schema(sed_subdir=False):
               pa.field('MW_av_lsst_i', pa.float32(), True),
               pa.field('MW_av_lsst_z', pa.float32(), True),
               pa.field('MW_av_lsst_y', pa.float32(), True)]
+    if knots:
+        print("knots requested")
+        fields.append(pa.field('sed_val_knots',
+                               pa.list_(pa.float64()), True))
+        ### For sizes API can alias to disk sizes
+        ### What else?  magnorm? Probably can be aliased to disk magnorm
+        ### (or do we need to adjust disk magnorm according to the ratio?
+        ###  Don't think so.  Splitting the SED between the two should
+        ###  take care of it.)
+        ###  position angle, shears and convergence are all
+        ###  galaxy-wide quantities.
+        ### n_knots?  - should be a new field.  When writing out instcat
+        ### entry it will take the place of "sersic index"
+        fields.append(pa.field('n_knots', pa.float32(), True))
+        fields.append(pa.field('knots_magnorm', pa.float64(), True))
+
     if sed_subdir:
         fields.append(pa.field('bulge_sed_file_path', pa.string(), True))
         fields.append(pa.field('disk_sed_file_path', pa.string(), True))
 
+    for f in fields:
+        print(f.name)
     return pa.schema(fields)
 
 
@@ -145,7 +159,8 @@ def _generate_sed_path(ids, subdir, cmp):
 class CatalogCreator:
     def __init__(self, parts, area_partition, output_dir=None, galaxy_truth=None,
                  sedLookup_dir=None, output_type='parquet', verbose=False,
-                 mag_cut=None,  sed_subdir='galaxyTopHatSED'):
+                 mag_cut=None,  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
+                 knots=True):
         """
         Store context for catalog creation
 
@@ -163,8 +178,10 @@ class CatalogCreator:
                         relevant to finding and using appropriate SED file
                         OBSOLETE
         output_type     A format.  For now only parquet is supported
-        mag_cut         If not None, exclude galaxies with mag > mag_cut
+        mag_cut         If not None, exclude galaxies with mag_r > mag_cut
         sed_subdir      In instcat entry, prepend this value to SED filename
+        knots_mag_cut   No knots for galaxies with i_mag > cut
+        knots           If True include knots
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -204,6 +221,8 @@ class CatalogCreator:
         self._verbose = verbose
         self._mag_cut = mag_cut
         self._sed_subdir = sed_subdir
+        self._knots_mag_cut = knots_mag_cut
+        self._knots = knots
 
     def create(self, catalog_type):
         """
@@ -235,7 +254,7 @@ class CatalogCreator:
                          sigma8=gal_cat.cosmology.sigma8,
                          n_s=gal_cat.cosmology.n_s)
 
-        arrow_schema = _make_galaxy_schema(self._sed_subdir)
+        arrow_schema = _make_galaxy_schema(self._sed_subdir, self._knots)
 
         for p in self._parts:
             print("Starting on pixel ", p)
@@ -275,12 +294,15 @@ class CatalogCreator:
                    'convergence', 'position_angle_true',
                    'size_bulge_true', 'size_minor_bulge_true', 'sersic_bulge',
                    'size_disk_true', 'size_minor_disk_true', 'sersic_disk']
+        if self._knots:
+                   non_sed += ['knots_flux_ratio', 'n_knots', 'mag_i_lsst']
         # Find all the tophat sed numbers
         q = gal_cat.list_all_quantities()
         sed_bulge_names = [i for i in q if (i.startswith('sed') and
                                             i.endswith('bulge'))]
         sed_disk_names = [i for i in q if (i.startswith('sed') and
                                            i.endswith('disk'))]
+
         #Sort sed columns by start value, descending
         def _sed_bulge_key(s):
             return int(re.match(tophat_bulge_re, s)['start'])
@@ -290,6 +312,8 @@ class CatalogCreator:
         # Sort into increaing order by start wavelength
         sed_bulge_names.sort(key=_sed_bulge_key)
         sed_disk_names.sort(key=_sed_disk_key)
+        if self._knots:
+            sed_knot_names = [i.replace('disk', 'knots') for i in sed_disk_names]
 
         #Fetch the data
         to_fetch = non_sed + sed_bulge_names + sed_disk_names
@@ -318,14 +342,30 @@ class CatalogCreator:
                                             'bulge')
             disk_path =  _generate_sed_path(df['galaxy_id'], self._sed_subdir,
                                             'disk')
+
+        if self._knots:
+            # adjust disk sed; create knots sed
+            eps = np.finfo(np.float32).eps
+            mag_mask = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut,0, 1)
+            if self._verbose:
+                print("Count of mags <=  cut (so adjustment performed: ",
+                      np.count_nonzero(mag_mask))
+
+            for d_name, k_name in zip(sed_disk_names, sed_knot_names):
+                df[k_name] = mag_mask * np.clip(df['knots_flux_ratio'], None, 1-eps) * df[d_name]
+                #df[d_name] = df[d_name] -  df[k_name]
+                df[d_name] = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 1,
+                                      np.clip(1 - df['knots_flux_ratio'], eps, None)) * df[d_name]
         # Re-form sed columns into two arrays
         bulge_seds = (np.array([df[sbn] for sbn in sed_bulge_names]).T).tolist()
         disk_seds = (np.array([df[sdn] for sdn in sed_disk_names]).T).tolist()
+        if self._knots:
+            knots_seds = (np.array([df[kdn] for kdn in sed_knot_names]).T).tolist()
 
         #  Compute mag_norm from TH sed and redshift
         bulge_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(bulge_seds, df['redshiftHubble']) ]
         disk_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(disk_seds, df['redshiftHubble']) ]
-        #  Compute magnorm ourselves from tophat values
+        knots_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(knots_seds, df['redshiftHubble']) ]
 
         # Assume R(V) = 3.1.  Calculate A(V) from R(V), E(B-V). See "Plotting
         # Dust Maps" example in
@@ -359,6 +399,11 @@ class CatalogCreator:
             out_dict['MW_rv'] = MW_rv[l_bnd : u_bnd]
             for k,v in  MW_av_columns.items():
                 out_dict[k] = v[l_bnd : u_bnd]
+
+            if self._knots:
+                out_dict['sed_val_knots'] = knots_seds[l_bnd : u_bnd]
+                out_dict['n_knots'] = df['n_knots'][l_bnd : u_bnd]
+                out_dict['knots_magnorm'] = knots_magnorm[l_bnd : u_bnd]
 
             if self._sed_subdir:
                 out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]
