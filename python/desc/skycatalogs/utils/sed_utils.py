@@ -158,16 +158,21 @@ def get_star_sed_path(filename, name_to_folder=_standard_dict):
 def create_cosmology(config):
     """
     Create a FlatLambdaCDM cosmology from a dictionary of input parameters.
-    This code is stolen from
+    This code is based on/borrowed from
     https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/cosmodc2.py#L128
     """
+    # Ensure that H0 and Om0 are included, assuming that pyccl-style
+    # parameters are used.
+    config['H0'] = config['h']*100
+    config['Om0'] = config['Omega_c'] + config['Omega_b']
     cosmo_astropy_allowed = FlatLambdaCDM.__init__.__code__.co_varnames[1:]
     cosmo_astropy = {k: v for k, v in config.items()
                      if k in cosmo_astropy_allowed}
     cosmology = FlatLambdaCDM(**cosmo_astropy)
-    for k, v in cosmology.items():
-        if k not in cosmo_astropy_allowed:
-            setattr(self.cosmology, k, v)
+    for k, v in config.items():
+        if (k not in cosmo_astropy_allowed and
+            not hasattr(cosmology, k)):
+            setattr(cosmology, k, v)
 
     return cosmology
 
