@@ -163,8 +163,10 @@ def create_cosmology(config):
     """
     # Ensure that H0 and Om0 are included, assuming that pyccl-style
     # parameters are used.
-    config['H0'] = config['h']*100
-    config['Om0'] = config['Omega_c'] + config['Omega_b']
+    if 'H0' not in config:
+        config['H0'] = config['h']*100
+    if 'Om0' not in config:
+        config['Om0'] = config['Omega_c'] + config['Omega_b']
     cosmo_astropy_allowed = FlatLambdaCDM.__init__.__code__.co_varnames[1:]
     cosmo_astropy = {k: v for k, v in config.items()
                      if k in cosmo_astropy_allowed}
