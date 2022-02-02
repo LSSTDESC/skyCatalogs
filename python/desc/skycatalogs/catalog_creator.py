@@ -9,7 +9,6 @@ from astropy.coordinates import SkyCoord
 import h5py
 import sqlite3
 import GCRCatalogs
-import pyccl as ccl
 from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
 
