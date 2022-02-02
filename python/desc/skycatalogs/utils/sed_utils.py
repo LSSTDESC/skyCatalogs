@@ -2,14 +2,13 @@ from collections import namedtuple
 import os
 import re
 from astropy import units as u
+from astropy import cosmology
 import h5py
 import pandas as pd
 
 import numpy as np
 import numpy.ma as ma
 from numpy.random import default_rng
-
-import pyccl as ccl
 
 from desc.skycatalogs.utils.common_utils import print_dated_msg
 import GCRCatalogs
@@ -155,13 +154,36 @@ def get_star_sed_path(filename, name_to_folder=_standard_dict):
     return np.array(path_list)
 
 class MagNorm:
-    def __init__(self, Omega_c=0.2648, Omega_b=0.0448, h=0.71, sigma8=0.8,
-                 n_s=0.963):
-        self.cosmo = ccl.Cosmology(Omega_c=Omega_c, Omega_b=Omega_b, h=h,
-                                   sigma8=sigma8, n_s=n_s)
+    def __init__(self, Omega_c=0.2648, Omega_b=0.0448, h=0.71, T_CMB=2.725,
+                 Neff=3.046):
+        """
+        Parameters
+        ----------
+        Omega_c : float [0.2648]
+            Cold dark matter fraction relative to critical density.
+        Omega_b : float [0.0448]
+            Baryonic matter fraction relative to critical density.
+        h : float [0.71]
+            Hubble constant scaled to 100 (km/s)/Mpc
+        T_CMB : float [2.725]
+            CMB temperature at zero redshift.  2.725 is the pyccl default.
+        Neff : float [3.046]
+            Effective number of neutrino species. 3.046 is the pyccl default.
+
+        Note: the parameter names above correspond to the argument names
+        for the pyccl.Cosmology class.
+        """
+        Om0 = Omega_b + Omega_c   # Omega_matter at zero redshift
+        self.cosmo = cosmology.FlatLambdaCDM(H0=h*100., Om0=Om0, Ob0=Omega_b,
+                                             Tcmb0=T_CMB, Neff=Neff)
     def dl(self, z):
-        aa = 1/(1 + z)
-        return ccl.luminosity_distance(self.cosmo, aa)*ccl.physical_constants.MPC_TO_METER
+        """
+        Return the luminosity distance in units of meters.
+        """
+        # Conversion factor from CCL
+        MPC_TO_METER = 3.085677581491367e+22
+        return self.cosmo.luminosity_distance(z).value*MPC_TO_METER
+
     def __call__(self, tophat_sed_value, redshift_hubble, one_maggy=4.3442e13):
         one_Jy = 1e-26  # W/Hz/m**2
         Lnu = tophat_sed_value*one_maggy    # convert from maggies to W/Hz
