@@ -2,7 +2,7 @@ from collections import namedtuple
 import os
 import re
 from astropy import units as u
-from astropy import cosmology
+from astropy.cosmology import FlatLambdaCDM
 import h5py
 import pandas as pd
 
@@ -14,7 +14,8 @@ from desc.skycatalogs.utils.common_utils import print_dated_msg
 import GCRCatalogs
 
 __all__ = ['LookupInfo', 'Cmp', 'MagNorm', 'convert_tophat_sed',
-           'write_sed_file', 'NORMWV_IX', 'get_star_sed_path']
+           'write_sed_file', 'NORMWV_IX', 'get_star_sed_path',
+           'create_cosmology']
 
 # Index for tophat bin containing 500 nm
 NORMWV_IX = 13
@@ -153,36 +154,42 @@ def get_star_sed_path(filename, name_to_folder=_standard_dict):
             raise ValueError(f'get_star_sed_path: Filename {f} does not match any known patterns')
     return np.array(path_list)
 
+
+def create_cosmology(config):
+    """
+    Create a FlatLambdaCDM cosmology from a dictionary of input parameters.
+    This code is stolen from
+    https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/cosmodc2.py#L128
+    """
+    cosmo_astropy_allowed = FlatLambdaCDM.__init__.__code__.co_varnames[1:]
+    cosmo_astropy = {k: v for k, v in config.items()
+                     if k in cosmo_astropy_allowed}
+    cosmology = FlatLambdaCDM(**cosmo_astropy)
+    for k, v in cosmology.items():
+        if k not in cosmo_astropy_allowed:
+            setattr(self.cosmology, k, v)
+
+    return cosmology
+
+
 class MagNorm:
-    def __init__(self, Omega_c=0.2648, Omega_b=0.0448, h=0.71, T_CMB=2.725,
-                 Neff=3.046):
+    def __init__(self, cosmology):
         """
         Parameters
         ----------
-        Omega_c : float [0.2648]
-            Cold dark matter fraction relative to critical density.
-        Omega_b : float [0.0448]
-            Baryonic matter fraction relative to critical density.
-        h : float [0.71]
-            Hubble constant scaled to 100 (km/s)/Mpc
-        T_CMB : float [2.725]
-            CMB temperature at zero redshift.  2.725 is the pyccl default.
-        Neff : float [3.046]
-            Effective number of neutrino species. 3.046 is the pyccl default.
-
-        Note: the parameter names above correspond to the argument names
-        for the pyccl.Cosmology class.
+        cosmology : astropy.cosmology
+            Cosmology object created from the gcr-catalogs galaxy catalog
+            cosmology specification.
         """
-        Om0 = Omega_b + Omega_c   # Omega_matter at zero redshift
-        self.cosmo = cosmology.FlatLambdaCDM(H0=h*100., Om0=Om0, Ob0=Omega_b,
-                                             Tcmb0=T_CMB, Neff=Neff)
+        self.cosmology = cosmology
+
     def dl(self, z):
         """
         Return the luminosity distance in units of meters.
         """
-        # Conversion factor from CCL
+        # Conversion factor from Mpc to meters (obtained from pyccl).
         MPC_TO_METER = 3.085677581491367e+22
-        return self.cosmo.luminosity_distance(z).value*MPC_TO_METER
+        return self.cosmology.luminosity_distance(z).value*MPC_TO_METER
 
     def __call__(self, tophat_sed_value, redshift_hubble, one_maggy=4.3442e13):
         one_Jy = 1e-26  # W/Hz/m**2
