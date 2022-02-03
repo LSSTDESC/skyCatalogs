@@ -161,21 +161,10 @@ def create_cosmology(config):
     This code is based on/borrowed from
     https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/cosmodc2.py#L128
     """
-    # Ensure that H0 and Om0 are included, assuming that pyccl-style
-    # parameters are used.
-    if 'H0' not in config:
-        config['H0'] = config['h']*100
-    if 'Om0' not in config:
-        config['Om0'] = config['Omega_c'] + config['Omega_b']
     cosmo_astropy_allowed = FlatLambdaCDM.__init__.__code__.co_varnames[1:]
     cosmo_astropy = {k: v for k, v in config.items()
                      if k in cosmo_astropy_allowed}
     cosmology = FlatLambdaCDM(**cosmo_astropy)
-    for k, v in config.items():
-        if (k not in cosmo_astropy_allowed and
-            not hasattr(cosmology, k)):
-            setattr(cosmology, k, v)
-
     return cosmology
 
 
