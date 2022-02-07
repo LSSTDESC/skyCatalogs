@@ -9,7 +9,6 @@ from astropy.coordinates import SkyCoord
 import h5py
 import sqlite3
 import GCRCatalogs
-import pyccl as ccl
 from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
 
@@ -249,10 +248,7 @@ class CatalogCreator:
 
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)
 
-        self._mag_norm_f = MagNorm(Omega_c=gal_cat.cosmology.Om0,
-                         Omega_b=gal_cat.cosmology.Ob0, h=gal_cat.cosmology.h,
-                         sigma8=gal_cat.cosmology.sigma8,
-                         n_s=gal_cat.cosmology.n_s)
+        self._mag_norm_f = MagNorm(gal_cat.cosmology)
 
         arrow_schema = _make_galaxy_schema(self._sed_subdir, self._knots)
 

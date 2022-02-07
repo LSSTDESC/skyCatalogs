@@ -11,7 +11,7 @@ from astropy import units
 from desc.skycatalogs.objects import *
 from desc.skycatalogs.readers import *
 from desc.skycatalogs.readers import ParquetReader
-from desc.skycatalogs.utils.sed_utils import MagNorm
+from desc.skycatalogs.utils.sed_utils import MagNorm, create_cosmology
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
 
@@ -121,11 +121,8 @@ class SkyCatalog(object):
         self._hp_info = dict()
         hps = self._find_all_hps()
 
-        try:
-            c_parms = config['Cosmology']
-            self._magnorm_f = MagNorm(**c_parms)
-        except KeyError as k:
-            self._magnorm_f = MagNorm()
+        cosmology = create_cosmology(config['Cosmology'])
+        self._magnorm_f = MagNorm(cosmology)
 
     @property
     def mag_norm_f(self):

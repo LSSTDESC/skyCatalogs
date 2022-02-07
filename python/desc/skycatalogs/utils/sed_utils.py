@@ -2,6 +2,7 @@ from collections import namedtuple
 import os
 import re
 from astropy import units as u
+from astropy.cosmology import FlatLambdaCDM
 import h5py
 import pandas as pd
 
@@ -9,13 +10,12 @@ import numpy as np
 import numpy.ma as ma
 from numpy.random import default_rng
 
-import pyccl as ccl
-
 from desc.skycatalogs.utils.common_utils import print_dated_msg
 import GCRCatalogs
 
 __all__ = ['LookupInfo', 'Cmp', 'MagNorm', 'convert_tophat_sed',
-           'write_sed_file', 'NORMWV_IX', 'get_star_sed_path']
+           'write_sed_file', 'NORMWV_IX', 'get_star_sed_path',
+           'create_cosmology']
 
 # Index for tophat bin containing 500 nm
 NORMWV_IX = 13
@@ -154,14 +154,39 @@ def get_star_sed_path(filename, name_to_folder=_standard_dict):
             raise ValueError(f'get_star_sed_path: Filename {f} does not match any known patterns')
     return np.array(path_list)
 
+
+def create_cosmology(config):
+    """
+    Create a FlatLambdaCDM cosmology from a dictionary of input parameters.
+    This code is based on/borrowed from
+    https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/cosmodc2.py#L128
+    """
+    cosmo_astropy_allowed = FlatLambdaCDM.__init__.__code__.co_varnames[1:]
+    cosmo_astropy = {k: v for k, v in config.items()
+                     if k in cosmo_astropy_allowed}
+    cosmology = FlatLambdaCDM(**cosmo_astropy)
+    return cosmology
+
+
 class MagNorm:
-    def __init__(self, Omega_c=0.2648, Omega_b=0.0448, h=0.71, sigma8=0.8,
-                 n_s=0.963):
-        self.cosmo = ccl.Cosmology(Omega_c=Omega_c, Omega_b=Omega_b, h=h,
-                                   sigma8=sigma8, n_s=n_s)
+    def __init__(self, cosmology):
+        """
+        Parameters
+        ----------
+        cosmology : astropy.cosmology
+            Cosmology object created from the gcr-catalogs galaxy catalog
+            cosmology specification.
+        """
+        self.cosmology = cosmology
+
     def dl(self, z):
-        aa = 1/(1 + z)
-        return ccl.luminosity_distance(self.cosmo, aa)*ccl.physical_constants.MPC_TO_METER
+        """
+        Return the luminosity distance in units of meters.
+        """
+        # Conversion factor from Mpc to meters (obtained from pyccl).
+        MPC_TO_METER = 3.085677581491367e+22
+        return self.cosmology.luminosity_distance(z).value*MPC_TO_METER
+
     def __call__(self, tophat_sed_value, redshift_hubble, one_maggy=4.3442e13):
         one_Jy = 1e-26  # W/Hz/m**2
         Lnu = tophat_sed_value*one_maggy    # convert from maggies to W/Hz
