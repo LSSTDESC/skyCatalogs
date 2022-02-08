@@ -11,7 +11,6 @@ import numpy.ma as ma
 from numpy.random import default_rng
 
 from desc.skycatalogs.utils.common_utils import print_dated_msg
-import GCRCatalogs
 
 __all__ = ['LookupInfo', 'Cmp', 'MagNorm', 'convert_tophat_sed',
            'write_sed_file', 'NORMWV_IX', 'get_star_sed_path',
