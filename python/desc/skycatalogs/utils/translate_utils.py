@@ -128,9 +128,11 @@ def write_to_instance(handle, ordered_data_dict, fmt):
         handle.write(fmt.format(*row) + '\n')
 
 def form_object_string(obj, band, component):
-    # parse columns for this object/component type
-    # fetch data and config values as needed
-    # form values into a list.
+    '''
+    parse columns for this object/component type
+    fetch data and config values as needed
+    form values into a list.
+    '''
     row = []
 
     if obj.object_type == 'star':
