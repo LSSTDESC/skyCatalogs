@@ -6,7 +6,6 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from astropy.coordinates import SkyCoord
-import h5py
 import sqlite3
 import GCRCatalogs
 from desc.skycatalogs.utils.common_utils import print_date
@@ -361,7 +360,8 @@ class CatalogCreator:
         #  Compute mag_norm from TH sed and redshift
         bulge_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(bulge_seds, df['redshiftHubble']) ]
         disk_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(disk_seds, df['redshiftHubble']) ]
-        knots_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(knots_seds, df['redshiftHubble']) ]
+        if self._knots:
+            knots_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(knots_seds, df['redshiftHubble']) ]
 
         # Assume R(V) = 3.1.  Calculate A(V) from R(V), E(B-V). See "Plotting
         # Dust Maps" example in
