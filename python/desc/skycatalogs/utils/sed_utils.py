@@ -233,7 +233,7 @@ class LookupInfo(object):
         else:
             return (self.sed_names[self.disk_sed[the_ix]]).decode("utf-8")
 
-
+# This class is no longer used. Consider deleting
 class Cmp(object):
     '''
     Handle writing of SED files and booking for either disk or bulge
@@ -337,9 +337,6 @@ class Cmp(object):
 
         # For debugging predictability
         seed_dict = {}
-        #seed_dict['bulge'] = 135711 + 2 * self.hp
-        #seed_dict['disk'] = 890123 + 2 * self.hp
-        #  Try different seeds
         seed_dict['bulge'] = 271423 + 2 * self.hp
         seed_dict['disk'] = 1780247 + 2 * self.hp
 
