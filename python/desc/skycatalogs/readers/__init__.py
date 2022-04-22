@@ -1,1 +1,1 @@
-from .parquet_reader import ParquetReader
+from .parquet_reader import *
