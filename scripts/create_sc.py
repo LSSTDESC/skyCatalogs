@@ -19,8 +19,8 @@ area_partition = {'type' : 'healpix', 'ordering' : 'ring', 'nside' : 32}
 parser = argparse.ArgumentParser(description='''
 Create Sky Catalogs. By default create a galaxy catalog for a
 single healpix pixel''', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--pointsource', action='store_true',
-                    help='if used, create point source catalog(s)')
+parser.add_argument('--no-pointsources', action='store_true',
+                    help='if used, point source catalogs will NOT be created')
 parser.add_argument('--no-galaxies', action='store_true',
                     help='if used galaxy catalogs will NOT be created')
 parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
@@ -57,7 +57,7 @@ if not args.no_galaxies:
     print("Creating galaxy catalogs")
     creator.create('galaxy')
 
-if args.pointsource:
+if not args.no_pointsources:
     print("Creating point source catalogs")
     creator.create('pointsource')
 
