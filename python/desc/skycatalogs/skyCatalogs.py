@@ -431,7 +431,8 @@ def open_catalog(config_file, mp=False):
         return SkyCatalog(yaml.safe_load(f), mp)
 
 if __name__ == '__main__':
-    cfg_file_name = 'to_translate.yaml'
+    ##cfg_file_name = 'to_translate.yaml'
+    cfg_file_name = 'latest.yaml'
 
     if len(sys.argv) > 1:
         cfg_file_name = sys.argv[1]
