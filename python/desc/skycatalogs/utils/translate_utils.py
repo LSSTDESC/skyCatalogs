@@ -28,7 +28,7 @@ def form_star_instance_columns(band):
                      column_finder('galacticExtinctionModel', SourceType.CONFIG,
                                    ('object_types/star/MW_extinction', str)),
                      column_finder('galactivAv', SourceType.DATA,
-                                   f'MW_av_lsst_{band}'),
+                                   'MW_av'),
                      column_finder('galacticRv', SourceType.CONFIG,
                                    ('MW_extinction_values/r_v/value', float))]
     return star_instance
@@ -56,7 +56,7 @@ def _form_knots_instance_columns(cmp, band):
                     column_finder('galacticExtinctionModel', SourceType.CONFIG,
                                   (f'object_types/{cmp}_basic/MW_extinction', 'str')),
                     column_finder('galactivAv', SourceType.DATA,
-                                  f'MW_av_lsst_{band}'),
+                                  'MW_av'),
                     column_finder('galacticRv', SourceType.CONFIG,
                                   ('MW_extinction_values/r_v/value', float))]
     return cmp_instance
@@ -88,7 +88,7 @@ def form_cmp_instance_columns(cmp, band):
                     column_finder('galacticExtinctionModel', SourceType.CONFIG,
                                   (f'object_types/{cmp}_basic/MW_extinction', 'str')),
                     column_finder('galactivAv', SourceType.DATA,
-                                  f'MW_av_lsst_{band}'),
+                                  'MW_av'),
                     column_finder('galacticRv', SourceType.CONFIG,
                                   ('MW_extinction_values/r_v/value', float))]
     return cmp_instance

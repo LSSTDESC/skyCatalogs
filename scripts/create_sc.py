@@ -19,8 +19,8 @@ area_partition = {'type' : 'healpix', 'ordering' : 'ring', 'nside' : 32}
 parser = argparse.ArgumentParser(description='''
 Create Sky Catalogs. By default create a galaxy catalog for a
 single healpix pixel''', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--pointsource', action='store_true',
-                    help='if used, create point source catalog(s)')
+parser.add_argument('--no-pointsources', action='store_true',
+                    help='if used, point source catalogs will NOT be created')
 parser.add_argument('--no-galaxies', action='store_true',
                     help='if used galaxy catalogs will NOT be created')
 parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
@@ -31,8 +31,8 @@ parser.add_argument('--output-dir', help='directory for output files',
 parser.add_argument('--sed-subdir', help='subdirectory to prepend to paths of galaxy SEDs as written to the sky catalog', default='galaxyTopHatSED')
 parser.add_argument('--verbose', help='print more output if true',
                     action='store_true')
-parser.add_argument('--galaxy-magnitude-cut', default=None, type=float,
-                    help='If supplied exclude galaxies with r-magnitude above')
+parser.add_argument('--galaxy-magnitude-cut', default=29.0, type=float,
+                    help='Exclude galaxies with r-magnitude above this value')
 parser.add_argument('--knots-magnitude-cut', default=27.0, type=float,
                     help='Galaxies with i-magnitude above this cut get no knots')
 parser.add_argument('--no-knots', action='store_true', help='If supplied omit knots component. Default is False')
@@ -57,7 +57,7 @@ if not args.no_galaxies:
     print("Creating galaxy catalogs")
     creator.create('galaxy')
 
-if args.pointsource:
+if not args.no_pointsources:
     print("Creating point source catalogs")
     creator.create('pointsource')
 

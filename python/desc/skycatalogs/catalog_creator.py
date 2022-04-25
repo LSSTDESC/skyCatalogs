@@ -7,7 +7,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from astropy.coordinates import SkyCoord
 import sqlite3
-import GCRCatalogs
 from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
 
@@ -28,9 +27,8 @@ Multipliers come from
 https://iopscience.iop.org/article/10.1088/0004-637X/737/2/103#apj398709t6
 appendix, table 6
 '''
-_MW_extinction_bands = {'MW_av_lsst_u' : 4.145, 'MW_av_lsst_g' : 3.237,
-                       'MW_av_lsst_r' : 2.273, 'MW_av_lsst_i' : 1.684,
-                       'MW_av_lsst_z' : 1.323, 'MW_av_lsst_y' : 1.088}
+_Av_adjustment = 2.742
+_MW_rv_constant = 3.1
 
 # This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
@@ -60,12 +58,7 @@ def _make_galaxy_schema(sed_subdir=False, knots=True):
               pa.field('bulge_magnorm', pa.float64(), True),
               pa.field('disk_magnorm', pa.float64(), True),
               pa.field('MW_rv', pa.float32(), True),
-              pa.field('MW_av_lsst_u', pa.float32(), True),
-              pa.field('MW_av_lsst_g', pa.float32(), True),
-              pa.field('MW_av_lsst_r', pa.float32(), True),
-              pa.field('MW_av_lsst_i', pa.float32(), True),
-              pa.field('MW_av_lsst_z', pa.float32(), True),
-              pa.field('MW_av_lsst_y', pa.float32(), True)]
+              pa.field('MW_av', pa.float32(), True)]
     if knots:
         print("knots requested")
         fields.append(pa.field('sed_val_knots',
@@ -107,34 +100,27 @@ def _make_star_schema():
               pa.field('magnorm', pa.float64(), True),
               pa.field('sed_filepath', pa.string(), True),
               pa.field('MW_rv', pa.float32(), True),
-              pa.field('MW_av_lsst_u', pa.float32(), True),
-              pa.field('MW_av_lsst_g', pa.float32(), True),
-              pa.field('MW_av_lsst_r', pa.float32(), True),
-              pa.field('MW_av_lsst_i', pa.float32(), True),
-              pa.field('MW_av_lsst_z', pa.float32(), True),
-              pa.field('MW_av_lsst_y', pa.float32(), True)]
+              pa.field('MW_av', pa.float32(), True)]
     return pa.schema(fields)
 
-def _make_MW_extinction(ra, dec, MW_rv_constant, band_dict):
+def _make_MW_extinction(ra, dec):
     '''
-    Given arrays of ra & dec,  fixed Rv and per-band column names
-    and multipliers, create a MW Av column for each band
-    Parameters:
+    Given arrays of ra & dec, create a MW Av column corresponding to V-band
+    correction.
+    See "Plotting Dust Maps" example in
+    https://dustmaps.readthedocs.io/en/latest/examples.html
+
+    Parameters
+    ----------
     ra, dec - arrays specifying positions where Av is to be computed
-    MW_rv - single constant value for Rv
-    band_dict - keys are column names; values are multipliers
     Return:
-    dict with keys = column names. Value for each column is array of
-    Av values for a particular band at the ra,dec positions
+    Array of Av values
     '''
 
     sfd = SFDQuery()
     ebv_raw = np.array(sfd.query_equ(ra, dec))
-    av_dict = {}
-    for k,v in band_dict.items():
-        av_dict[k] = MW_rv_constant * v * ebv_raw
 
-    return av_dict
+    return _Av_adjustment * ebv_raw
 
 def _generate_sed_path(ids, subdir, cmp):
     '''
@@ -244,6 +230,7 @@ class CatalogCreator:
         -------
         Dict describing catalog produced
         """
+        import GCRCatalogs
 
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)
 
@@ -363,14 +350,8 @@ class CatalogCreator:
         if self._knots:
             knots_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(knots_seds, df['redshiftHubble']) ]
 
-        # Assume R(V) = 3.1.  Calculate A(V) from R(V), E(B-V). See "Plotting
-        # Dust Maps" example in
-        # https://dustmaps.readthedocs.io/en/latest/examples.html
-        MW_rv_constant = 3.1
-        MW_rv = np.full_like(df['sersic_bulge'], MW_rv_constant)
-        MW_av_columns = _make_MW_extinction(df['ra'], df['dec'],
-                                            MW_rv_constant,
-                                            _MW_extinction_bands)
+        MW_rv = np.full_like(df['sersic_bulge'], _MW_rv_constant)
+        MW_av = _make_MW_extinction(df['ra'], df['dec'])
         if self._verbose: print("Made extinction")
 
         #  Write row groups of size stride (or less) until input is exhausted
@@ -393,8 +374,7 @@ class CatalogCreator:
             out_dict['bulge_magnorm'] = bulge_magnorm[l_bnd : u_bnd]
             out_dict['disk_magnorm'] = disk_magnorm[l_bnd : u_bnd]
             out_dict['MW_rv'] = MW_rv[l_bnd : u_bnd]
-            for k,v in  MW_av_columns.items():
-                out_dict[k] = v[l_bnd : u_bnd]
+            out_dict['MW_av'] = MW_av[l_bnd : u_bnd]
 
             if self._knots:
                 out_dict['sed_val_knots'] = knots_seds[l_bnd : u_bnd]
@@ -480,17 +460,10 @@ class CatalogCreator:
             star_df['object_type'] = np.full((nobj,), 'star')
             star_df['host_galaxy_id'] = np.zeros((nobj,), np.int64())
 
-            MW_rv_constant = 3.1
-            star_df['MW_rv'] = np.full((nobj,), MW_rv_constant, np.float32())
+            star_df['MW_rv'] = np.full((nobj,), _MW_rv_constant, np.float32())
 
-            MW_av_columns = _make_MW_extinction(np.array(star_df['ra']),
-                                                np.array(star_df['dec']),
-                                                MW_rv_constant,
-                                                _MW_extinction_bands)
-            for k,v in  MW_av_columns.items():
-                # No need for multiple row groups. Data size is small.
-                #star_df[k] = v[l_bnd : u_bnd]
-                star_df[k] = v
+            star_df['MW_av'] = _make_MW_extinction(np.array(star_df['ra']),
+                                                   np.array(star_df['dec']))
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
             if self._verbose: print("created arrow table from dataframe")
 
