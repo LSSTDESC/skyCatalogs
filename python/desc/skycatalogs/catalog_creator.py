@@ -7,7 +7,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from astropy.coordinates import SkyCoord
 import sqlite3
-import GCRCatalogs
 from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
 
@@ -231,6 +230,7 @@ class CatalogCreator:
         -------
         Dict describing catalog produced
         """
+        import GCRCatalogs
 
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)
 
