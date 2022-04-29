@@ -341,9 +341,11 @@ class Cmp(object):
         seed_dict['disk'] = 1780247 + 2 * self.hp
 
         print_dated_msg(f'Cmp.create called for component  {self.cmp_name}')
-        #  Really it should have _no_host_extinction suffix but for
-        #  now schema is not using it
-        sed_col = 'sed_val_' + self.cmp_name + '_no_host_extinction'
+        ###  Really it should have _no_host_extinction suffix
+        ###                       REALLY??
+        ###   but for now schema is not using it
+        ### sed_col = 'sed_val_' + self.cmp_name + '_no_host_extinction'
+        sed_col = 'sed_val_' + self.cmp_name
         sed = np.array(self.coll.get_native_attribute(sed_col))
         magnorm_col = self.cmp_name + '_magnorm'
         magnorm = np.array(self.coll.get_native_attribute(magnorm_col))
