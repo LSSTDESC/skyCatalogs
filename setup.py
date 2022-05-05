@@ -22,16 +22,18 @@ shared_data = all_files_from('data')
 ## configs = all_files_from('cfg', '.yaml')
 configs = [os.path.join('cfg', 'latest.yaml')]
 
-# Read in the version from imsim/_version.py
+# Read in the version from python/desc/_version.py
 # cf. http://stackoverflow.com/questions/458550/standard-way-to-embed-version-into-python-package
-version_file = os.path.join('python', 'desc', '_version.py')verstrline = open(version_file, "rt").read()
+
+version_file = os.path.join('python', 'desc', '_version.py')
+verstrline = open(version_file, "rt").read()
 VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
 mo = re.search(VSRE, verstrline, re.M)
 if mo:
     skycatalogs_version = mo.group(1)
 else:
     raise RuntimeError("Unable to find version string in %s." % (version_file,))
-print('skyCatalogs version is %s'%(imsim_version))
+print('skyCatalogs version is %s'%(skycatalogs_version))
 
 dist = setup(name="skyCatalogs",
              version=skycatalogs_version,
