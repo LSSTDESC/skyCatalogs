@@ -27,7 +27,7 @@ configs = [os.path.join('cfg', 'latest.yaml')]
 # Read in the version from python/desc/_version.py
 # cf. http://stackoverflow.com/questions/458550/standard-way-to-embed-version-into-python-package
 
-version_file = os.path.join('python', 'desc', '_version.py')
+version_file = os.path.join('python', 'desc', 'skycatalogs', '_version.py')
 verstrline = open(version_file, "rt").read()
 VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
 mo = re.search(VSRE, verstrline, re.M)
