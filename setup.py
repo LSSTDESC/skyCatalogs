@@ -6,7 +6,8 @@ from setuptools import setup, find_packages
 with open('README.md') as file:
     long_description = file.read()
 
-packages = find_packages()
+packages = find_packages(where="python")
+print('packages = ', packages)
 
 def all_files_from(dir, ext=''):
     """Quick function to get all files from directory and all subdirectories
@@ -19,6 +20,7 @@ def all_files_from(dir, ext=''):
     return files
 
 shared_data = all_files_from('data')
+print('shared_data = ', shared_data)
 ## configs = all_files_from('cfg', '.yaml')
 configs = [os.path.join('cfg', 'latest.yaml')]
 
@@ -42,7 +44,8 @@ dist = setup(name="skyCatalogs",
              license="BSD",
              description="Writes, reads catalogs input to LSST DESC simulations",
              long_description=long_description,
-             packages=packages,
+             package_dir={"": "python"},
+             packages=find_packages(where="python"),
              package_data={"skycatalogs": shared_data + configs},
              url="https://github.com/LSSTDESC/skyCatalogs",
              classifiers=[
