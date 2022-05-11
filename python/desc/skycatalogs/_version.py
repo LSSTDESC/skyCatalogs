@@ -12,7 +12,7 @@
 # cf. https://semver.org/ for more info
 
 # This should be updated before a release.
-__version__ = '1.1.0-rc3'
+__version__ = '1.1.0'
 
 # This will work if the version has end tags like 2.0.0-rc.1
 __version_info__ = tuple(map(lambda x:int(x.split('-')[0]), __version__.split('.')))[:3]
