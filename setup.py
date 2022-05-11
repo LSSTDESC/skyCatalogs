@@ -19,10 +19,11 @@ def all_files_from(dir, ext=''):
                 files.append(os.path.join(root, filename))
     return files
 
-shared_data = all_files_from('data')
-print('shared_data = ', shared_data)
-## configs = all_files_from('cfg', '.yaml')
-configs = [os.path.join('cfg', 'latest.yaml')]
+# Need to clarify if this belongs in the distribution or not
+## shared_data = all_files_from('data')
+## print('shared_data = ', shared_data)
+
+## configs = [os.path.join('cfg', 'latest.yaml')]
 
 # Read in the version from python/desc/_version.py
 # cf. http://stackoverflow.com/questions/458550/standard-way-to-embed-version-into-python-package
@@ -46,7 +47,7 @@ dist = setup(name="skyCatalogs",
              long_description=long_description,
              package_dir={"": "python"},
              packages=find_packages(where="python"),
-             package_data={"skycatalogs": shared_data + configs},
+             ##package_data={"skycatalogs": shared_data + configs},
              url="https://github.com/LSSTDESC/skyCatalogs",
              classifiers=[
                  "License :: OSI Approved :: BSD License",
