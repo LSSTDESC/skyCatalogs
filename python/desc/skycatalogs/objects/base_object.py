@@ -2,9 +2,12 @@ from collections.abc import Sequence, Iterable
 from collections import namedtuple, OrderedDict
 import os
 import gzip
-import numpy as np
 import itertools
+import numpy as np
+import astropy.units as u
 import warnings
+from dust_extinction.parameter_averages import F19
+import galsim
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
 from desc.skycatalogs.utils.sed_utils import convert_tophat_sed
@@ -195,6 +198,68 @@ class BaseObject(object):
                                           mag_f, redshift=r, wavelen_step=resolution)
         return lmbda, f_lambda, mag_norm
 
+    def get_dust(self):
+        """Return the Av, Rv parameters for internal and Milky Way extinction."""
+        internal_av = 0
+        internal_rv = 1.
+        galactic_av = self.get_native_attribute('MW_av')
+        galactic_rv = self.get_native_attribute('MW_rv')
+        return internal_av, internal_rv, galactic_av, galactic_rv
+
+    def get_wl_params(self):
+        """Return the weak lensing parameters, g1, g2, mu."""
+        gamma1 = self.get_native_attribute('shear_1')
+        gamma2 = self.get_native_attribute('shear_2')
+        kappa =  self.get_native_attribute('convergence')
+        # Compute reduced shears and magnification.
+        g1 = gamma1/(1. - kappa)    # real part of reduced shear
+        g2 = gamma2/(1. - kappa)    # imaginary part of reduced shear
+        mu = 1./((1. - kappa)**2 - (gamma1**2 + gamma2**2)) # magnification
+        return g1, g2, mu
+
+    def get_gsobject_components(self, gsparams=None, rng=None):
+        """
+        Return a dictionary of the GSObject components for the
+        SkyCatalogs object, keyed by component name.
+        """
+        if gsparams is not None:
+            gsparams = galsim.GSParams(**gsparams)
+        if self.object_type == 'star':
+            return {None: galsim.DeltaFunction(gsparams=gsparams)}
+        if self.object_type != 'galaxy':
+            raise RuntimeError("Do not know how to handle object type "
+                               f"{self.skycat_obj.object_type}")
+        obj_dict = {}
+        for component in self.skycat_obj.subcomponents:
+            # knots use the same major/minor axes as the disk component.
+            my_component = 'disk' if component != 'bulge' else 'bulge'
+            a = self.get_native_attribute(
+                f'size_{my_component}_true')
+            b = self.get_native_attribute(
+                f'size_minor_{my_component}_true')
+            assert a >= b
+            pa = self.get_native_attribute('position_angle_unlensed')
+            beta = float(90 + pa)*galsim.degrees
+            hlr = (a*b)**0.5   # approximation for half-light radius
+            if component == 'knots':
+                npoints = self.get_native_attribute('n_knots')
+                assert npoints > 0
+                obj = galsim.RandomKnots(npoints=npoints,
+                                         half_light_radius=hlr, rng=rng,
+                                         gsparams=gsparams)
+            else:
+                n = self.get_native_attribute(f'sersic_{component}')
+                # Quantize the n values at 0.05 so that galsim can
+                # possibly amortize sersic calculations from the previous
+                # galaxy.
+                n = round(n*20.)/20.
+                obj = galsim.Sersic(n=n, half_light_radius=hlr,
+                                    gsparams=gsparams)
+            shear = galsim.Shear(q=b/a, beta=beta)
+            obj = obj._shear(shear)
+            g1, g2, mu = self.get_wl_params()
+            obj_dict[component] = obj._lens(g1, g2, mu)
+        return obj_dict
 
 class ObjectCollection(Sequence):
     '''
