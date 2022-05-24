@@ -220,7 +220,7 @@ class BaseObject(object):
     def get_gsobject_components(self, gsparams=None, rng=None):
         """
         Return a dictionary of the GSObject components for the
-        SkyCatalogs object, keyed by component name.
+        sky catalogs object, keyed by component name.
         """
         if gsparams is not None:
             gsparams = galsim.GSParams(**gsparams)
@@ -228,9 +228,9 @@ class BaseObject(object):
             return {None: galsim.DeltaFunction(gsparams=gsparams)}
         if self.object_type != 'galaxy':
             raise RuntimeError("Do not know how to handle object type "
-                               f"{self.skycat_obj.object_type}")
+                               f"{self.object_type}")
         obj_dict = {}
-        for component in self.skycat_obj.subcomponents:
+        for component in self.subcomponents:
             # knots use the same major/minor axes as the disk component.
             my_component = 'disk' if component != 'bulge' else 'bulge'
             a = self.get_native_attribute(
