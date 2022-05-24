@@ -261,6 +261,117 @@ class BaseObject(object):
             obj_dict[component] = obj._lens(g1, g2, mu)
         return obj_dict
 
+    def get_observer_sed_component(self, component):
+        """
+        Return the SED for the specified subcomponent of the SkyCatalog
+        object, applying internal extinction, redshift, and Milky Way
+        extinction.
+
+        For Milky Way extinction, the Fitzpatrick, et al. (2019) (F19)
+        model, as implemented in the dust_extinction package, is used.
+
+        The SEDs are computed assuming exposure times of 1 second.
+        """
+        wl, flambda, magnorm = self.get_sed(component=component)
+        if np.isinf(magnorm):
+            # This subcomponent has zero emission so return None.
+            return None
+
+        # Create a galsim.SED for this subcomponent.
+        sed_lut = galsim.LookupTable(wl, flambda)
+        sed = galsim.SED(sed_lut, wave_type='nm', flux_type='flambda')
+        sed = sed.withMagnitude(0, self._bp500)
+
+        # Apply magnorm. The SED is in units of photons/nm/cm^2/s
+        # -0.9210340371976184 = np.log(10)/2.5. Use to convert mag to flux
+        flux_500 = np.exp(-0.9210340371976184 * magnorm)
+        ###sed = sed*flux_500*self.eff_area
+        sed = sed*flux_500
+
+        iAv, iRv, mwAv, mwRv = self.get_dust()
+        if iAv > 0:
+            # Apply internal extinction model, which is assumed
+            # to be the same for all subcomponents.
+            pass  #TODO add implementation for internal extinction.
+
+        if 'redshift' in self.native_columns:
+            redshift = self.get_native_attribute('redshift')
+            sed = sed.atRedshift(redshift)
+
+        # Apply Milky Way extinction.
+        extinction = F19(Rv=mwRv)
+        # Use SED wavelengths
+        wl = sed.wave_list
+        # Restrict to the range where F19 can be evaluated. F19.x_range is
+        # in units of 1/micron, so convert to nm.
+        wl_min = 1e3/F19.x_range[1]
+        wl_max = 1e3/F19.x_range[0]
+        wl = wl[np.where((wl_min < wl) & (wl < wl_max))]
+        ext = extinction.extinguish(wl*u.nm, Av=mwAv)
+        spec = galsim.LookupTable(wl, ext)
+        mw_ext = galsim.SED(spec, wave_type='nm', flux_type='1')
+        sed = sed*mw_ext
+
+        return sed
+
+    def get_observer_sed_components(self):
+        """
+        Return a dictionary of the SEDs, keyed by component name.
+        """
+        sed_components = {}
+        subcomponents = [None] if not self.subcomponents \
+            else self.subcomponents
+        for component in subcomponents:
+            sed_components[component] = \
+                self.get_observer_sed_component(component)
+        return sed_components
+
+    def get_total_observer_sed(self):
+        """
+        Return the SED summed over SEDs for the individual SkyCatalog
+        components.
+        """
+        sed = None
+        for sed_component in self.get_observer_sed_components().values():
+            if sed is None:
+                sed = sed_component
+            else:
+                sed += sed_component
+        if 'shear_1' in self.native_columns:
+            _, _, mu = self.get_wl_params()
+            sed *= mu
+        return sed
+
+    def get_flux(self, bandpass):
+        """
+        Return the total object flux integrated over the bandpass
+        in photons/sec/cm^2
+        """
+        sed = self.get_total_observer_sed()
+        return sed.calculateFlux(bandpass)
+
+    def get_fluxes(self, bandpasses):
+        # To avoid recomputing sed
+        sed = self.get_total_observer_sed()
+        return [sed.calculateFlux(b) for b in bandpasses]
+
+    def get_LSST_flux(self, band):
+        if not band in 'ugrizy':
+            return None
+
+        # Should we first check if it's already an attribute
+
+        if f'flux_{band}' in self.native_columns:
+            return self.get_native_attribute(f'flux_{band}')
+
+        # galsim keeps standard bandpass files under
+        # os.path.join(galsim.meta_data.share_dir, 'bandpass').
+        # These include LSST_u.dat, etc.
+        else:
+            # should we first store as attribute, then return?
+            return self.get_flux(f'LSST_{band}.dat')
+
+
 class ObjectCollection(Sequence):
     '''
     Class for collection of static objects coming from the same
