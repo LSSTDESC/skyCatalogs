@@ -516,6 +516,23 @@ if __name__ == '__main__':
                         if magnorm < 1000:
                             for i in range(10):
                                 print(sed_fmt.format(lmbda[i], f_lambda[i]))
+                # Try out old wrapper functions
+                print("\nget_dust:")
+                i_av, i_rv, g_av, g_rv = o.get_dust()
+                print(f'i_av={i_av} i_rv={i_rv} g_av={g_av} g_rv={g_rv}')
+                print("\nget_wl_params")
+                g1, g2, mu = o.get_wl_params()
+                print(f'g1={g1} g2={g2} mu={mu}')
+                print("\nget_gsobject_components. Keys of returned dict:")
+                gs_dict = o.get_gsobject_components()
+                print(gs_dict.keys())
+                print("\nget_observer_sed_components.  Keys of returned dict:")
+                o_seds = o.get_observer_sed_components()
+                print(o_seds.keys())
+
+                f = o.get_LSST_flux('i')
+                print('Type of returned flux: ', type(f))
+                print(f'Flux for i bandpass: {f}')
 
         if n_obj > 200:
             print("Object 200")
@@ -530,6 +547,11 @@ if __name__ == '__main__':
                       o._belongs_index)
 
     print('Total object count: ', len(object_list))
+
+    # Temporarily exit here to make it easier to see results from
+    # new routines
+    ###print('Stopping here')
+    ####exit(0)
 
     obj = object_list[0]
     print("Type of element in object_list:", type(obj))

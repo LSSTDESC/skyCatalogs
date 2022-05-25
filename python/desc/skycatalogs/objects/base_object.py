@@ -36,6 +36,9 @@ class BaseObject(object):
     Abstract base class for static (in position coordinates) objects.
     Likely need a variant for SSO.
     '''
+
+    _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501],[0, 1, 0]),
+                             wave_type='nm').withZeropoint('AB')
     def __init__(self, ra, dec, id, object_type, redshift=None,
                  belongs_to=None, belongs_index=None):
         '''
@@ -369,7 +372,8 @@ class BaseObject(object):
         # These include LSST_u.dat, etc.
         else:
             # should we first store as attribute, then return?
-            return self.get_flux(f'LSST_{band}.dat')
+            bp = galsim.Bandpass(f'LSST_{band}.dat', 'nm')   # guessing
+            return self.get_flux(bp)
 
 
 class ObjectCollection(Sequence):
