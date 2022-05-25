@@ -2,9 +2,12 @@ from collections.abc import Sequence, Iterable
 from collections import namedtuple, OrderedDict
 import os
 import gzip
-import numpy as np
 import itertools
+import numpy as np
+import astropy.units as u
 import warnings
+from dust_extinction.parameter_averages import F19
+import galsim
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
 from desc.skycatalogs.utils.sed_utils import convert_tophat_sed
@@ -33,6 +36,9 @@ class BaseObject(object):
     Abstract base class for static (in position coordinates) objects.
     Likely need a variant for SSO.
     '''
+
+    _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501],[0, 1, 0]),
+                             wave_type='nm').withZeropoint('AB')
     def __init__(self, ra, dec, id, object_type, redshift=None,
                  belongs_to=None, belongs_index=None):
         '''
@@ -195,6 +201,194 @@ class BaseObject(object):
                                           mag_f, redshift=r, wavelen_step=resolution)
         return lmbda, f_lambda, mag_norm
 
+    def get_dust(self):
+        """Return the Av, Rv parameters for internal and Milky Way extinction."""
+        internal_av = 0
+        internal_rv = 1.
+        galactic_av = self.get_native_attribute('MW_av')
+        galactic_rv = self.get_native_attribute('MW_rv')
+        return internal_av, internal_rv, galactic_av, galactic_rv
+
+    def get_wl_params(self):
+        """Return the weak lensing parameters, g1, g2, mu."""
+        gamma1 = self.get_native_attribute('shear_1')
+        gamma2 = self.get_native_attribute('shear_2')
+        kappa =  self.get_native_attribute('convergence')
+        # Compute reduced shears and magnification.
+        g1 = gamma1/(1. - kappa)    # real part of reduced shear
+        g2 = gamma2/(1. - kappa)    # imaginary part of reduced shear
+        mu = 1./((1. - kappa)**2 - (gamma1**2 + gamma2**2)) # magnification
+        return g1, g2, mu
+
+    def get_gsobject_components(self, gsparams=None, rng=None):
+        """
+        Return a dictionary of the GSObject components for the
+        sky catalogs object, keyed by component name.
+        """
+        if gsparams is not None:
+            gsparams = galsim.GSParams(**gsparams)
+        if self.object_type == 'star':
+            return {None: galsim.DeltaFunction(gsparams=gsparams)}
+        if self.object_type != 'galaxy':
+            raise RuntimeError("Do not know how to handle object type "
+                               f"{self.object_type}")
+        obj_dict = {}
+        for component in self.subcomponents:
+            # knots use the same major/minor axes as the disk component.
+            my_component = 'disk' if component != 'bulge' else 'bulge'
+            a = self.get_native_attribute(
+                f'size_{my_component}_true')
+            b = self.get_native_attribute(
+                f'size_minor_{my_component}_true')
+            assert a >= b
+            pa = self.get_native_attribute('position_angle_unlensed')
+            beta = float(90 + pa)*galsim.degrees
+            hlr = (a*b)**0.5   # approximation for half-light radius
+            if component == 'knots':
+                npoints = self.get_native_attribute('n_knots')
+                assert npoints > 0
+                obj = galsim.RandomKnots(npoints=npoints,
+                                         half_light_radius=hlr, rng=rng,
+                                         gsparams=gsparams)
+            else:
+                n = self.get_native_attribute(f'sersic_{component}')
+                # Quantize the n values at 0.05 so that galsim can
+                # possibly amortize sersic calculations from the previous
+                # galaxy.
+                n = round(n*20.)/20.
+                obj = galsim.Sersic(n=n, half_light_radius=hlr,
+                                    gsparams=gsparams)
+            shear = galsim.Shear(q=b/a, beta=beta)
+            obj = obj._shear(shear)
+            g1, g2, mu = self.get_wl_params()
+            obj_dict[component] = obj._lens(g1, g2, mu)
+        return obj_dict
+
+    def get_observer_sed_component(self, component):
+        """
+        Return the SED for the specified subcomponent of the SkyCatalog
+        object, applying internal extinction, redshift, and Milky Way
+        extinction.
+
+        For Milky Way extinction, the Fitzpatrick, et al. (2019) (F19)
+        model, as implemented in the dust_extinction package, is used.
+
+        The SEDs are computed assuming exposure times of 1 second.
+        """
+        wl, flambda, magnorm = self.get_sed(component=component)
+        if np.isinf(magnorm):
+            # This subcomponent has zero emission so return None.
+            return None
+
+        # Create a galsim.SED for this subcomponent.
+        sed_lut = galsim.LookupTable(wl, flambda)
+        sed = galsim.SED(sed_lut, wave_type='nm', flux_type='flambda')
+        sed = sed.withMagnitude(0, self._bp500)
+
+        # Apply magnorm. The SED is in units of photons/nm/cm^2/s
+        # -0.9210340371976184 = -np.log(10)/2.5. Use to convert mag to flux
+        flux_500 = np.exp(-0.9210340371976184 * magnorm)
+        ###sed = sed*flux_500*self.eff_area
+        sed = sed*flux_500
+
+        iAv, iRv, mwAv, mwRv = self.get_dust()
+        if iAv > 0:
+            # Apply internal extinction model, which is assumed
+            # to be the same for all subcomponents.
+            pass  #TODO add implementation for internal extinction.
+
+        if 'redshift' in self.native_columns:
+            redshift = self.get_native_attribute('redshift')
+            sed = sed.atRedshift(redshift)
+
+        # Apply Milky Way extinction.
+        extinction = F19(Rv=mwRv)
+        # Use SED wavelengths
+        wl = sed.wave_list
+        # Restrict to the range where F19 can be evaluated. F19.x_range is
+        # in units of 1/micron, so convert to nm.
+        wl_min = 1e3/F19.x_range[1]
+        wl_max = 1e3/F19.x_range[0]
+        wl = wl[np.where((wl_min < wl) & (wl < wl_max))]
+        ext = extinction.extinguish(wl*u.nm, Av=mwAv)
+        spec = galsim.LookupTable(wl, ext)
+        mw_ext = galsim.SED(spec, wave_type='nm', flux_type='1')
+        sed = sed*mw_ext
+
+        return sed
+
+    def get_observer_sed_components(self):
+        """
+        Return a dictionary of the SEDs, keyed by component name.
+        """
+        sed_components = {}
+        subcomponents = [None] if not self.subcomponents \
+            else self.subcomponents
+        for component in subcomponents:
+            sed_components[component] = \
+                self.get_observer_sed_component(component)
+        return sed_components
+
+    def get_total_observer_sed(self):
+        """
+        Return the SED summed over SEDs for the individual SkyCatalog
+        components.
+        """
+        sed = None
+        for sed_component in self.get_observer_sed_components().values():
+            if sed is None:
+                sed = sed_component
+            else:
+                sed += sed_component
+        if 'shear_1' in self.native_columns:
+            _, _, mu = self.get_wl_params()
+            sed *= mu
+        return sed
+
+    def get_flux(self, bandpass):
+        """
+        Return the total object flux integrated over the bandpass
+        in photons/sec/cm^2
+        """
+        sed = self.get_total_observer_sed()
+        return sed.calculateFlux(bandpass)
+
+    def get_fluxes(self, bandpasses):
+        # To avoid recomputing sed
+        sed = self.get_total_observer_sed()
+        return [sed.calculateFlux(b) for b in bandpasses]
+
+    def get_LSST_flux(self, band, cache=True):
+        if not band in 'ugrizy':
+            return None
+        att = f'flux_{band}'
+        # Check if it's already an attribute
+        val = getattr(self, att, None)
+        if val is not None:
+            return val
+
+        if att in self.native_columns:
+            return self.get_native_attribute(att)
+
+        # galsim keeps standard bandpass files under
+        # os.path.join(galsim.meta_data.share_dir, 'bandpass').
+        # These include LSST_u.dat, etc.
+        else:
+            bp = galsim.Bandpass(f'LSST_{band}.dat', 'nm')
+            val = self.get_flux(bp)
+            if cache:
+                setattr(self, att, val)
+            return val
+
+    def get_LSST_fluxes(self, cache=True):
+        '''
+        Return a dict of fluxes for LSST bandpasses
+        '''
+        fluxes = {}
+        for band in 'ugrizy':
+            fluxes[band] = self.get_LSST_flux(band, cache)
+
+        return fluxes
 
 class ObjectCollection(Sequence):
     '''
