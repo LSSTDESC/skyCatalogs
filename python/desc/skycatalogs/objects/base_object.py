@@ -358,23 +358,37 @@ class BaseObject(object):
         sed = self.get_total_observer_sed()
         return [sed.calculateFlux(b) for b in bandpasses]
 
-    def get_LSST_flux(self, band):
+    def get_LSST_flux(self, band, cache=True):
         if not band in 'ugrizy':
             return None
+        att = f'flux_{band}'
+        # Check if it's already an attribute
+        val = getattr(self, att, None)
+        if val is not None:
+            return val
 
-        # Should we first check if it's already an attribute
-
-        if f'flux_{band}' in self.native_columns:
-            return self.get_native_attribute(f'flux_{band}')
+        if att in self.native_columns:
+            return self.get_native_attribute(att)
 
         # galsim keeps standard bandpass files under
         # os.path.join(galsim.meta_data.share_dir, 'bandpass').
         # These include LSST_u.dat, etc.
         else:
-            # should we first store as attribute, then return?
             bp = galsim.Bandpass(f'LSST_{band}.dat', 'nm')   # guessing
-            return self.get_flux(bp)
+            val = self.get_flux(bp)
+            if cache:
+                setattr(self, att, val)
+            return val
 
+    def get_LSST_fluxes(self, cache=True):
+        '''
+        Return a dict of fluxes for LSST bandpasses
+        '''
+        fluxes = {}
+        for band in 'ugrizy':
+            fluxes[band] = self.get_LSST_flux(band, cache)
+
+        return fluxes
 
 class ObjectCollection(Sequence):
     '''

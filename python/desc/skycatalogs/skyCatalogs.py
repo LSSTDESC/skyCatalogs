@@ -531,8 +531,10 @@ if __name__ == '__main__':
                 print(o_seds.keys())
 
                 f = o.get_LSST_flux('i')
-                print('Type of returned flux: ', type(f))
                 print(f'Flux for i bandpass: {f}')
+                fluxes = o.get_LSST_fluxes()
+                for k,v in fluxes.items():
+                    print(f'Bandpass {k} has flux {v}')
 
         if n_obj > 200:
             print("Object 200")
