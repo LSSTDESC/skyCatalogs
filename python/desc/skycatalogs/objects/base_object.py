@@ -325,8 +325,9 @@ class BaseObject(object):
         subcomponents = [None] if not self.subcomponents \
             else self.subcomponents
         for component in subcomponents:
-            sed_components[component] = \
-                self.get_observer_sed_component(component)
+            sed = self.get_observer_sed_component(component)
+            if sed is not None:
+                sed_components[component] = sed
         return sed_components
 
     def get_total_observer_sed(self):
