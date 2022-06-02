@@ -6,7 +6,7 @@ area_partition :
 #skycatalog_root : /global/cscratch1/sd/jrbogart/desc/skycatalogs
 skycatalog_root : /global/cscratch1/sd/jrbogart/desc/no_such_dir
 
-output_dir : latest
+catalog_dir : latest
 #  A sample sky catalog config for partially-faked catalog of stars & galaxies
 #  used as input to create equivalent instance catalogs
 

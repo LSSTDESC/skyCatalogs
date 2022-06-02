@@ -121,7 +121,7 @@ class SkyCatalog(object):
                 if sky_root_env:
                     sky_root = sky_root_env
 
-            self._cat_dir = os.path.join(sky_root, config['output_dir'])
+            self._cat_dir = os.path.join(sky_root, config['catalog_dir'])
 
         # There may be more to do at this point but not too much.
         # In particular, don't read in anything from data files
@@ -443,7 +443,7 @@ def open_catalog(config_file, mp=False, skycatalog_root=None):
                     SKYCATALOG_ROOT.  Precedence is 1) argument
                     2) environment variable 3) value in config file for
                     key skycatalog_root.  However set, this value
-                    joined to value of the key output_dir will be used
+                    joined to value of the key catalog_dir will be used
                     to find the catalog data.
 
     Returns
