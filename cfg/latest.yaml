@@ -5,7 +5,6 @@ area_partition :
 root_directory : /global/cscratch1/sd/jrbogart/desc/skycatalogs/latest
 #  A sample sky catalog config for partially-faked catalog of stars & galaxies
 #  used as input to create equivalent instance catalogs
-catalog_name : latest
 
 SED_models :
   -
