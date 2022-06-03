@@ -3,15 +3,14 @@ catalog_name : future_latest
 schema_version : 1.1.0
 area_partition :
   { type: healpix, ordering : ring, nside : 32}
-#skycatalog_root : /global/cscratch1/sd/jrbogart/desc/skycatalogs
-skycatalog_root : /global/cscratch1/sd/jrbogart/desc/no_such_dir
+skycatalog_root : /global/cscratch1/sd/jrbogart/desc/skycatalogs
+#skycatalog_root : /global/cscratch1/sd/jrbogart/desc/no_such_dir
 
 catalog_dir : latest
 #  A sample sky catalog config for partially-faked catalog of stars & galaxies
 #  used as input to create equivalent instance catalogs
 
 SED_models :
-  -
     tophat :
        units : angstrom
        bin_parameters : [start, width]
@@ -22,7 +21,7 @@ SED_models :
                [7385, 458],[7843, 486],[8329, 517],[8846, 549],[9395, 583],
                [9978, 1489],[11467, 1710],[13177, 1966],[15143, 2259],
                [17402, 2596],]
-    file :
+    file_nm :
        units : nm
 
 MW_extinction_values :
@@ -75,6 +74,6 @@ object_types :
   star :
       file_template : 'pointsource_(?P<healpix>\d+).parquet'
       data_file_type : parquet
-      sed_model : file
+      sed_model : file_nm
       sed_file_root : '$SIMS_SED_LIBRARY_DIR'
       MW_extinction : CCM

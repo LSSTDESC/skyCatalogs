@@ -50,7 +50,7 @@ class Config(object):
         Return list of named tuples
         Should maybe be part of Sky Catalogs API
         '''
-        raw_bins = self._cfg['SED_models'][0]['tophat']['bins']
+        raw_bins = self._cfg['SED_models']['tophat']['bins']
 
         return [ Tophat(b[0], b[1]) for b in raw_bins]
 
