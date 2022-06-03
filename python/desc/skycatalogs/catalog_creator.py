@@ -361,14 +361,13 @@ class CatalogCreator:
         rg_written = 0
         writer = None
 
-        # Some columns need to be renamed and, in one case, units changed
+        # Some columns need to be renamed
         to_modify = ['position_angle_true', 'redshiftHubble', 'peculiarVelocity']
         while u_bnd > l_bnd:
             out_dict = {k : df[k][l_bnd : u_bnd] for k in non_sed if k not in to_modify}
             out_dict['redshift_hubble'] = df['redshiftHubble'][l_bnd : u_bnd]
             out_dict['peculiar_velocity'] = df['peculiarVelocity'][l_bnd : u_bnd]
-            out_dict['position_angle_unlensed'] = np.radians(df['position_angle_true']
-                                                             [l_bnd : u_bnd])
+            out_dict['position_angle_unlensed'] = df['position_angle_true'][l_bnd : u_bnd]
             out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
             out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
             out_dict['bulge_magnorm'] = bulge_magnorm[l_bnd : u_bnd]
