@@ -173,8 +173,6 @@ class SkyCatalog(object):
 
         '''
 
-        #cat_dir = self._cat_dir
-
         # If major organization is by healpix, healpix # will be in
         # subdirectory name.  Otherwise there may be no subdirectories
         # or data may be organized by component type.
@@ -318,14 +316,13 @@ class SkyCatalog(object):
 
         # Associate object types with readers.  May be > one type per reader
         rdr_ot = dict()
-        #root_dir = self._config['root_directory']
+
         for ot in obj_types:
             if 'file_template' in self._config['object_types'][ot]:
                 f = self._hp_info[hp]['object_types'][ot]
             elif 'parent' in self._config['object_types'][ot]:
                 f = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
             if f not in self._hp_info[hp]:
-                ##the_reader = parquet_reader.ParquetReader(os.path.join(root_dir,f), mask=None)
                 the_reader = parquet_reader.ParquetReader(os.path.join(self._cat_dir,f), mask=None)
                 self._hp_info[hp][f] = the_reader
             the_reader = self._hp_info[hp][f]
