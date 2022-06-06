@@ -102,8 +102,8 @@ class Config(object):
         fpath = None
         if schema is None:
             if 'schema_version' not in self._cfg:
-                raise .NoSchemaVersionError
-            fpath = _find_schema(self._cfg["schema_version"])
+                raise NoSchemaVersionError
+            fpath = _find_schema_path(self._cfg["schema_version"])
             if not fpath:
                 raise NoSchemaVersionError('Schema file not found')
         elif isinstance(schema, string):
@@ -113,7 +113,7 @@ class Config(object):
                 f = open(fpath)
                 sch = yaml.safe_load(f)
             except OSError as e:
-                raise e
+                raise NoSchemaVersionError('Schema file not found or unreadable')
             except yaml.YAMLError as ye:
                 raise ye
         if isinstance(schema, dict):
@@ -128,7 +128,7 @@ class Config(object):
         k        Top-level key belonging to the schema
         v        value for the key
         '''
-        #  Ideally should first verify that k is in our schema
+
         if k in self._cfg[k]:
             raise ConfigDuplicateKeyError(k)
         self._cfg[k] = v
@@ -138,13 +138,20 @@ class Config(object):
         Export self to yaml document and write to specified directory.
         If filename is None the file will be named after catalog_name
         '''
+        self.validate()
 
-def _find_schema_name(schema_string):
+        if not filename:
+            filename = self._cfg['catalog_name'] + '.yaml'
+
+
+
+
+def _find_schema_path(schema_spec):
     '''
-    Given a schema version specification, attempt to find the schema file
-    describing it
+    Given a schema version specification, return the file path
+    where the file describing it belongs
     '''
-    fname = f'skycatalogs_config_{self._cfg["schema_string"]}'
+    fname = f'skycatalogs_config_{self._cfg["schema_spec"]}'
     here = os.path.dirname(__file__)
     return = os.path.join(here, '../../../../cfg', fname)
 
