@@ -1,4 +1,9 @@
 import yaml
+import jsonschema.validate
+import os
+
+from desc.skycatalogs.utils.exceptions import NoSchemaVersionError, ConfigDuplicateKeyError
+
 from collections import namedtuple
 
 __all__ = ['Config', 'open_config_file', 'Tophat']
@@ -75,3 +80,74 @@ class Config(object):
             if not isinstance(d, dict):
                 raise ValueError(f'intermediate {d} is not a dict')
         return d[path_items[-1]]
+
+    def validate(self, schema=None):
+        '''
+        Parameters
+        ----------
+        schema    Identifies schema to validate against.
+                  If string, open file with this file path
+                  If dict, use "as is"
+                  If None, attempt to deduce schema version (and hence
+                  file path) from schema_version keyword
+        Returns:  None
+                  Raise exception if validation fails for any reason:
+                  desc.skycatalogs.exception.NoSchema if schema specification
+                  can't be found
+                  OSError if schema file can't be read
+                  yaml.YAMLerror if schema can't be loaded
+                  jsonschema.exceptions.SchemaError if schema is invalid
+                  jsonschema.exceptions.ValidationError otherwise
+        '''
+        fpath = None
+        if schema is None:
+            if 'schema_version' not in self._cfg:
+                raise .NoSchemaVersionError
+            fpath = _find_schema(self._cfg["schema_version"])
+            if not fpath:
+                raise NoSchemaVersionError('Schema file not found')
+        elif isinstance(schema, string):
+            fpath = schema
+        if fpath:
+            try:
+                f = open(fpath)
+                sch = yaml.safe_load(f)
+            except OSError as e:
+                raise e
+            except yaml.YAMLError as ye:
+                raise ye
+        if isinstance(schema, dict):
+            sch = schema
+
+        jsonschema.validate(self._cfg, schema.dict)
+
+    def add_key(self, k, d):
+        '''
+        Parameters
+        ----------
+        k        Top-level key belonging to the schema
+        v        value for the key
+        '''
+        #  Ideally should first verify that k is in our schema
+        if k in self._cfg[k]:
+            raise ConfigDuplicateKeyError(k)
+        self._cfg[k] = v
+
+    def write_config(self, dirpath, filename=None):
+        '''
+        Export self to yaml document and write to specified directory.
+        If filename is None the file will be named after catalog_name
+        '''
+
+def _find_schema_name(schema_string):
+    '''
+    Given a schema version specification, attempt to find the schema file
+    describing it
+    '''
+    fname = f'skycatalogs_config_{self._cfg["schema_string"]}'
+    here = os.path.dirname(__file__)
+    return = os.path.join(here, '../../../../cfg', fname)
+
+def create_config(catalog_name, schema_version):
+    return Config({'catalog_name' : catalog_name,
+                   'schema_version' : schema_version})
