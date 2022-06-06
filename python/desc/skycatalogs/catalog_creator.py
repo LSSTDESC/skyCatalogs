@@ -21,12 +21,6 @@ Code to create a sky catalog for a particular object type
 
 __all__ = ['CatalogCreator']
 
-'''
-Dict of MW av column names and multipliers needed to create from ebv, MW_rv
-Multipliers come from
-https://iopscience.iop.org/article/10.1088/0004-637X/737/2/103#apj398709t6
-appendix, table 6
-'''
 _Av_adjustment = 2.742
 _MW_rv_constant = 3.1
 
