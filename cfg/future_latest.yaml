@@ -2,7 +2,7 @@
 catalog_name : future_latest
 schema_version : 1.1.0
 area_partition :
-  { type: healpix, ordering : ring, nside : 32}
+  { partition_type: healpix, ordering : ring, nside : 32}
 skycatalog_root : /global/cscratch1/sd/jrbogart/desc/skycatalogs
 #skycatalog_root : /global/cscratch1/sd/jrbogart/desc/no_such_dir
 
