@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import yaml
+import logging
 from collections import namedtuple
 import healpy
 import numpy as np
@@ -99,7 +100,8 @@ class SkyCatalog(object):
     point sources, SSOs
 
     '''
-    def __init__(self, config, mp=False, skycatalog_root=None, verbose=False):
+    def __init__(self, config, mp=False, skycatalog_root=None, verbose=False,
+                 loglevel='INFO'):
         '''
         Parameters
         ----------
@@ -109,6 +111,15 @@ class SkyCatalog(object):
                          in environment variable SKYCATALOG_ROOT
         '''
         self._config = config
+        self._logger = logging.getLogger('skyCatalogs.client')
+        self._logger.setLevel(loglevel)
+        ch = logging.StreamHandler()
+        ch.setLevel(loglevel)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        ch.setFormatter(formatter)
+
+        self._logger.addHandler(ch)
+
         self._mp = mp
         if 'schema_version' not in config:
             self._cat_dir = config['root_directory']
@@ -123,6 +134,7 @@ class SkyCatalog(object):
 
             self._cat_dir = os.path.join(sky_root, config['catalog_dir'])
 
+        self._logger.info(f'Catalog data will be read from {self._cat_dir}')
         # There may be more to do at this point but not too much.
         # In particular, don't read in anything from data files
 
