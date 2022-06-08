@@ -10,8 +10,9 @@ for details
 
 import os
 import argparse
+import logging
 from desc.skycatalogs.catalog_creator import CatalogCreator
-from desc.skycatalogs.utils.common_utils import print_date, print_callinfo
+from desc.skycatalogs.utils.common_utils import print_date, log_callinfo
 
 
 area_partition = {'type' : 'healpix', 'ordering' : 'ring', 'nside' : 32}
@@ -47,8 +48,19 @@ parser.add_argument('--config-path', default=None, help='''
                     with filenmame config.yaml''')
 
 args = parser.parse_args()
+logname = 'skyCatalogs.creator'
+loglevel = 'INFO'                 # fixed for now
+logger = logging.getLogger(logname)
+logger.setLevel(loglevel)
 
-print_callinfo('create_sc', args)
+ch = logging.StreamHandler()
+ch.setLevel(loglevel)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+
+logger.addHandler(ch)
+
+log_callinfo('create_sc', args, logname)
 
 skycatalog_root = args.skycatalog_root
 if not skycatalog_root:
@@ -65,14 +77,14 @@ creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          sed_subdir=args.sed_subdir,
                          knots_mag_cut=args.knots_magnitude_cut,
                          knots=(not args.no_knots))
-print('Starting with healpix pixel ', parts[0])
+logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
-    print("Creating galaxy catalogs")
+    logger.info("Creating galaxy catalogs")
     creator.create('galaxy')
 
 if not args.no_pointsources:
-    print("Creating point source catalogs")
+    logger.info("Creating point source catalogs")
     creator.create('pointsource')
 
-print('All done')
+logger.info('All done')
 print_date()
