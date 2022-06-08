@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import yaml
+import logging
 from collections import namedtuple
 import healpy
 import numpy as np
@@ -99,15 +100,41 @@ class SkyCatalog(object):
     point sources, SSOs
 
     '''
-    def __init__(self, config, mp=False, verbose=False):
+    def __init__(self, config, mp=False, skycatalog_root=None, verbose=False,
+                 loglevel='INFO'):
         '''
         Parameters
         ----------
         config:  dict.  Typically the result of loading a yaml file
         mp:      boolean  Default False. Set True to enable multiprocessing.
+        skycatalog_root: If not None, overrides value in config or
+                         in environment variable SKYCATALOG_ROOT
         '''
         self._config = config
+        self._logger = logging.getLogger('skyCatalogs.client')
+        self._logger.setLevel(loglevel)
+        ch = logging.StreamHandler()
+        ch.setLevel(loglevel)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        ch.setFormatter(formatter)
+
+        self._logger.addHandler(ch)
+
         self._mp = mp
+        if 'schema_version' not in config:
+            self._cat_dir = config['root_directory']
+        else:
+            sky_root = config['skycatalog_root']        # default
+            if skycatalog_root:
+                sky_root = skycatalog_root
+            else:
+                sky_root_env = os.getenv('SKYCATALOG_ROOT', None)
+                if sky_root_env:
+                    sky_root = sky_root_env
+
+            self._cat_dir = os.path.join(sky_root, config['catalog_dir'])
+
+        self._logger.info(f'Catalog data will be read from {self._cat_dir}')
         # There may be more to do at this point but not too much.
         # In particular, don't read in anything from data files
 
@@ -158,13 +185,11 @@ class SkyCatalog(object):
 
         '''
 
-        cat_dir = self._config['root_directory']
-
         # If major organization is by healpix, healpix # will be in
         # subdirectory name.  Otherwise there may be no subdirectories
         # or data may be organized by component type.
         # Here only handle case where data files are directly in root dir
-        files = os.listdir(cat_dir)
+        files = os.listdir(self._cat_dir)
         o_types = self._config['object_types']
 
         hp_set = set()
@@ -303,14 +328,14 @@ class SkyCatalog(object):
 
         # Associate object types with readers.  May be > one type per reader
         rdr_ot = dict()
-        root_dir = self._config['root_directory']
+
         for ot in obj_types:
             if 'file_template' in self._config['object_types'][ot]:
                 f = self._hp_info[hp]['object_types'][ot]
             elif 'parent' in self._config['object_types'][ot]:
                 f = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
             if f not in self._hp_info[hp]:
-                the_reader = parquet_reader.ParquetReader(os.path.join(root_dir,f), mask=None)
+                the_reader = parquet_reader.ParquetReader(os.path.join(self._cat_dir,f), mask=None)
                 self._hp_info[hp][f] = the_reader
             the_reader = self._hp_info[hp][f]
             if the_reader in rdr_ot:
@@ -417,35 +442,42 @@ class SkyCatalog(object):
         pass
 
 
-def open_catalog(config_file, mp=False):
+def open_catalog(config_file, mp=False, skycatalog_root=None):
     '''
     Parameters
     ----------
-    yaml file containing config
+    config_file   yaml file containing config
+    skycatalog_root optional override of skycatalog_root. This value may also
+                    be supplied by setting the environment variable
+                    SKYCATALOG_ROOT.  Precedence is 1) argument
+                    2) environment variable 3) value in config file for
+                    key skycatalog_root.  However set, this value
+                    joined to value of the key catalog_dir will be used
+                    to find the catalog data.
 
     Returns
     -------
     SkyCatalog
     '''
     with open(config_file) as f:
-        return SkyCatalog(yaml.safe_load(f), mp)
+        return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
+                          mp=mp)
 
 if __name__ == '__main__':
-    ##cfg_file_name = 'to_translate.yaml'
-    cfg_file_name = 'latest.yaml'
+    ###cfg_file_name = 'latest.yaml'
+    cfg_file_name = 'future_latest.yaml'
 
     if len(sys.argv) > 1:
         cfg_file_name = sys.argv[1]
     cfg_file = os.path.join('/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg',
                             cfg_file_name)
-    ##cfg_file = '/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg/to_translate.yaml'
 
     # For tract 3828
     #   55.73604 < ra < 57.563452
     #  -37.19001 < dec < -35.702481
 
 
-    cat = open_catalog(cfg_file)
+    cat = open_catalog(cfg_file, skycatalog_root='/global/cscratch1/sd/jrbogart/desc/skycatalogs')
     hps = cat._find_all_hps()
     print('Found {} healpix pixels '.format(len(hps)))
     for h in hps: print(h)

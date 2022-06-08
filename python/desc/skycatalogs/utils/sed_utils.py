@@ -213,7 +213,6 @@ class LookupInfo(object):
             self.disk_sed = np.array(f['disk_sed'])
             self.bulge_sed = np.array(f['bulge_sed'])
             self.galaxy_id = np.array(f['galaxy_id'])
-            self.redshift = np.array(f['galaxy_id'])
             self.cached = True
 
     def get_orig_sed_file(self, cmp, galaxy_id, min_ix=0):
