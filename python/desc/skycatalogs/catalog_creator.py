@@ -58,14 +58,8 @@ def _make_galaxy_schema(sed_subdir=False, knots=True):
         fields.append(pa.field('sed_val_knots',
                                pa.list_(pa.float64()), True))
         ### For sizes API can alias to disk sizes
-        ### What else?  magnorm? Probably can be aliased to disk magnorm
-        ### (or do we need to adjust disk magnorm according to the ratio?
-        ###  Don't think so.  Splitting the SED between the two should
-        ###  take care of it.)
         ###  position angle, shears and convergence are all
         ###  galaxy-wide quantities.
-        ### n_knots?  - should be a new field.  When writing out instcat
-        ### entry it will take the place of "sersic index"
         fields.append(pa.field('n_knots', pa.float32(), True))
         fields.append(pa.field('knots_magnorm', pa.float64(), True))
 
@@ -190,10 +184,6 @@ class CatalogCreator:
             self._output_dir = output_dir
         else:
             self._output_dir = os.path.abspath(os.curdir)
-        # if not sedLookup_dir:
-        #     self._sedLookup_dir = _sedLookup_dir
-        # else:
-        #     self._sedLookup_dir = sedLookup_dir
 
         self._output_type = output_type
         self._verbose = verbose
@@ -250,7 +240,6 @@ class CatalogCreator:
 
         # Filename templates: input (sedLookup) and our output.
         # Hardcode for now.
-        ### sedLookup_template = 'sed_fit_{}.h5'
         output_template = 'galaxy_{}.parquet'
         tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
         tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
@@ -258,7 +247,6 @@ class CatalogCreator:
         # Number of rows to include in a row group
         stride = 1000000
 
-        #native_cut = "native_filters=f'healpix_pixel=={pixel}'"
         hp_filter = [f'healpix_pixel=={pixel}']
         if self._mag_cut:
             r_mag_name = 'mag_r_lsst'
@@ -329,7 +317,6 @@ class CatalogCreator:
 
             for d_name, k_name in zip(sed_disk_names, sed_knot_names):
                 df[k_name] = mag_mask * np.clip(df['knots_flux_ratio'], None, 1-eps) * df[d_name]
-                #df[d_name] = df[d_name] -  df[k_name]
                 df[d_name] = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 1,
                                       np.clip(1 - df['knots_flux_ratio'], eps, None)) * df[d_name]
         # Re-form sed columns into two arrays
