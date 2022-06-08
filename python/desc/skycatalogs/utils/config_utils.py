@@ -1,5 +1,5 @@
 import yaml
-import jsonschema.validate
+from jsonschema import validate
 import os
 
 from desc.skycatalogs.utils.exceptions import NoSchemaVersionError, ConfigDuplicateKeyError
@@ -153,7 +153,7 @@ def _find_schema_path(schema_spec):
     '''
     fname = f'skycatalogs_config_{self._cfg["schema_spec"]}'
     here = os.path.dirname(__file__)
-    return = os.path.join(here, '../../../../cfg', fname)
+    return os.path.join(here, '../../../../cfg', fname)
 
 def create_config(catalog_name, schema_version):
     return Config({'catalog_name' : catalog_name,
