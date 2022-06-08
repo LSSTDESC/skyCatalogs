@@ -129,8 +129,10 @@ def _generate_sed_path(ids, subdir, cmp):
     return r
 
 class CatalogCreator:
-    def __init__(self, parts, area_partition, output_dir=None, galaxy_truth=None,
-                 sedLookup_dir=None, output_type='parquet', verbose=False,
+    def __init__(self, parts, area_partition, skycatalog_root=None,
+                 catalog_dir='.', galaxy_truth=None, write_config=False,
+                 config_path=None,
+                 output_type='parquet', verbose=False,
                  mag_cut=None,  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True):
         """
@@ -143,12 +145,16 @@ class CatalogCreator:
                         of HEALpix pixels
         area_partition  Dict characterizing partition; e.g. HEALpix,
                         nside=<something>
-        output_dir      Where to put created sky catalog. Defaults to
-                        current directory.
+        skycatalog_root Typically absolute directory containing one or
+                        more subdirectories for sky catalogs. Defaults
+                        to current directory
+        catalog_dir     Directory relative to skycatalog_root where catalog
+                        will be written.  Defaults to '.'
         galaxy_truth    GCRCatalogs name for galaxy truth (e.g. cosmoDC2)
-        sedLookup_dir   Where to find files with some per-galaxy information
-                        relevant to finding and using appropriate SED file
-                        OBSOLETE
+        write_config    If True, write config file. Default is False
+        config_path     Where to write config file. Default is data
+                        directory. Ignored if write_config
+                        is False.
         output_type     A format.  For now only parquet is supported
         mag_cut         If not None, exclude galaxies with mag_r > mag_cut
         sed_subdir      In instcat entry, prepend this value to SED filename
@@ -159,13 +165,6 @@ class CatalogCreator:
         and template for input sedLookup file name.
         """
 
-        # Following directory contains per-healpix pixel files, each of which
-        # has some per-galaxy information, including internal Av, Rv for
-        # disk and bulge components, fluxes, mags for lsst bands, appropriate
-        # index into sed_names array (which is typically around a 1000 entries,
-        # whereas #galaxies is of order 10 million) and so forth.
-        # If multiprocessing probably should defer this to create_pixel
-        ##_sedLookup_dir = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sedLookup'
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
 
         if area_partition['type'] != 'healpix':
@@ -180,10 +179,17 @@ class CatalogCreator:
 
         self._parts = parts
         self._area_partition = area_partition
-        if output_dir:
-            self._output_dir = output_dir
+        if skycatalog_root:
+            self._skycatalog_root = skycatalog_root
         else:
-            self._output_dir = os.path.abspath(os.curdir)
+            self._skycatalog_root = './'
+        if catalog_dir:
+            self._catalog_dir = catalog_dir
+        else:
+            catalog_dir = '.'
+
+        self._output_dir = os.path.join(self._skycatalog_root,
+                                        self._catalog_dir)
 
         self._output_type = output_type
         self._verbose = verbose
@@ -238,9 +244,10 @@ class CatalogCreator:
         arrow_schema    schema to use for output file
         """
 
-        # Filename templates: input (sedLookup) and our output.
-        # Hardcode for now.
+        # Output filename template
         output_template = 'galaxy_{}.parquet'
+
+        # Used to finding tophat parameters from cosmoDC2 column names
         tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
         tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
 
