@@ -28,7 +28,7 @@ _MW_rv_constant = 3.1
 
 # This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
-def _make_galaxy_schema(sed_subdir=False, knots=True):
+def _make_galaxy_schema(logname, sed_subdir=False, knots=True):
     fields = [pa.field('galaxy_id', pa.int64()),
               pa.field('ra', pa.float64() , True),
 ##                       metadata={"units" : "radians"}),
@@ -55,8 +55,9 @@ def _make_galaxy_schema(sed_subdir=False, knots=True):
               pa.field('disk_magnorm', pa.float64(), True),
               pa.field('MW_rv', pa.float32(), True),
               pa.field('MW_av', pa.float32(), True)]
+    logger = logging.getLogger(logname)
     if knots:
-        print("knots requested")
+        logger.debug("knots requested")
         fields.append(pa.field('sed_val_knots',
                                pa.list_(pa.float64()), True))
         ### For sizes API can alias to disk sizes
@@ -69,8 +70,10 @@ def _make_galaxy_schema(sed_subdir=False, knots=True):
         fields.append(pa.field('bulge_sed_file_path', pa.string(), True))
         fields.append(pa.field('disk_sed_file_path', pa.string(), True))
 
+    debug_out = ''
     for f in fields:
-        print(f.name)
+        debug_out += f'{f.name}\n'
+    logger.debug(debug_out)
     return pa.schema(fields)
 
 
@@ -231,7 +234,8 @@ class CatalogCreator:
 
         self._mag_norm_f = MagNorm(gal_cat.cosmology)
 
-        arrow_schema = _make_galaxy_schema(self._sed_subdir, self._knots)
+        arrow_schema = _make_galaxy_schema(self._logname, self._sed_subdir,
+                                           self._knots)
 
         for p in self._parts:
             print("Starting on pixel ", p)
