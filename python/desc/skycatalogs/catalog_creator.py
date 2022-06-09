@@ -1,6 +1,7 @@
 import os
 import re
 import math
+import logging
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -9,6 +10,7 @@ from astropy.coordinates import SkyCoord
 import sqlite3
 from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
+from desc.skycatalogs.utils.config_utils import create_config
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
@@ -131,10 +133,10 @@ def _generate_sed_path(ids, subdir, cmp):
 class CatalogCreator:
     def __init__(self, parts, area_partition, skycatalog_root=None,
                  catalog_dir='.', galaxy_truth=None, write_config=False,
-                 config_path=None,
+                 config_path=None, catalog_name='skyCatalog',
                  output_type='parquet', verbose=False,
                  mag_cut=None,  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
-                 knots=True):
+                 knots=True, logname='skyCatalogs.creator'):
         """
         Store context for catalog creation
 
@@ -160,6 +162,7 @@ class CatalogCreator:
         sed_subdir      In instcat entry, prepend this value to SED filename
         knots_mag_cut   No knots for galaxies with i_mag > cut
         knots           If True include knots
+        logname         logname for Python logger
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -186,7 +189,7 @@ class CatalogCreator:
         if catalog_dir:
             self._catalog_dir = catalog_dir
         else:
-            catalog_dir = '.'
+            self._catalog_dir = '.'
 
         self._output_dir = os.path.join(self._skycatalog_root,
                                         self._catalog_dir)
@@ -197,6 +200,8 @@ class CatalogCreator:
         self._sed_subdir = sed_subdir
         self._knots_mag_cut = knots_mag_cut
         self._knots = knots
+        self._logname = logname
+        self._logger = logging.getLogger(logname)
 
     def create(self, catalog_type):
         """
@@ -464,3 +469,13 @@ class CatalogCreator:
             raise NotImplementedError('SNe not yet supported. Have a nice day.')
 
         return
+
+    def write_config(self, config_path, catalog_name, overwrite=False):
+        config = create_config(catalog_name)
+        config.add_key('area_partition', self._area_partition)
+        config.add_key('skycatalog_root', self._skycatalog_root)
+        config.add_key('catalog_dir' , self._catalog_dir)
+
+        if not config_path:
+            config_path = self._output_dir
+        config.write_config(config_path, filename=(catalog_name + '.yaml'))

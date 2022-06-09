@@ -6,7 +6,9 @@ from desc.skycatalogs.utils.exceptions import NoSchemaVersionError, ConfigDuplic
 
 from collections import namedtuple
 
-__all__ = ['Config', 'open_config_file', 'Tophat']
+__all__ = ['Config', 'open_config_file', 'Tophat', 'create_config']
+
+_CURRENT_SCHEMA_VERSION='1.1.0'
 
 def open_config_file(config_file):
     '''
@@ -121,7 +123,7 @@ class Config(object):
 
         jsonschema.validate(self._cfg, schema.dict)
 
-    def add_key(self, k, d):
+    def add_key(self, k, v):
         '''
         Parameters
         ----------
@@ -129,7 +131,7 @@ class Config(object):
         v        value for the key
         '''
 
-        if k in self._cfg[k]:
+        if k in self._cfg:
             raise ConfigDuplicateKeyError(k)
         self._cfg[k] = v
 
@@ -138,10 +140,13 @@ class Config(object):
         Export self to yaml document and write to specified directory.
         If filename is None the file will be named after catalog_name
         '''
-        self.validate()
+        ###self.validate()   skip for now
 
         if not filename:
             filename = self._cfg['catalog_name'] + '.yaml'
+
+        with open(os.path.join(dirpath, filename), "w") as f:
+            yaml.dump(self._cfg, f)
 
 
 
@@ -155,6 +160,8 @@ def _find_schema_path(schema_spec):
     here = os.path.dirname(__file__)
     return os.path.join(here, '../../../../cfg', fname)
 
-def create_config(catalog_name, schema_version):
+def create_config(catalog_name, schema_version=None):
+    if not schema_version:
+        schema_version = _CURRENT_SCHEMA_VERSION
     return Config({'catalog_name' : catalog_name,
                    'schema_version' : schema_version})

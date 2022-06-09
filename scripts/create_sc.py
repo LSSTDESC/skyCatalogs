@@ -45,7 +45,12 @@ parser.add_argument('--write-config', action='store_true',
 parser.add_argument('--config-path', default=None, help='''
                     Output path for config file. If no value,
                     config will be written to same location as data,
-                    with filenmame config.yaml''')
+                    with filenmame taken from catalog-name''')
+parser.add_argument('--catalog-name', default='skyCatalog',
+                    help='''If write-config option is used, this value
+                    will appear in the config and will be part of
+                    the filename''')
+
 
 args = parser.parse_args()
 logname = 'skyCatalogs.creator'
@@ -76,7 +81,7 @@ creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          mag_cut=args.galaxy_magnitude_cut,
                          sed_subdir=args.sed_subdir,
                          knots_mag_cut=args.knots_magnitude_cut,
-                         knots=(not args.no_knots))
+                         knots=(not args.no_knots), logname=logname)
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
     logger.info("Creating galaxy catalogs")
@@ -85,6 +90,9 @@ if not args.no_galaxies:
 if not args.no_pointsources:
     logger.info("Creating point source catalogs")
     creator.create('pointsource')
+
+if args.write_config:
+    creator.write_config(args.config_path, args.catalog_name)
 
 logger.info('All done')
 print_date()
