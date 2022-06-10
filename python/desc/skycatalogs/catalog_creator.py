@@ -11,7 +11,7 @@ from astropy.coordinates import SkyCoord
 import sqlite3
 from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
-from desc.skycatalogs.utils.config_utils import create_config
+from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models, assemble_MW_extinction, assemble_cosmology, assemble_object_types
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
@@ -491,40 +491,12 @@ class CatalogCreator:
         config.add_key('catalog_dir' , self._catalog_dir)
 
         config.add_key('SED_models',
-                       _assemble_SED_models(self._sed_bins))
-        config.add_key('MW_extinction_values', _assemble_MW_extinction())
-        config.add_key('Cosmology', _assemble_cosmo(self._cosmology))
-        config.add_key('object_types', _assemble_object_types())
+                       assemble_SED_models(self._sed_bins))
+        config.add_key('MW_extinction_values', assemble_MW_extinction())
+        config.add_key('Cosmology', assemble_cosmology(self._cosmology))
+        config.add_key('object_types', assemble_object_types())
 
 
         if not config_path:
             config_path = self._output_dir
         config.write_config(config_path, filename=(catalog_name + '.yaml'))
-
-def _assemble_cosmo(cosmology):
-    d = {k : cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
-                                                     'n_s')}
-    d['H0'] = float(cosmology.H0.value)
-    return d
-
-def _assemble_MW_extinction():
-    av = {'mode' : 'data'}
-    rv = {'mode' : 'constant', 'value' : 3.1}
-    return {'r_v' : rv, 'a_v' : av}
-
-def _assemble_object_types():
-    '''
-    Include all supported object types even though a particular catalog
-    might not use them all
-    '''
-    here = os.path.dirname(__file__)
-    t_path = os.path.join(here, '../../../cfg', 'object_types.yaml')
-    with open(t_path) as f:
-        d = yaml.safe_load(f)
-        return d['object_types']
-
-def _assemble_SED_models(bins):
-    tophat_d = { 'units' : 'angstrom', 'bin_parameters' : ['start', 'width']}
-    tophat_d['bins'] = bins
-    file_nm_d = {'units' : 'nm'}
-    return {'tophat' : tophat_d, 'file_nm' : file_nm_d}

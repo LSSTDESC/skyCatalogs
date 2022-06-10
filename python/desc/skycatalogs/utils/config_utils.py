@@ -6,7 +6,9 @@ from desc.skycatalogs.utils.exceptions import NoSchemaVersionError, ConfigDuplic
 
 from collections import namedtuple
 
-__all__ = ['Config', 'open_config_file', 'Tophat', 'create_config']
+__all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
+           'assemble_SED_models', 'assemble_MW_extinction',
+           'assemble_cosmology', 'assemble_object_types']
 
 _CURRENT_SCHEMA_VERSION='1.1.0'
 
@@ -165,3 +167,31 @@ def create_config(catalog_name, schema_version=None):
         schema_version = _CURRENT_SCHEMA_VERSION
     return Config({'catalog_name' : catalog_name,
                    'schema_version' : schema_version})
+
+def assemble_cosmology(cosmology):
+    d = {k : cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
+                                                     'n_s')}
+    d['H0'] = float(cosmology.H0.value)
+    return d
+
+def assemble_MW_extinction():
+    av = {'mode' : 'data'}
+    rv = {'mode' : 'constant', 'value' : 3.1}
+    return {'r_v' : rv, 'a_v' : av}
+
+def assemble_object_types():
+    '''
+    Include all supported object types even though a particular catalog
+    might not use them all
+    '''
+    here = os.path.dirname(__file__)
+    t_path = os.path.join(here, '../../../../cfg', 'object_types.yaml')
+    with open(t_path) as f:
+        d = yaml.safe_load(f)
+        return d['object_types']
+
+def assemble_SED_models(bins):
+    tophat_d = { 'units' : 'angstrom', 'bin_parameters' : ['start', 'width']}
+    tophat_d['bins'] = bins
+    file_nm_d = {'units' : 'nm'}
+    return {'tophat' : tophat_d, 'file_nm' : file_nm_d}
