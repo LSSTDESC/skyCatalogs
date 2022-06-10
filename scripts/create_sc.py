@@ -31,8 +31,8 @@ parser.add_argument('--skycatalog_root',
 parser.add_argument('--catalog-dir', help='directory for output files relative to skycatalog_root',
                     default='.')
 parser.add_argument('--sed-subdir', help='subdirectory to prepend to paths of galaxy SEDs as written to the sky catalog', default='galaxyTopHatSED')
-parser.add_argument('--verbose', help='print more output if true',
-                    action='store_true')
+parser.add_argument('--loglevel', help='controls logging output',
+                    default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'])
 parser.add_argument('--galaxy-magnitude-cut', default=29.0, type=float,
                     help='Exclude galaxies with r-magnitude above this value')
 parser.add_argument('--knots-magnitude-cut', default=27.0, type=float,
@@ -54,12 +54,11 @@ parser.add_argument('--catalog-name', default='skyCatalog',
 
 args = parser.parse_args()
 logname = 'skyCatalogs.creator'
-loglevel = 'INFO'                 # fixed for now
 logger = logging.getLogger(logname)
-logger.setLevel(loglevel)
+logger.setLevel(args.loglevel)
 
 ch = logging.StreamHandler()
-ch.setLevel(loglevel)
+ch.setLevel(args.loglevel)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 
@@ -77,7 +76,6 @@ creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          catalog_dir=args.catalog_dir,
                          write_config=args.write_config,
                          config_path=args.config_path,
-                         verbose=args.verbose,
                          mag_cut=args.galaxy_magnitude_cut,
                          sed_subdir=args.sed_subdir,
                          knots_mag_cut=args.knots_magnitude_cut,

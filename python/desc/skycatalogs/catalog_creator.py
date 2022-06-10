@@ -138,8 +138,8 @@ class CatalogCreator:
     def __init__(self, parts, area_partition, skycatalog_root=None,
                  catalog_dir='.', galaxy_truth=None, write_config=False,
                  config_path=None, catalog_name='skyCatalog',
-                 output_type='parquet', verbose=False,
-                 mag_cut=None,  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
+                 output_type='parquet', mag_cut=None,
+                 sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator'):
         """
         Store context for catalog creation
@@ -199,7 +199,6 @@ class CatalogCreator:
                                         self._catalog_dir)
 
         self._output_type = output_type
-        self._verbose = verbose
         self._mag_cut = mag_cut
         self._sed_subdir = sed_subdir
         self._knots_mag_cut = knots_mag_cut
@@ -242,11 +241,9 @@ class CatalogCreator:
                                            self._knots)
 
         for p in self._parts:
-            print("Starting on pixel ", p)
-            print_date()
+            self._logger.info(f'Starting on pixel {p}')
             self.create_galaxy_pixel(p, gal_cat, arrow_schema)
-            print("completed pixel ", p)
-            print_date()
+            self._logger.info(f'Completed pixel {p}')
 
     def create_galaxy_pixel(self, pixel, gal_cat, arrow_schema):
         """
@@ -308,14 +305,6 @@ class CatalogCreator:
         #Fetch the data
         to_fetch = non_sed + sed_bulge_names + sed_disk_names
 
-        # Save the 'start' and 'width' values; they'll be needed for our output
-        # config.  Though we only need to do this once, not once per pixel
-        # tophat_parms = []
-        # for s in sed_bulge_names:
-        #     m = re.match(tophat_bulge_re, s)
-        #     if m:
-        #         tophat_parms.append((m['start'], m['width']))
-
         if not self._mag_cut:
             df = gal_cat.get_quantities(to_fetch, native_filters=hp_filter)
         else:
@@ -337,9 +326,7 @@ class CatalogCreator:
             # adjust disk sed; create knots sed
             eps = np.finfo(np.float32).eps
             mag_mask = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut,0, 1)
-            if self._verbose:
-                print("Count of mags <=  cut (so adjustment performed: ",
-                      np.count_nonzero(mag_mask))
+            self._logger.debug(f'Count of mags <=  cut (so adjustment performed: {np.count_nonzero(mag_mask)}')
 
             for d_name, k_name in zip(sed_disk_names, sed_knot_names):
                 df[k_name] = mag_mask * np.clip(df['knots_flux_ratio'], None, 1-eps) * df[d_name]
@@ -359,7 +346,7 @@ class CatalogCreator:
 
         MW_rv = np.full_like(df['sersic_bulge'], _MW_rv_constant)
         MW_av = _make_MW_extinction(df['ra'], df['dec'])
-        if self._verbose: print("Made extinction")
+        self._logger.debug('Made extinction')
 
         #  Write row groups of size stride (or less) until input is exhausted
         last_row = len(df['galaxy_id']) - 1
@@ -391,9 +378,9 @@ class CatalogCreator:
                 out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]
                 out_dict['disk_sed_file_path'] = disk_path[l_bnd : u_bnd]
 
-            if self._verbose:
+            if self._logger.getEffectiveLevel() == logging.DEBUG:
                 for kd,i in out_dict.items():
-                    print(f'Key={kd}, type={type(i)}, len={len(i)}')
+                    self._logger.debug(f'Key={kd}, type={type(i)}, len={len(i)}')
             print_col = False
 
             out_df = pd.DataFrame.from_dict(out_dict)
@@ -409,7 +396,7 @@ class CatalogCreator:
             u_bnd = min(l_bnd + stride, last_row)
 
         writer.close()
-        if self._verbose: print("# row groups written: ", rg_written)
+        self._logger.debug(f'# row groups written: {rg_written}')
 
     def create_pointsource_catalog(self, star_truth=None, sne_truth=None):
 
@@ -434,19 +421,15 @@ class CatalogCreator:
         #  Need a way to indicate which object types to include; deal with that
         #  later.  For now, default is stars only.  Use default star parameter file.
         for p in self._parts:
-            if self._verbose:
-                print("Point sources. Starting on pixel ", p)
-                print_date()
+            self._logger.debug(f'Point sources. Starting on pixel {p}')
             self.create_pointsource_pixel(p, arrow_schema, star_cat=_star_db)
-            if self._verbose:
-                print("completed pixel ", p)
-                print_date()
+            self._logger.debug(f'Completed pixel {p}')
 
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None,
                              sn_cat=None):
 
         if not star_cat and not sn_cat:
-            print("no point source inputs specified")
+            self._logger.info('No point source inputs specified')
             return
 
         output_template = 'pointsource_{}.parquet'
@@ -462,7 +445,7 @@ class CatalogCreator:
             star_df['sed_filepath'] = get_star_sed_path(star_df['sed_filepath'])
 
             nobj = len(star_df['id'])
-            print(f"Found {nobj} stars")
+            self._logger.debug(f'Found {nobj} stars')
             star_df['object_type'] = np.full((nobj,), 'star')
             star_df['host_galaxy_id'] = np.zeros((nobj,), np.int64())
 
@@ -471,7 +454,7 @@ class CatalogCreator:
             star_df['MW_av'] = _make_MW_extinction(np.array(star_df['ra']),
                                                    np.array(star_df['dec']))
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
-            if self._verbose: print("created arrow table from dataframe")
+            self._logger.debug('Created arrow table from dataframe')
 
             writer = pq.ParquetWriter(os.path.join(
                 self._output_dir, output_template.format(pixel)), arrow_schema)
