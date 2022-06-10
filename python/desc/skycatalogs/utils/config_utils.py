@@ -1,6 +1,7 @@
-import yaml
-from jsonschema import validate
 import os
+import yaml
+import git
+from jsonschema import validate
 
 from desc.skycatalogs.utils.exceptions import NoSchemaVersionError, ConfigDuplicateKeyError
 
@@ -8,7 +9,7 @@ from collections import namedtuple
 
 __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
            'assemble_SED_models', 'assemble_MW_extinction',
-           'assemble_cosmology', 'assemble_object_types']
+           'assemble_cosmology', 'assemble_object_types', 'assemble_provenance']
 
 _CURRENT_SCHEMA_VERSION='1.1.0'
 
@@ -195,3 +196,22 @@ def assemble_SED_models(bins):
     tophat_d['bins'] = bins
     file_nm_d = {'units' : 'nm'}
     return {'tophat' : tophat_d, 'file_nm' : file_nm_d}
+
+def assemble_provenance(inputs={}):
+    repo = git.Repo()
+    has_uncommited = repo.is_dirty()
+    has_untracked = (len(repo.untracked_files) > 0)
+
+    git_d = {}
+    git_d['git_hash'] = repo.commit().hexsha
+    git_d['git_branch'] = repo.active_branch.name
+    status = []
+    if has_uncommited:
+        status.append('UNCOMMITTED_FILES')
+    if has_untracked:
+        status.append('UNTRACKED_FILES')
+    if len(status) == 0:
+        status.append('CLEAN')
+    git_d['git_status'] = status
+
+    return {'skyCatalogs_repo' : git_d, 'inputs' : inputs}

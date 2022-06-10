@@ -11,7 +11,8 @@ from astropy.coordinates import SkyCoord
 import sqlite3
 from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
-from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models, assemble_MW_extinction, assemble_cosmology, assemble_object_types
+from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
+from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
@@ -183,6 +184,9 @@ class CatalogCreator:
         self._galaxy_truth = galaxy_truth
         if galaxy_truth is None:
             self._galaxy_truth = _cosmo_cat
+
+        self._sn_truth = None
+        self._star_truth = None
 
         self._parts = parts
         self._area_partition = area_partition
@@ -398,13 +402,13 @@ class CatalogCreator:
         writer.close()
         self._logger.debug(f'# row groups written: {rg_written}')
 
-    def create_pointsource_catalog(self, star_truth=None, sne_truth=None):
+    def create_pointsource_catalog(self, star_truth=None, sn_truth=None):
 
         """
         Parameters
         ----------
-        star_truth      Where to find star parameters. If None, omit stars
-        sne_truth       Where to find SNe parameters.  If None, omit SNe
+        star_truth      Where to find star parameters. If None use default
+        sn_truth       Where to find SN parameters.  If None, use default
 
         Might want to add a way to specify template for output file name
 
@@ -416,6 +420,8 @@ class CatalogCreator:
         # For now fixed location for star, SNe parameter files.
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
         _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
+        self._star_truth = _star_db
+        self._sn_truth = _sn_db
 
         arrow_schema = _make_star_schema()
         #  Need a way to indicate which object types to include; deal with that
@@ -479,6 +485,12 @@ class CatalogCreator:
         config.add_key('Cosmology', assemble_cosmology(self._cosmology))
         config.add_key('object_types', assemble_object_types())
 
+        inputs = {'galaxy_truth' : self._galaxy_truth}
+        if self._sn_truth:
+            inputs['sn_truth'] = self._sn_truth
+        if self._star_truth:
+            inputs['star_truth'] = self._star_truth
+        config.add_key('provenance', assemble_provenance(inputs))
 
         if not config_path:
             config_path = self._output_dir
