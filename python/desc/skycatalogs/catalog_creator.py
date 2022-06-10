@@ -2,6 +2,7 @@ import os
 import re
 import math
 import logging
+import yaml
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -232,7 +233,10 @@ class CatalogCreator:
 
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)
 
-        self._mag_norm_f = MagNorm(gal_cat.cosmology)
+        # Save cosmology in case we need to write parameters out later
+        self._cosmology = gal_cat.cosmology
+
+        self._mag_norm_f = MagNorm(self._cosmology)
 
         arrow_schema = _make_galaxy_schema(self._logname, self._sed_subdir,
                                            self._knots)
@@ -282,8 +286,14 @@ class CatalogCreator:
                                             i.endswith('bulge'))]
         sed_disk_names = [i for i in q if (i.startswith('sed') and
                                            i.endswith('disk'))]
+        # Save all the start, width values
+        self._sed_bins = [[int(re.match(tophat_bulge_re, s)['start']), int(re.match(tophat_bulge_re, s)['width'])] for s in sed_bulge_names]
 
-        #Sort sed columns by start value, descending
+        # Sort by value for start
+        def _bin_start_key(start_width):
+            return start_width[0]
+        self._sed_bins.sort(key=_bin_start_key)
+
         def _sed_bulge_key(s):
             return int(re.match(tophat_bulge_re, s)['start'])
         def _sed_disk_key(s):
@@ -300,11 +310,11 @@ class CatalogCreator:
 
         # Save the 'start' and 'width' values; they'll be needed for our output
         # config.  Though we only need to do this once, not once per pixel
-        tophat_parms = []
-        for s in sed_bulge_names:
-            m = re.match(tophat_bulge_re, s)
-            if m:
-                tophat_parms.append((m['start'], m['width']))
+        # tophat_parms = []
+        # for s in sed_bulge_names:
+        #     m = re.match(tophat_bulge_re, s)
+        #     if m:
+        #         tophat_parms.append((m['start'], m['width']))
 
         if not self._mag_cut:
             df = gal_cat.get_quantities(to_fetch, native_filters=hp_filter)
@@ -480,6 +490,41 @@ class CatalogCreator:
         config.add_key('skycatalog_root', self._skycatalog_root)
         config.add_key('catalog_dir' , self._catalog_dir)
 
+        config.add_key('SED_models',
+                       _assemble_SED_models(self._sed_bins))
+        config.add_key('MW_extinction_values', _assemble_MW_extinction())
+        config.add_key('Cosmology', _assemble_cosmo(self._cosmology))
+        config.add_key('object_types', _assemble_object_types())
+
+
         if not config_path:
             config_path = self._output_dir
         config.write_config(config_path, filename=(catalog_name + '.yaml'))
+
+def _assemble_cosmo(cosmology):
+    d = {k : cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
+                                                     'n_s')}
+    d['H0'] = float(cosmology.H0.value)
+    return d
+
+def _assemble_MW_extinction():
+    av = {'mode' : 'data'}
+    rv = {'mode' : 'constant', 'value' : 3.1}
+    return {'r_v' : rv, 'a_v' : av}
+
+def _assemble_object_types():
+    '''
+    Include all supported object types even though a particular catalog
+    might not use them all
+    '''
+    here = os.path.dirname(__file__)
+    t_path = os.path.join(here, '../../../cfg', 'object_types.yaml')
+    with open(t_path) as f:
+        d = yaml.safe_load(f)
+        return d['object_types']
+
+def _assemble_SED_models(bins):
+    tophat_d = { 'units' : 'angstrom', 'bin_parameters' : ['start', 'width']}
+    tophat_d['bins'] = bins
+    file_nm_d = {'units' : 'nm'}
+    return {'tophat' : tophat_d, 'file_nm' : file_nm_d}

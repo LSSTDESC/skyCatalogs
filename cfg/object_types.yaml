@@ -1,0 +1,40 @@
+#  Yaml fragment to be incorporated into configs
+object_types :
+  galaxy :
+      file_template : 'galaxy_(?P<healpix>\d+).parquet'
+      flux_file_template : 'galaxy_flux_(?P<healpix>\d+).parquet'
+      data_file_type : parquet
+      composite :
+        bulge : required
+        disk  : required
+        knots : optional
+      attribute_aliases :
+        size_knots_true : size_disk_true
+        size_minor_knots_true : size_minor_disk_true
+  bulge_basic :
+      subtype : bulge
+      parent : galaxy
+      sed_model : tophat
+      internal_extinction : CCM
+      MW_extinction : F19
+      spatial_model : sersic2D
+  disk_basic :
+      subtype : disk
+      parent : galaxy
+      sed_model : tophat
+      internal_extinction : CCM
+      MW_extinction : F19
+      spatial_model :  sersic2D
+  knots_basic :
+      subtype : knots
+      parent : galaxy
+      sed_model : tophat
+      internal_extinction : CCM
+      MW_extinction : F19
+      spatial_model :  knots
+  star :
+      file_template : 'pointsource_(?P<healpix>\d+).parquet'
+      data_file_type : parquet
+      sed_model : file_nm
+      sed_file_root_env_var : SIMS_SED_LIBRARY_DIR
+      MW_extinction : CCM

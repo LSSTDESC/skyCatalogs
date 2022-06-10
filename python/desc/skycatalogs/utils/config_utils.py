@@ -156,7 +156,7 @@ def _find_schema_path(schema_spec):
     Given a schema version specification, return the file path
     where the file describing it belongs
     '''
-    fname = f'skycatalogs_config_{self._cfg["schema_spec"]}'
+    fname = f'skycatalogs_schema_{self._cfg["schema_spec"]}'
     here = os.path.dirname(__file__)
     return os.path.join(here, '../../../../cfg', fname)
 
