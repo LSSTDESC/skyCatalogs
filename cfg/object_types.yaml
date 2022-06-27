@@ -37,4 +37,6 @@ object_types :
       data_file_type : parquet
       sed_model : file_nm
       sed_file_root_env_var : SIMS_SED_LIBRARY_DIR
-      MW_extinction : CCM
+      MW_extinction : F19
+      internal_extinction : None
+      
