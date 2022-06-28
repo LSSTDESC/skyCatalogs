@@ -141,7 +141,8 @@ class CatalogCreator:
                  config_path=None, catalog_name='skyCatalog',
                  output_type='parquet', mag_cut=None,
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
-                 knots=True, logname='skyCatalogs.creator'):
+                 knots=True, logname='skyCatalogs.creator',
+                 pkg_root=None):
         """
         Store context for catalog creation
 
@@ -168,12 +169,18 @@ class CatalogCreator:
         knots_mag_cut   No knots for galaxies with i_mag > cut
         knots           If True include knots
         logname         logname for Python logger
+        pkg_root        defaults to three levels up from __file__
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
         """
 
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
+        if pkg_root:
+            self._pkg_root = pkg_root
+        else:
+            self._pkg_root = os.path.join(os.path.dirname(__file__),
+                                          '../../..')
 
         if area_partition['type'] != 'healpix':
             raise NotImplementedError(f'CatalogCreator: Unknown partition type {area_partition["type"]} ')
@@ -483,14 +490,15 @@ class CatalogCreator:
                        assemble_SED_models(self._sed_bins))
         config.add_key('MW_extinction_values', assemble_MW_extinction())
         config.add_key('Cosmology', assemble_cosmology(self._cosmology))
-        config.add_key('object_types', assemble_object_types())
+        config.add_key('object_types', assemble_object_types(self._pkg_root))
 
         inputs = {'galaxy_truth' : self._galaxy_truth}
         if self._sn_truth:
             inputs['sn_truth'] = self._sn_truth
         if self._star_truth:
             inputs['star_truth'] = self._star_truth
-        config.add_key('provenance', assemble_provenance(inputs))
+        config.add_key('provenance', assemble_provenance(self._pkg_root,
+                                                         inputs=inputs))
 
         if not config_path:
             config_path = self._output_dir

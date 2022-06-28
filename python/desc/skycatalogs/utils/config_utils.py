@@ -180,13 +180,12 @@ def assemble_MW_extinction():
     rv = {'mode' : 'constant', 'value' : 3.1}
     return {'r_v' : rv, 'a_v' : av}
 
-def assemble_object_types():
+def assemble_object_types(pkg_root):
     '''
     Include all supported object types even though a particular catalog
     might not use them all
     '''
-    here = os.path.dirname(__file__)
-    t_path = os.path.join(here, '../../../../cfg', 'object_types.yaml')
+    t_path = os.path.join(pkg_root, 'cfg', 'object_types.yaml')
     with open(t_path) as f:
         d = yaml.safe_load(f)
         return d['object_types']
@@ -197,8 +196,8 @@ def assemble_SED_models(bins):
     file_nm_d = {'units' : 'nm'}
     return {'tophat' : tophat_d, 'file_nm' : file_nm_d}
 
-def assemble_provenance(inputs={}):
-    repo = git.Repo()
+def assemble_provenance(pkg_root, inputs={}):
+    repo = git.Repo(pkg_root)
     has_uncommited = repo.is_dirty()
     has_untracked = (len(repo.untracked_files) > 0)
 
