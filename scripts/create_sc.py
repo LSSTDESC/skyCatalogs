@@ -39,13 +39,11 @@ parser.add_argument('--knots-magnitude-cut', default=27.0, type=float,
                     help='Galaxies with i-magnitude above this cut get no knots')
 parser.add_argument('--no-knots', action='store_true', help='If supplied omit knots component. Default is False')
 
-parser.add_argument('--write-config', action='store_true',
-                    help='''If present output config for the new catalog.
-                    Path is determined by --config-path.''')
 parser.add_argument('--config-path', default=None, help='''
                     Output path for config file. If no value,
                     config will be written to same location as data,
-                    with filenmame taken from catalog-name''')
+                    with filenmame taken from catalog-name.
+                    A config file is written iff galaxies are requested''')
 parser.add_argument('--catalog-name', default='skyCatalog',
                     help='''If write-config option is used, this value
                     will appear in the config and will be part of
@@ -74,12 +72,13 @@ parts = args.pixels
 
 creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          catalog_dir=args.catalog_dir,
-                         write_config=args.write_config,
                          config_path=args.config_path,
+                         catalog_name=args.catalog_name,
                          mag_cut=args.galaxy_magnitude_cut,
                          sed_subdir=args.sed_subdir,
                          knots_mag_cut=args.knots_magnitude_cut,
                          knots=(not args.no_knots), logname=logname)
+
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
     logger.info("Creating galaxy catalogs")
@@ -89,8 +88,6 @@ if not args.no_pointsources:
     logger.info("Creating point source catalogs")
     creator.create('pointsource')
 
-if args.write_config:
-    creator.write_config(args.config_path, args.catalog_name)
 
 logger.info('All done')
 print_date()

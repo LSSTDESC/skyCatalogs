@@ -77,6 +77,22 @@ def _make_galaxy_schema(logname, sed_subdir=False, knots=True):
     logger.debug(debug_out)
     return pa.schema(fields)
 
+def _make_galaxy_flux_schema(logname):
+    '''
+    Will make a separate parquet file with lsst flux for each band
+    and galaxy id for joining with the main galaxy file
+    '''
+    logger = logging.getLogger(logname)
+    logger.debug('Creating galaxy flux schema')
+    fields = [pa.field('galaxy_id', pa.int64()),
+              # should flux fields be named e.g. lsst_cmodel_flux_u?
+              pa.field('lsst_flux_u', pa.float32() , True),
+              pa.filed('lsst_flux_g', pa.float32() , True),
+              pa.filed('lsst_flux_r', pa.float32() , True),
+              pa.filed('lsst_flux_i', pa.float32() , True),
+              pa.filed('lsst_flux_z', pa.float32() , True),
+              pa.filed('lsst_flux_y', pa.float32() , True)]
+    return pa.schema(fields)
 
 def _make_star_schema():
     '''
@@ -140,7 +156,7 @@ def _generate_sed_path(ids, subdir, cmp):
 
 class CatalogCreator:
     def __init__(self, parts, area_partition, skycatalog_root=None,
-                 catalog_dir='.', galaxy_truth=None, write_config=False,
+                 catalog_dir='.', galaxy_truth=None,
                  config_path=None, catalog_name='skyCatalog',
                  output_type='parquet', mag_cut=None,
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
@@ -162,10 +178,11 @@ class CatalogCreator:
         catalog_dir     Directory relative to skycatalog_root where catalog
                         will be written.  Defaults to '.'
         galaxy_truth    GCRCatalogs name for galaxy truth (e.g. cosmoDC2)
-        write_config    If True, write config file. Default is False
         config_path     Where to write config file. Default is data
-                        directory. Ignored if write_config
-                        is False.
+                        directory.
+        catalog_name    If a config file is written this value is saved
+                        there and is also part of the filename of the
+                        config file.
         output_type     A format.  For now only parquet is supported
         mag_cut         If not None, exclude galaxies with mag_r > mag_cut
         sed_subdir      In instcat entry, prepend this value to SED filename
@@ -212,6 +229,9 @@ class CatalogCreator:
         self._output_dir = os.path.join(self._skycatalog_root,
                                         self._catalog_dir)
 
+        self._config_path = config_path
+        self._catalog_name = catalog_name
+
         self._output_type = output_type
         self._mag_cut = mag_cut
         self._sed_subdir = sed_subdir
@@ -240,7 +260,7 @@ class CatalogCreator:
         """
         Returns
         -------
-        Dict describing catalog produced
+        None
         """
         import GCRCatalogs
 
@@ -258,6 +278,10 @@ class CatalogCreator:
             self._logger.info(f'Starting on pixel {p}')
             self.create_galaxy_pixel(p, gal_cat, arrow_schema)
             self._logger.info(f'Completed pixel {p}')
+
+        # Now make config.   We need it for computing LSST fluxes for
+        # the second part of the galaxy catalog
+        self.write_config()
 
     def create_galaxy_pixel(self, pixel, gal_cat, arrow_schema):
         """
@@ -424,7 +448,7 @@ class CatalogCreator:
 
         Returns
         -------
-        Dict describing catalog produced
+        None
         """
 
         # For now fixed location for star, SNe parameter files.
@@ -483,8 +507,8 @@ class CatalogCreator:
 
         return
 
-    def write_config(self, config_path, catalog_name, overwrite=False):
-        config = create_config(catalog_name)
+    def write_config(self, overwrite=False):
+        config = create_config(self._catalog_name, self._logname)
         config.add_key('area_partition', self._area_partition)
         config.add_key('skycatalog_root', self._skycatalog_root)
         config.add_key('catalog_dir' , self._catalog_dir)
@@ -503,6 +527,6 @@ class CatalogCreator:
         config.add_key('provenance', assemble_provenance(self._pkg_root,
                                                          inputs=inputs))
 
-        if not config_path:
-            config_path = self._output_dir
-        config.write_config(config_path, filename=(catalog_name + '.yaml'))
+        if not self._config_path:
+            self._config_path = self._output_dir
+        config.write_config(self._config_path,  overwrite=overwrite)
