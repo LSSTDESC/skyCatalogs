@@ -31,7 +31,7 @@ parser.add_argument('--skycatalog_root',
 parser.add_argument('--catalog-dir', help='directory for output files relative to skycatalog_root',
                     default='.')
 parser.add_argument('--sed-subdir', help='subdirectory to prepend to paths of galaxy SEDs as written to the sky catalog', default='galaxyTopHatSED')
-parser.add_argument('--loglevel', help='controls logging output',
+parser.add_argument('--log-level', help='controls logging output',
                     default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'])
 parser.add_argument('--galaxy-magnitude-cut', default=29.0, type=float,
                     help='Exclude galaxies with r-magnitude above this value')
@@ -55,10 +55,10 @@ parser.add_argument('--catalog-name', default='skyCatalog',
 args = parser.parse_args()
 logname = 'skyCatalogs.creator'
 logger = logging.getLogger(logname)
-logger.setLevel(args.loglevel)
+logger.setLevel(args.log_level)
 
 ch = logging.StreamHandler()
-ch.setLevel(args.loglevel)
+ch.setLevel(args.log_level)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 

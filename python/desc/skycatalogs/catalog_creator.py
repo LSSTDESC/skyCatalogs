@@ -25,7 +25,6 @@ Code to create a sky catalog for a particular object type
 
 __all__ = ['CatalogCreator']
 
-_Av_adjustment = 2.742
 _MW_rv_constant = 3.1
 
 # This schema is not the same as the one taken from the data,
@@ -98,12 +97,16 @@ def _make_star_schema():
               pa.field('MW_av', pa.float32(), True)]
     return pa.schema(fields)
 
+_Av_adjustment = 2.742
 def _make_MW_extinction(ra, dec):
     '''
     Given arrays of ra & dec, create a MW Av column corresponding to V-band
     correction.
     See "Plotting Dust Maps" example in
     https://dustmaps.readthedocs.io/en/latest/examples.html
+
+    The coefficient _Av_adjustment comes Table 6 in Schlafly & Finkbeiner (2011)
+    See http://iopscience.iop.org/0004-637X/737/2/103/article#apj398709t6
 
     Parameters
     ----------
