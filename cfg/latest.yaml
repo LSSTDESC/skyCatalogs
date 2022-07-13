@@ -1,7 +1,7 @@
 #  A sample sky catalog config for galaxies only
 catalog_name : latest
 area_partition :
-  { type: healpix, ordering : ring, nside : 32}
+  { partition_type: healpix, ordering : ring, nside : 32}
 root_directory : /global/cscratch1/sd/jrbogart/desc/skycatalogs/latest
 #  A sample sky catalog config for partially-faked catalog of stars & galaxies
 #  used as input to create equivalent instance catalogs

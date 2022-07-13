@@ -2,8 +2,9 @@ from collections import namedtuple, OrderedDict
 from enum import Enum
 import numpy as np
 
-__all__ = ['column_finder', 'check_file', 'write_to_instance', 'SourceType', 'STAR_FMT', 'CMP_FMT',
-           'form_star_instance_column', 'form_cmp_instance_columns']
+__all__ = ['column_finder', 'check_file', 'write_to_instance', 'SourceType',
+           'STAR_FMT', 'CMP_FMT',
+           'form_star_instance_columns', 'form_cmp_instance_columns']
 
 
 STAR_FMT = '{:s} {:d} {:.14f} {:.14f} {:.8f} {:s} {:d} {:d} {:d} {:d} {:d} {:d} {:s} {:s} {:s} {:.8f} {:f}'

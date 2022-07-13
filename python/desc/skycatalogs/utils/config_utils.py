@@ -1,7 +1,17 @@
+import os
 import yaml
+import git
+from jsonschema import validate
+
+from desc.skycatalogs.utils.exceptions import NoSchemaVersionError, ConfigDuplicateKeyError
+
 from collections import namedtuple
 
-__all__ = ['Config', 'open_config_file', 'Tophat']
+__all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
+           'assemble_SED_models', 'assemble_MW_extinction',
+           'assemble_cosmology', 'assemble_object_types', 'assemble_provenance']
+
+_CURRENT_SCHEMA_VERSION='1.1.0'
 
 def open_config_file(config_file):
     '''
@@ -50,7 +60,7 @@ class Config(object):
         Return list of named tuples
         Should maybe be part of Sky Catalogs API
         '''
-        raw_bins = self._cfg['SED_models'][0]['tophat']['bins']
+        raw_bins = self._cfg['SED_models']['tophat']['bins']
 
         return [ Tophat(b[0], b[1]) for b in raw_bins]
 
@@ -75,3 +85,132 @@ class Config(object):
             if not isinstance(d, dict):
                 raise ValueError(f'intermediate {d} is not a dict')
         return d[path_items[-1]]
+
+    def validate(self, schema=None):
+        '''
+        Parameters
+        ----------
+        schema    Identifies schema to validate against.
+                  If string, open file with this file path
+                  If dict, use "as is"
+                  If None, attempt to deduce schema version (and hence
+                  file path) from schema_version keyword
+        Returns:  None
+                  Raise exception if validation fails for any reason:
+                  desc.skycatalogs.exception.NoSchema if schema specification
+                  can't be found
+                  OSError if schema file can't be read
+                  yaml.YAMLerror if schema can't be loaded
+                  jsonschema.exceptions.SchemaError if schema is invalid
+                  jsonschema.exceptions.ValidationError otherwise
+        '''
+        fpath = None
+        if schema is None:
+            if 'schema_version' not in self._cfg:
+                raise NoSchemaVersionError
+            fpath = _find_schema_path(self._cfg["schema_version"])
+            if not fpath:
+                raise NoSchemaVersionError('Schema file not found')
+        elif isinstance(schema, string):
+            fpath = schema
+        if fpath:
+            try:
+                f = open(fpath)
+                sch = yaml.safe_load(f)
+            except OSError as e:
+                raise NoSchemaVersionError('Schema file not found or unreadable')
+            except yaml.YAMLError as ye:
+                raise ye
+        if isinstance(schema, dict):
+            sch = schema
+
+        jsonschema.validate(self._cfg, schema.dict)
+
+    def add_key(self, k, v):
+        '''
+        Parameters
+        ----------
+        k        Top-level key belonging to the schema
+        v        value for the key
+        '''
+
+        if k in self._cfg:
+            raise ConfigDuplicateKeyError(k)
+        self._cfg[k] = v
+
+    def write_config(self, dirpath, filename=None):
+        '''
+        Export self to yaml document and write to specified directory.
+        If filename is None the file will be named after catalog_name
+        '''
+        ###self.validate()   skip for now
+
+        if not filename:
+            filename = self._cfg['catalog_name'] + '.yaml'
+
+        with open(os.path.join(dirpath, filename), "w") as f:
+            yaml.dump(self._cfg, f)
+
+
+
+
+def _find_schema_path(schema_spec):
+    '''
+    Given a schema version specification, return the file path
+    where the file describing it belongs
+    '''
+    fname = f'skycatalogs_schema_{self._cfg["schema_spec"]}'
+    here = os.path.dirname(__file__)
+    return os.path.join(here, '../../../../cfg', fname)
+
+def create_config(catalog_name, schema_version=None):
+    if not schema_version:
+        schema_version = _CURRENT_SCHEMA_VERSION
+    return Config({'catalog_name' : catalog_name,
+                   'schema_version' : schema_version})
+
+def assemble_cosmology(cosmology):
+    d = {k : cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
+                                                     'n_s')}
+    d['H0'] = float(cosmology.H0.value)
+    return d
+
+def assemble_MW_extinction():
+    av = {'mode' : 'data'}
+    rv = {'mode' : 'constant', 'value' : 3.1}
+    return {'r_v' : rv, 'a_v' : av}
+
+def assemble_object_types(pkg_root):
+    '''
+    Include all supported object types even though a particular catalog
+    might not use them all
+    '''
+    t_path = os.path.join(pkg_root, 'cfg', 'object_types.yaml')
+    with open(t_path) as f:
+        d = yaml.safe_load(f)
+        return d['object_types']
+
+def assemble_SED_models(bins):
+    tophat_d = { 'units' : 'angstrom', 'bin_parameters' : ['start', 'width']}
+    tophat_d['bins'] = bins
+    file_nm_d = {'units' : 'nm'}
+    return {'tophat' : tophat_d, 'file_nm' : file_nm_d}
+
+def assemble_provenance(pkg_root, inputs={}):
+    repo = git.Repo(pkg_root)
+    has_uncommited = repo.is_dirty()
+    has_untracked = (len(repo.untracked_files) > 0)
+
+    git_d = {}
+    git_d['git_hash'] = repo.commit().hexsha
+    git_d['git_branch'] = repo.active_branch.name
+    status = []
+    if has_uncommited:
+        status.append('UNCOMMITTED_FILES')
+    if has_untracked:
+        status.append('UNTRACKED_FILES')
+    if len(status) == 0:
+        status.append('CLEAN')
+    git_d['git_status'] = status
+
+    return {'skyCatalogs_repo' : git_d, 'inputs' : inputs}

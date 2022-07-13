@@ -1,6 +1,8 @@
 import os
 import re
 import math
+import logging
+import yaml
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -9,6 +11,8 @@ from astropy.coordinates import SkyCoord
 import sqlite3
 from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
+from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
+from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
@@ -21,18 +25,11 @@ Code to create a sky catalog for a particular object type
 
 __all__ = ['CatalogCreator']
 
-'''
-Dict of MW av column names and multipliers needed to create from ebv, MW_rv
-Multipliers come from
-https://iopscience.iop.org/article/10.1088/0004-637X/737/2/103#apj398709t6
-appendix, table 6
-'''
-_Av_adjustment = 2.742
 _MW_rv_constant = 3.1
 
 # This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
-def _make_galaxy_schema(sed_subdir=False, knots=True):
+def _make_galaxy_schema(logname, sed_subdir=False, knots=True):
     fields = [pa.field('galaxy_id', pa.int64()),
               pa.field('ra', pa.float64() , True),
 ##                       metadata={"units" : "radians"}),
@@ -59,19 +56,14 @@ def _make_galaxy_schema(sed_subdir=False, knots=True):
               pa.field('disk_magnorm', pa.float64(), True),
               pa.field('MW_rv', pa.float32(), True),
               pa.field('MW_av', pa.float32(), True)]
+    logger = logging.getLogger(logname)
     if knots:
-        print("knots requested")
+        logger.debug("knots requested")
         fields.append(pa.field('sed_val_knots',
                                pa.list_(pa.float64()), True))
         ### For sizes API can alias to disk sizes
-        ### What else?  magnorm? Probably can be aliased to disk magnorm
-        ### (or do we need to adjust disk magnorm according to the ratio?
-        ###  Don't think so.  Splitting the SED between the two should
-        ###  take care of it.)
         ###  position angle, shears and convergence are all
         ###  galaxy-wide quantities.
-        ### n_knots?  - should be a new field.  When writing out instcat
-        ### entry it will take the place of "sersic index"
         fields.append(pa.field('n_knots', pa.float32(), True))
         fields.append(pa.field('knots_magnorm', pa.float64(), True))
 
@@ -79,8 +71,10 @@ def _make_galaxy_schema(sed_subdir=False, knots=True):
         fields.append(pa.field('bulge_sed_file_path', pa.string(), True))
         fields.append(pa.field('disk_sed_file_path', pa.string(), True))
 
+    debug_out = ''
     for f in fields:
-        print(f.name)
+        debug_out += f'{f.name}\n'
+    logger.debug(debug_out)
     return pa.schema(fields)
 
 
@@ -103,12 +97,16 @@ def _make_star_schema():
               pa.field('MW_av', pa.float32(), True)]
     return pa.schema(fields)
 
+_Av_adjustment = 2.742
 def _make_MW_extinction(ra, dec):
     '''
     Given arrays of ra & dec, create a MW Av column corresponding to V-band
     correction.
     See "Plotting Dust Maps" example in
     https://dustmaps.readthedocs.io/en/latest/examples.html
+
+    The coefficient _Av_adjustment comes Table 6 in Schlafly & Finkbeiner (2011)
+    See http://iopscience.iop.org/0004-637X/737/2/103/article#apj398709t6
 
     Parameters
     ----------
@@ -141,10 +139,13 @@ def _generate_sed_path(ids, subdir, cmp):
     return r
 
 class CatalogCreator:
-    def __init__(self, parts, area_partition, output_dir=None, galaxy_truth=None,
-                 sedLookup_dir=None, output_type='parquet', verbose=False,
-                 mag_cut=None,  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
-                 knots=True):
+    def __init__(self, parts, area_partition, skycatalog_root=None,
+                 catalog_dir='.', galaxy_truth=None, write_config=False,
+                 config_path=None, catalog_name='skyCatalog',
+                 output_type='parquet', mag_cut=None,
+                 sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
+                 knots=True, logname='skyCatalogs.creator',
+                 pkg_root=None):
         """
         Store context for catalog creation
 
@@ -155,30 +156,34 @@ class CatalogCreator:
                         of HEALpix pixels
         area_partition  Dict characterizing partition; e.g. HEALpix,
                         nside=<something>
-        output_dir      Where to put created sky catalog. Defaults to
-                        current directory.
+        skycatalog_root Typically absolute directory containing one or
+                        more subdirectories for sky catalogs. Defaults
+                        to current directory
+        catalog_dir     Directory relative to skycatalog_root where catalog
+                        will be written.  Defaults to '.'
         galaxy_truth    GCRCatalogs name for galaxy truth (e.g. cosmoDC2)
-        sedLookup_dir   Where to find files with some per-galaxy information
-                        relevant to finding and using appropriate SED file
-                        OBSOLETE
+        write_config    If True, write config file. Default is False
+        config_path     Where to write config file. Default is data
+                        directory. Ignored if write_config
+                        is False.
         output_type     A format.  For now only parquet is supported
         mag_cut         If not None, exclude galaxies with mag_r > mag_cut
         sed_subdir      In instcat entry, prepend this value to SED filename
         knots_mag_cut   No knots for galaxies with i_mag > cut
         knots           If True include knots
+        logname         logname for Python logger
+        pkg_root        defaults to three levels up from __file__
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
         """
 
-        # Following directory contains per-healpix pixel files, each of which
-        # has some per-galaxy information, including internal Av, Rv for
-        # disk and bulge components, fluxes, mags for lsst bands, appropriate
-        # index into sed_names array (which is typically around a 1000 entries,
-        # whereas #galaxies is of order 10 million) and so forth.
-        # If multiprocessing probably should defer this to create_pixel
-        ##_sedLookup_dir = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sedLookup'
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
+        if pkg_root:
+            self._pkg_root = pkg_root
+        else:
+            self._pkg_root = os.path.join(os.path.dirname(__file__),
+                                          '../../..')
 
         if area_partition['type'] != 'healpix':
             raise NotImplementedError(f'CatalogCreator: Unknown partition type {area_partition["type"]} ')
@@ -190,23 +195,30 @@ class CatalogCreator:
         if galaxy_truth is None:
             self._galaxy_truth = _cosmo_cat
 
+        self._sn_truth = None
+        self._star_truth = None
+
         self._parts = parts
         self._area_partition = area_partition
-        if output_dir:
-            self._output_dir = output_dir
+        if skycatalog_root:
+            self._skycatalog_root = skycatalog_root
         else:
-            self._output_dir = os.path.abspath(os.curdir)
-        # if not sedLookup_dir:
-        #     self._sedLookup_dir = _sedLookup_dir
-        # else:
-        #     self._sedLookup_dir = sedLookup_dir
+            self._skycatalog_root = './'
+        if catalog_dir:
+            self._catalog_dir = catalog_dir
+        else:
+            self._catalog_dir = '.'
+
+        self._output_dir = os.path.join(self._skycatalog_root,
+                                        self._catalog_dir)
 
         self._output_type = output_type
-        self._verbose = verbose
         self._mag_cut = mag_cut
         self._sed_subdir = sed_subdir
         self._knots_mag_cut = knots_mag_cut
         self._knots = knots
+        self._logname = logname
+        self._logger = logging.getLogger(logname)
 
     def create(self, catalog_type):
         """
@@ -234,16 +246,18 @@ class CatalogCreator:
 
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)
 
-        self._mag_norm_f = MagNorm(gal_cat.cosmology)
+        # Save cosmology in case we need to write parameters out later
+        self._cosmology = gal_cat.cosmology
 
-        arrow_schema = _make_galaxy_schema(self._sed_subdir, self._knots)
+        self._mag_norm_f = MagNorm(self._cosmology)
+
+        arrow_schema = _make_galaxy_schema(self._logname, self._sed_subdir,
+                                           self._knots)
 
         for p in self._parts:
-            print("Starting on pixel ", p)
-            print_date()
+            self._logger.info(f'Starting on pixel {p}')
             self.create_galaxy_pixel(p, gal_cat, arrow_schema)
-            print("completed pixel ", p)
-            print_date()
+            self._logger.info(f'Completed pixel {p}')
 
     def create_galaxy_pixel(self, pixel, gal_cat, arrow_schema):
         """
@@ -254,17 +268,16 @@ class CatalogCreator:
         arrow_schema    schema to use for output file
         """
 
-        # Filename templates: input (sedLookup) and our output.
-        # Hardcode for now.
-        ### sedLookup_template = 'sed_fit_{}.h5'
+        # Output filename template
         output_template = 'galaxy_{}.parquet'
+
+        # Used to finding tophat parameters from cosmoDC2 column names
         tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
         tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
 
         # Number of rows to include in a row group
         stride = 1000000
 
-        #native_cut = "native_filters=f'healpix_pixel=={pixel}'"
         hp_filter = [f'healpix_pixel=={pixel}']
         if self._mag_cut:
             r_mag_name = 'mag_r_lsst'
@@ -284,8 +297,14 @@ class CatalogCreator:
                                             i.endswith('bulge'))]
         sed_disk_names = [i for i in q if (i.startswith('sed') and
                                            i.endswith('disk'))]
+        # Save all the start, width values
+        self._sed_bins = [[int(re.match(tophat_bulge_re, s)['start']), int(re.match(tophat_bulge_re, s)['width'])] for s in sed_bulge_names]
 
-        #Sort sed columns by start value, descending
+        # Sort by value for start
+        def _bin_start_key(start_width):
+            return start_width[0]
+        self._sed_bins.sort(key=_bin_start_key)
+
         def _sed_bulge_key(s):
             return int(re.match(tophat_bulge_re, s)['start'])
         def _sed_disk_key(s):
@@ -299,14 +318,6 @@ class CatalogCreator:
 
         #Fetch the data
         to_fetch = non_sed + sed_bulge_names + sed_disk_names
-
-        # Save the 'start' and 'width' values; they'll be needed for our output
-        # config.  Though we only need to do this once, not once per pixel
-        tophat_parms = []
-        for s in sed_bulge_names:
-            m = re.match(tophat_bulge_re, s)
-            if m:
-                tophat_parms.append((m['start'], m['width']))
 
         if not self._mag_cut:
             df = gal_cat.get_quantities(to_fetch, native_filters=hp_filter)
@@ -329,13 +340,10 @@ class CatalogCreator:
             # adjust disk sed; create knots sed
             eps = np.finfo(np.float32).eps
             mag_mask = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut,0, 1)
-            if self._verbose:
-                print("Count of mags <=  cut (so adjustment performed: ",
-                      np.count_nonzero(mag_mask))
+            self._logger.debug(f'Count of mags <=  cut (so adjustment performed: {np.count_nonzero(mag_mask)}')
 
             for d_name, k_name in zip(sed_disk_names, sed_knot_names):
                 df[k_name] = mag_mask * np.clip(df['knots_flux_ratio'], None, 1-eps) * df[d_name]
-                #df[d_name] = df[d_name] -  df[k_name]
                 df[d_name] = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 1,
                                       np.clip(1 - df['knots_flux_ratio'], eps, None)) * df[d_name]
         # Re-form sed columns into two arrays
@@ -352,7 +360,7 @@ class CatalogCreator:
 
         MW_rv = np.full_like(df['sersic_bulge'], _MW_rv_constant)
         MW_av = _make_MW_extinction(df['ra'], df['dec'])
-        if self._verbose: print("Made extinction")
+        self._logger.debug('Made extinction')
 
         #  Write row groups of size stride (or less) until input is exhausted
         last_row = len(df['galaxy_id']) - 1
@@ -384,9 +392,9 @@ class CatalogCreator:
                 out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]
                 out_dict['disk_sed_file_path'] = disk_path[l_bnd : u_bnd]
 
-            if self._verbose:
+            if self._logger.getEffectiveLevel() == logging.DEBUG:
                 for kd,i in out_dict.items():
-                    print(f'Key={kd}, type={type(i)}, len={len(i)}')
+                    self._logger.debug(f'Key={kd}, type={type(i)}, len={len(i)}')
             print_col = False
 
             out_df = pd.DataFrame.from_dict(out_dict)
@@ -402,15 +410,15 @@ class CatalogCreator:
             u_bnd = min(l_bnd + stride, last_row)
 
         writer.close()
-        if self._verbose: print("# row groups written: ", rg_written)
+        self._logger.debug(f'# row groups written: {rg_written}')
 
-    def create_pointsource_catalog(self, star_truth=None, sne_truth=None):
+    def create_pointsource_catalog(self, star_truth=None, sn_truth=None):
 
         """
         Parameters
         ----------
-        star_truth      Where to find star parameters. If None, omit stars
-        sne_truth       Where to find SNe parameters.  If None, omit SNe
+        star_truth      Where to find star parameters. If None use default
+        sn_truth       Where to find SN parameters.  If None, use default
 
         Might want to add a way to specify template for output file name
 
@@ -422,24 +430,22 @@ class CatalogCreator:
         # For now fixed location for star, SNe parameter files.
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
         _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
+        self._star_truth = _star_db
+        self._sn_truth = _sn_db
 
         arrow_schema = _make_star_schema()
         #  Need a way to indicate which object types to include; deal with that
         #  later.  For now, default is stars only.  Use default star parameter file.
         for p in self._parts:
-            if self._verbose:
-                print("Point sources. Starting on pixel ", p)
-                print_date()
+            self._logger.debug(f'Point sources. Starting on pixel {p}')
             self.create_pointsource_pixel(p, arrow_schema, star_cat=_star_db)
-            if self._verbose:
-                print("completed pixel ", p)
-                print_date()
+            self._logger.debug(f'Completed pixel {p}')
 
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None,
                              sn_cat=None):
 
         if not star_cat and not sn_cat:
-            print("no point source inputs specified")
+            self._logger.info('No point source inputs specified')
             return
 
         output_template = 'pointsource_{}.parquet'
@@ -455,7 +461,7 @@ class CatalogCreator:
             star_df['sed_filepath'] = get_star_sed_path(star_df['sed_filepath'])
 
             nobj = len(star_df['id'])
-            print(f"Found {nobj} stars")
+            self._logger.debug(f'Found {nobj} stars')
             star_df['object_type'] = np.full((nobj,), 'star')
             star_df['host_galaxy_id'] = np.zeros((nobj,), np.int64())
 
@@ -464,7 +470,7 @@ class CatalogCreator:
             star_df['MW_av'] = _make_MW_extinction(np.array(star_df['ra']),
                                                    np.array(star_df['dec']))
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
-            if self._verbose: print("created arrow table from dataframe")
+            self._logger.debug('Created arrow table from dataframe')
 
             writer = pq.ParquetWriter(os.path.join(
                 self._output_dir, output_template.format(pixel)), arrow_schema)
@@ -476,3 +482,27 @@ class CatalogCreator:
             raise NotImplementedError('SNe not yet supported. Have a nice day.')
 
         return
+
+    def write_config(self, config_path, catalog_name, overwrite=False):
+        config = create_config(catalog_name)
+        config.add_key('area_partition', self._area_partition)
+        config.add_key('skycatalog_root', self._skycatalog_root)
+        config.add_key('catalog_dir' , self._catalog_dir)
+
+        config.add_key('SED_models',
+                       assemble_SED_models(self._sed_bins))
+        config.add_key('MW_extinction_values', assemble_MW_extinction())
+        config.add_key('Cosmology', assemble_cosmology(self._cosmology))
+        config.add_key('object_types', assemble_object_types(self._pkg_root))
+
+        inputs = {'galaxy_truth' : self._galaxy_truth}
+        if self._sn_truth:
+            inputs['sn_truth'] = self._sn_truth
+        if self._star_truth:
+            inputs['star_truth'] = self._star_truth
+        config.add_key('provenance', assemble_provenance(self._pkg_root,
+                                                         inputs=inputs))
+
+        if not config_path:
+            config_path = self._output_dir
+        config.write_config(config_path, filename=(catalog_name + '.yaml'))

@@ -1,0 +1,150 @@
+#  Validate our configs using jsonschema by
+#     loading the config and this schema using yaml.load or yaml.safe_load
+#     e.g.
+#  from jsonschema import validate
+#  import yaml
+#  validate(yaml.load('my_cfg.yaml'), yaml.load('future_schema.yaml'))
+#  Fundamental types are
+#       null, boolean, object(=map), array(=list),
+#       number, string
+# what-keyword-goes-here? : "skyCatalogs config"
+"$schema": "https://json-schema.org/draft/2020-12/schema"
+"$id": "https://github.com/LSSTDESC/skyCatalog/schema1.1.0.json"
+type : object
+"$defs" :
+  bin :
+    type : array
+    items :
+      type : integer
+    minItems : 2
+    maxItmes : 2
+
+  galaxy_component :
+    type : object
+    properties :
+      subtype :
+        type : string
+      parent :
+        type : string
+      sed_model :
+        type : string
+      internal_extinction :
+        type : string
+      spatial_model :
+        type : string
+      required : [subtype, parent, sed_model, internal_extinction, spatial_model]
+
+required : [catalog_name, schema_version, area_partition, SED_models, Cosmology, object_types]
+properties :
+  catalog_name :
+    type : string
+  schema_version :
+    type : string
+  area_partition :
+    properties :
+      partition_type :
+        type : string
+      ordering :
+        type : string
+      nside :
+        type : integer
+
+  SED_models :
+    type : object
+    properties :
+      tophat :
+        properties :
+          units :
+            type : string
+          bin_parameters :
+            type : array
+            items :
+              type : string
+            minItems : 2
+            maxItems : 2
+          bins :
+            type : array
+            items :
+              type : array
+              items :
+                type : integer
+                minimum : 0
+              maxItems : 2
+              minItems : 2
+            minItems : 1
+        file_nm :
+          properties :
+            units :
+              type : string
+    MW_extinction_values :
+      type : object
+      properties :
+        r_v :
+          properties :
+            mode :
+              type : string
+            value :
+              type : number
+        a_v :
+          properties :
+            mode :
+              type : string
+
+    Cosmology :
+      type : object
+      properties :
+        Om0 :
+          type : number
+        Ob0 :
+          type : number
+        H0 :
+          type : number
+        sigma8 :
+          type : number
+        n_s :
+          type : number
+
+    object_types :
+      type : object
+      properties :
+        galaxy :
+          type : object
+          properties :
+            file_template :
+              type : string
+            data_file_type :
+              type : string
+            sed_file_root :
+              type : string
+            composite :
+              type : object
+              properties :
+                bulge :
+                  type : string
+                disk :
+                  type : string
+                knots :
+                  type : string
+            attribute_aliases :
+              type : object
+              items :
+                type : string
+          bulge_basic :
+            type : { "$ref" : "#/$defs/galaxy_component" }
+          disk_basic :
+            type : { "$ref" : "#/$defs/galaxy_component" }
+          knots_basic :
+            type : { "$ref" : "#/$defs/galaxy_component" }
+          star :
+            type : object
+            properties :
+              file_template :
+                type : string
+              data_file_type :
+                type : string
+              sed_mode :
+                type : string
+              sed_file_root :
+                type : string
+              MW_extinction :
+                type : string

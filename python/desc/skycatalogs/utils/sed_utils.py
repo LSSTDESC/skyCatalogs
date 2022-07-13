@@ -190,7 +190,9 @@ class MagNorm:
         one_Jy = 1e-26  # W/Hz/m**2
         Lnu = tophat_sed_value*one_maggy    # convert from maggies to W/Hz
         Fnu = Lnu/4/np.pi/self.dl(redshift_hubble)**2
-        return -2.5*np.log10(Fnu/one_Jy) + 8.90
+        with np.errstate(divide='ignore', invalid='ignore'):
+            mgn = -2.5*np.log10(Fnu/one_Jy) + 8.90
+            return mgn
 
 
 class LookupInfo(object):
