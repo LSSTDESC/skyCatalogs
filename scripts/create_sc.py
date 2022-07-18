@@ -27,7 +27,7 @@ parser.add_argument('--no-galaxies', action='store_true',
 parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
                     help='healpix pixels for which catalogs will be created')
 parser.add_argument('--skycatalog_root',
-                    help='Root directory for sky catalogs, typically site-dependent. If not specified, use value environment variable SKYCATALOG_ROOT')
+                    help='Root directory for sky catalogs, typically site-dependent. If not specified, use value of environment variable SKYCATALOG_ROOT')
 parser.add_argument('--catalog-dir', help='directory for output files relative to skycatalog_root',
                     default='.')
 parser.add_argument('--sed-subdir', help='subdirectory to prepend to paths of galaxy SEDs as written to the sky catalog', default='galaxyTopHatSED')
