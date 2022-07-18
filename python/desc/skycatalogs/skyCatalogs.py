@@ -384,10 +384,11 @@ class SkyCatalog(object):
             #     rdr_ot[the_reader] = set([ot])
 
         # Now get minimal columns for objects using the readers
-        collection_readers = []
+        galaxy_readers = []
+        star_readers = []
         for rdr in rdr_ot:
             if 'galaxy' in rdr_ot[rdr]:
-                collection_readers.append(rdr)
+                galaxy_readers.append(rdr)
                 if 'ra' not in rdr.columns:      # flux addendum file
                     continue
                 arrow_t = rdr.read_columns(G_COLUMNS, None) # or read_row_group
@@ -424,12 +425,12 @@ class SkyCatalog(object):
                                                   self,
                                                   region=region,
                                                   mask=mask,
-                                                  readers=collection_readers)
+                                                  readers=galaxy_readers)
                 object_list.append_collection(new_collection)
 
                 # Now do the same for point sources
             if 'star' in rdr_ot[rdr]:
-                collection_readers.append(rdr)
+                star_readers.append(rdr)
                 arrow_t = rdr.read_columns(PS_COLUMNS, None) # or read_row_group
                 # Make a boolean array, value set to 1 for objects
                 # outside the region
@@ -460,7 +461,7 @@ class SkyCatalog(object):
                                                   self,
                                                   region=region,
                                                   mask=mask,
-                                                  readers=collection_readers)
+                                                  readers=star_readers)
                 #                                  reader=rdr)
                 object_list.append_collection(new_collection)
 
