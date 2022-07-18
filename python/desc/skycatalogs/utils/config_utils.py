@@ -29,7 +29,7 @@ class Config(object):
     A wrapper around the dict which is the contents of a Sky Catalog
     config file which understands some of the semantics
     '''
-    def __init__(self, cfg, logname):
+    def __init__(self, cfg, logname=None):
         self._cfg = cfg
         self._logname = logname
 
@@ -166,8 +166,11 @@ class Config(object):
                 with open(outpath, mode='x') as f:
                     yaml.dump(self._cfg, f)
             except FileExistsError:
-                logger = logging.getLogger(self._logname)
-                logger.warning('Config.write_config: Will not overwrite pre-existing config file ' + outpath)
+                if self._logname:
+                    logger = logging.getLogger(self._logname)
+                    logger.warning('Config.write_config: Will not overwrite pre-existing config file ' + outpath)
+                else:
+                    print('Config.write_config: Will not overwrite pre-existing config file ' + outpath)
                 return
 
         else:
@@ -186,7 +189,7 @@ def _find_schema_path(schema_spec):
     here = os.path.dirname(__file__)
     return os.path.join(here, '../../../../cfg', fname)
 
-def create_config(catalog_name, logname, schema_version=None):
+def create_config(catalog_name, logname=None, schema_version=None):
     if not schema_version:
         schema_version = _CURRENT_SCHEMA_VERSION
     return Config({'catalog_name' : catalog_name,

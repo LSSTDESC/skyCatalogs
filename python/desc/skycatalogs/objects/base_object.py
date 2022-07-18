@@ -399,27 +399,30 @@ class ObjectCollection(Sequence):
     rather than a single number.  There are some additional methods
     '''
     def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
-                 region=None, mask=None, reader=None):
+                 region=None, mask=None, readers=None):
         '''
         Minimum information needed for static objects.
         specified, has already been used by the caller to generate mask.
-        ra, dec, id must be array-like.
-        object_type  may be either single value or array-like.
+        ra, dec, id must be array-like and the same length
+        object_type  may be either single value or array-like (could be
+        useful if more than one object type is stored in the same file)
         partition_id (e.g. healpix id)
         sky_catalog instance of SkyCatalog class
         (redshift should probably be ditched; no need for it)
         (similarly for region with current code structure. Information
         needed is encoded in mask)
+
         mask  indices to be masked off, e.g. because region does not
               include the entire healpix pixel
-        All arrays must be the same length
+        readers one per file associated with the type(s). (Galaxy info
+              is stored in two files)
 
 
         '''
         self._ra = np.array(ra)
         self._dec = np.array(dec)
         self._id = np.array(id)
-        self._rdr = reader
+        self._rdrs = readers
         self._partition_id = partition_id
         self._sky_catalog = sky_catalog   # might not need this
         self._config = Config(sky_catalog.raw_config)
@@ -458,7 +461,10 @@ class ObjectCollection(Sequence):
         May not include quantities which are constant for all objects
         of this type
         '''
-        return self._rdr.columns
+        columns = set()
+        for rdr in self._rdrs:
+            columns = columns.union(rdr.columns)
+        return columns
 
     @property
     def subcomponents(self):
@@ -483,20 +489,40 @@ class ObjectCollection(Sequence):
         val = getattr(self, attribute_name, None)
         if val is not None: return val
 
-        d = self._rdr.read_columns([attribute_name], self._mask)
-        if not d:
-            return None
-        val = d[attribute_name]
-        setattr(self, attribute_name, val)
-        return val
+        for r in self._rdrs:
+            if attribute_name in r.columns:
+                d = r.read_columns([attribute_name], self._mask)
+                if not d:
+                    return None
+                val = d[attribute_name]
+                setattr(self, attribute_name, val)
+                return val
 
     def get_native_attributes(self, attribute_list):
         '''
         Return requested attributes as an OrderedDict. Keys are column names.
         Use our mask if we have one
         '''
-        df = self._rdr.read_columns(attribute_list, self._mask)
-        return df
+        remaining = set(attribute_list)
+        final_d = OrderedDict()
+        for r in self._rdrs:
+            to_read = []
+            new_remaining = remaining
+            for a in remaining:
+                if a in r.columns:
+                    to_read.append(a)
+                    new_remaining.remove(a)
+            d = r.read_columns(to_read, self._mask)
+            remaining = new_remaining
+            for k in d:
+                final_d[k] = d[k]
+
+        if len(remaining) > 0:
+            # raise exception?   log error?
+            print(f'Unknown column or columns {remaining}')
+            return None
+
+        return d
 
     def get_native_attributes_iterator(self, attribute_names):
         '''

@@ -177,7 +177,7 @@ class SkyCatalog(object):
         '''
         For each healpix with files matching pattern in the directory,
         update _hp_info as needed to keep track of all files for that healpix
-        and the object types included in those files.   Also..
+        and the object types included in those files.
 
         Returns
         -------
@@ -195,20 +195,31 @@ class SkyCatalog(object):
         hp_set = set()
         for f in files:
             for ot in o_types:
-                if 'file_template' in o_types[ot]:
-                    m = re.match(o_types[ot]['file_template'], f)
+                # find all keys containing the string 'file_template'
+                template_keys = [k for k in o_types[ot] if 'file_template' in k]
+                ##if 'file_template' in o_types[ot]:
+                ##    m = re.match(o_types[ot]['file_template'], f)
+                for k in template_keys:
+                    m = re.match(o_types[ot][k], f)
                     if m:
                         hp = int(m['healpix'])
                         hp_set.add(hp)
 
                         if hp not in self._hp_info:
                             self._hp_info[hp] = {'files' : {f : None},
-                                                 'object_types' : {ot : f}}
+                                                 #'object_types' : {ot : f}}
+                                                 # Value of 'object_types' is now a list
+                                                 'object_types' : {ot : [f]}}
                         else:
                             this_hp = self._hp_info[hp]
+                            # Value of 'object_types' is now a list
                             if f not in this_hp['files'] :
                                 this_hp['files'][f] = None
-                            this_hp['object_types'][ot] = f
+                            if ot in this_hp['object_types']:
+                                this_hp['object_types'][ot].append(f)
+                            else:
+                                #this_hp['object_types'][ot] = f
+                                this_hp['object_types'][ot] = [f]
         return hp_set
 
     def get_hps_by_region(self, region):
@@ -261,7 +272,7 @@ class SkyCatalog(object):
         if self.verbose:
             print("Region ", region)
             print("obj_type_set ", obj_type_set)
-        if self._config['area_partition']['type'] == 'healpix':
+        if self._config['area_partition']['partition_type'] == 'healpix':
             hps = self.get_hps_by_region(region)
 
         # otherwise raise a not-supported exception
@@ -301,9 +312,16 @@ class SkyCatalog(object):
     def get_objects_by_hp(self, hp, region=None, obj_type_set=None,
                           datetime=None):
         '''
-        Find all object
-        # Find the right Sky Catalog file or files (depends on obj_type_set)
-        # Get file handle(s) and store if we don't already have it (them)
+        Find all objects in the healpixl (and region if specified)
+        of requested types
+
+        Parameters
+        ----------
+        hp     The healpix pixel.
+        region If supplied defines a disk or box. Return only object contained
+               in it
+        obj_type_set   Type of objects to fetch.  Defaults to all
+        datetime       Ignored for now; no support for moving objects
 
         Returns
         -------
@@ -326,26 +344,52 @@ class SkyCatalog(object):
                     parents.add(self._config['object_types'][ot]['parent'])
             obj_types = obj_types.union(parents)
 
-        # Associate object types with readers.  May be > one type per reader
-        rdr_ot = dict()
+        # Find the right Sky Catalog file or files (depends on obj_type_set)
+        # Get file handle(s) and store if we don't already have it (them)
+
+        # Associate object types with files and files with readers.
+        # May be > one type per reader (e.g. different kinds of point sources
+        # stored in a single file)
+        # Also may be more than one file per type (galaxy has two)
+        rdr_ot = dict()   # maps readers to set of object types it reads
 
         for ot in obj_types:
+            # FInd files associated with this type
             if 'file_template' in self._config['object_types'][ot]:
-                f = self._hp_info[hp]['object_types'][ot]
+                f_list = self._hp_info[hp]['object_types'][ot]
             elif 'parent' in self._config['object_types'][ot]:
-                f = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
-            if f not in self._hp_info[hp]:
-                the_reader = parquet_reader.ParquetReader(os.path.join(self._cat_dir,f), mask=None)
-                self._hp_info[hp][f] = the_reader
-            the_reader = self._hp_info[hp][f]
-            if the_reader in rdr_ot:
-                rdr_ot[the_reader].add(ot)
-            else:
-                rdr_ot[the_reader] = set([ot])
+                f_list = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
+
+            for f in f_list:
+                if self._hp_info[hp]['files'][f] is None:            # no reader yet
+                    full_path = os.path.join(self._cat_dir, f)
+                    the_reader = parquet_reader.ParquetReader(full_path, mask=None)
+                    #self._hp_info[hp][f] = the_reader
+                    self._hp_info[hp]['files'][f] = the_reader
+                else:
+                    the_reader = self._hp_info[hp]['files'][f]
+                # associate object type with this reader
+                if the_reader in rdr_ot:
+                    rdr_ot[the_reader].add(ot)
+                else:
+                    rdr_ot[the_reader] = set([ot])
+
+            # if f not in self._hp_info[hp]:
+            #     the_reader = parquet_reader.ParquetReader(os.path.join(self._cat_dir,f), mask=None)
+            #     self._hp_info[hp][f] = the_reader
+            # the_reader = self._hp_info[hp][f]
+            # if the_reader in rdr_ot:
+            #     rdr_ot[the_reader].add(ot)
+            # else:
+            #     rdr_ot[the_reader] = set([ot])
 
         # Now get minimal columns for objects using the readers
+        collection_readers = []
         for rdr in rdr_ot:
             if 'galaxy' in rdr_ot[rdr]:
+                collection_readers.append(rdr)
+                if 'ra' not in rdr.columns:      # flux addendum file
+                    continue
                 arrow_t = rdr.read_columns(G_COLUMNS, None) # or read_row_group
                 # Make a boolean array, value set to 1 for objects
                 # outside the region
@@ -380,11 +424,12 @@ class SkyCatalog(object):
                                                   self,
                                                   region=region,
                                                   mask=mask,
-                                                  reader=rdr)
+                                                  readers=collection_readers)
                 object_list.append_collection(new_collection)
 
                 # Now do the same for point sources
             if 'star' in rdr_ot[rdr]:
+                collection_readers.append(rdr)
                 arrow_t = rdr.read_columns(PS_COLUMNS, None) # or read_row_group
                 # Make a boolean array, value set to 1 for objects
                 # outside the region
@@ -415,7 +460,8 @@ class SkyCatalog(object):
                                                   self,
                                                   region=region,
                                                   mask=mask,
-                                                  reader=rdr)
+                                                  readers=collection_readers)
+                #                                  reader=rdr)
                 object_list.append_collection(new_collection)
 
 
