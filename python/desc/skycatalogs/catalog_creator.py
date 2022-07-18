@@ -18,7 +18,7 @@ from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble
 from dustmaps.sfd import SFDQuery
 
 """
-Code to create a sky catalog for a particular object type
+Code to create a sky catalog for particular object types
 """
 
 #####pixels = [9556, 9683, 9684, 9812, 9813, 9940]
@@ -248,19 +248,27 @@ class CatalogCreator:
         ----------
         catalog_type   string    Currently 'galaxy' and 'pointsource' are
                                  the only values allowed
+        Return
+        ------
+        None
         """
         if catalog_type == ('galaxy'):
-            return self.create_galaxy_catalog()
+            self.create_galaxy_catalog()
+            self.create_galaxy_flux_catalog()
         elif catalog_type == ('pointsource'):
-            return self.create_pointsource_catalog()
+            self.create_pointsource_catalog()
         else:
             raise NotImplemented(f'CatalogCreator.create: unsupported catalog type {catalog_type}')
 
     def create_galaxy_catalog(self):
         """
+        Create the 'main' galaxy catalog, including everything except
+        LSST fluxes
+
         Returns
         -------
         None
+
         """
         import GCRCatalogs
 
@@ -436,6 +444,52 @@ class CatalogCreator:
         writer.close()
         self._logger.debug(f'# row groups written: {rg_written}')
 
+    def create_galaxy_flux_catalog(self, config_file=None):
+        '''
+        Create a second file per healpixel containing just galaxy id and
+        LSST fluxes.  Use information in the main file to compute fluxes
+
+        Parameters
+        ----------
+        Path to config created in first stage so we can find the main
+        galaxy files.
+
+        Return
+        ------
+        None
+        '''
+
+        from desc.skycatalogs import open_catalog, SkyCatalog
+
+        if not config_file:
+            config_file = self._written_config
+        self._cat = open_catalog(config_file)
+
+        self._flux_arrow_schema = _make_galaxy_flux_schema(self._logname)
+        self._flux_template = self._cat.raw_config['object_types']['galaxy']['flux_file_template']
+
+        self._logger.info('Creating galaxy flux files')
+        for p in self._parts:
+            self._logger.info(f'Starting on pixel {p}')
+            self.create_galaxy_flux_pixel(p)
+            self._logger.info(f'Completed pixel {p}')
+
+    def create_galaxy_flux_pixel(self, pixel, main_cat, arrow_schema):
+        '''
+        Create a parquet file for a single healpix pixel containing only
+        galaxy id and LSST fluxes
+
+        Parameters
+        ----------
+        Pixel         int
+
+        Return
+        ------
+        None
+        '''
+
+        pass
+
     def create_pointsource_catalog(self, star_truth=None, sn_truth=None):
 
         """
@@ -508,6 +562,20 @@ class CatalogCreator:
         return
 
     def write_config(self, overwrite=False):
+        '''
+        Parameters
+        ----------
+        overwrite   boolean default False.   If true, overwrite existing
+                    config of the same name
+        Returns
+        -------
+        None
+
+        Side-effects
+        ------------
+        Save path to config file written as instance variable
+
+        '''
         config = create_config(self._catalog_name, self._logname)
         config.add_key('area_partition', self._area_partition)
         config.add_key('skycatalog_root', self._skycatalog_root)
@@ -529,4 +597,5 @@ class CatalogCreator:
 
         if not self._config_path:
             self._config_path = self._output_dir
-        config.write_config(self._config_path,  overwrite=overwrite)
+        self._written_config = config.write_config(self._config_path,
+                                                   overwrite=overwrite)
