@@ -144,6 +144,16 @@ class Config(object):
         '''
         Export self to yaml document and write to specified directory.
         If filename is None the file will be named after catalog_name
+
+        Parameters
+        ----------
+        dirpath        Directory to which file will be written
+        filename       If supplied, use for filename
+        overwrite      By default do not overwrite existing file with same path
+
+        Return
+        ------
+        Full path of output config
         '''
         ###self.validate()   skip for now
 
@@ -158,12 +168,13 @@ class Config(object):
             except FileExistsError:
                 logger = logging.getLogger(self._logname)
                 logger.warning('Config.write_config: Will not overwrite pre-existing config file ' + outpath)
-            return
+                return
 
-        with open(outpath, "w") as f:
-            yaml.dump(self._cfg, f)
+        else:
+            with open(outpath, mode='w') as f:
+                yaml.dump(self._cfg, f)
 
-
+        return outpath
 
 
 def _find_schema_path(schema_spec):
