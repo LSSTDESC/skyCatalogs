@@ -54,6 +54,36 @@ def _get_intersecting_hps(hp_ordering, nside, region):
         pixels = healpy.query_disc(nside, center, radius_rad, inclusive=True,
                                    nest=False)
         return pixels
+
+def _compress_via_mask(tbl, id_column, region):
+    '''
+    Parameters
+    ----------
+    tbl          data table including columns named "ra", "dec", and id_column
+    id_column    string
+    region       mask should restrict to this region (or not at all if None)
+
+    Returns
+    -------
+    4 values ra, dec, id, mask
+    If objects are in the region, ra, dec, id correspond to those objects.
+    mask will mask off unused objects
+    If there are no objects in the region, all return values are None
+
+    '''
+    if region is not None:
+        mask = _compute_mask(region, tbl['ra'], tbl['dec'])
+        masked_ra = ma.array(tbl['ra'], mask=mask)
+        ra_compress = masked_ra.compressed()
+        if ra_compress.size > 0:
+            dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
+            id_compress = ma.array(tbl[id_column], mask=mask).compressed()
+            return ra_compress, dec_compress, id_compress, mask
+        else:
+            return None,None,None,None
+    else:
+        return tbl['ra'], tbl['dec'], tbl[id_column],None
+
 def _compute_mask(region, ra, dec):
     '''
     Compute mask according to region for provided data
@@ -374,98 +404,47 @@ class SkyCatalog(object):
                 else:
                     rdr_ot[the_reader] = set([ot])
 
-            # if f not in self._hp_info[hp]:
-            #     the_reader = parquet_reader.ParquetReader(os.path.join(self._cat_dir,f), mask=None)
-            #     self._hp_info[hp][f] = the_reader
-            # the_reader = self._hp_info[hp][f]
-            # if the_reader in rdr_ot:
-            #     rdr_ot[the_reader].add(ot)
-            # else:
-            #     rdr_ot[the_reader] = set([ot])
-
         # Now get minimal columns for objects using the readers
         galaxy_readers = []
         star_readers = []
+
+        # First make a pass to separate out the readers
         for rdr in rdr_ot:
             if 'galaxy' in rdr_ot[rdr]:
                 galaxy_readers.append(rdr)
-                if 'ra' not in rdr.columns:      # flux addendum file
-                    continue
-                arrow_t = rdr.read_columns(G_COLUMNS, None) # or read_row_group
-                # Make a boolean array, value set to 1 for objects
-                # outside the region
-                if region is not None:
-                    # This belongs in a separate routine
-                    mask = _compute_mask(region, arrow_t['ra'], arrow_t['dec'])
+            elif 'star' in rdr_ot[rdr]:
+                star_readers.append(rdr)
 
-                else:
-                    mask = None
+        # Make galaxy collection
+        for rdr in galaxy_readers:
+            if 'ra' not in rdr.columns:
+                continue
+            arrow_t = rdr.read_columns(G_COLUMNS, None)
 
-                if mask is not None:
-                    masked_ra = ma.array(arrow_t['ra'], mask=mask)
-                    if self.verbose:
-                        print("Masked array size: ", masked_ra.size)
-                        print("Masked array compressed size: ", masked_ra.compressed().size)
-                    ra_compress = masked_ra.compressed()
-                    if ra_compress.size > 0:
-                        dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
-                        id_compress = ma.array(arrow_t['galaxy_id'], mask=mask).compressed()
-                    else:
-                        continue
-                else:
-                    ra_compress = arrow_t['ra']
-                    dec_compress = arrow_t['dec']
-                    id_compress = arrow_t['galaxy_id']
+            ra_c, dec_c, id_c, mask = _compress_via_mask(arrow_t, 'galaxy_id',
+                                                         region)
 
-                new_collection = ObjectCollection(ra_compress,
-                                                  dec_compress,
-                                                  id_compress,
-                                                  'galaxy',
-                                                  hp,
-                                                  self,
-                                                  region=region,
-                                                  mask=mask,
+            if ra_c is not None:
+                new_collection = ObjectCollection(ra_c, dec_c, id_c,
+                                                  'galaxy', hp, self,
+                                                  region=region, mask=mask,
                                                   readers=galaxy_readers)
                 object_list.append_collection(new_collection)
 
-                # Now do the same for point sources
-            if 'star' in rdr_ot[rdr]:
-                star_readers.append(rdr)
-                arrow_t = rdr.read_columns(PS_COLUMNS, None) # or read_row_group
-                # Make a boolean array, value set to 1 for objects
-                # outside the region
-                if region is not None:
-                    # This belongs in a separate routine
-                    mask = _compute_mask(region, arrow_t['ra'], arrow_t['dec'])
-                else:
-                    mask = None
+        # Make point source collection
+        for rdr in star_readers:
+            if 'ra' not in rdr.columns:
+                continue
+            arrow_t = rdr.read_columns(PS_COLUMNS, None)
 
-                if mask is not None:
-                    masked_ra = ma.array(arrow_t['ra'], mask=mask)
-                    ra_compress = masked_ra.compressed()
-                    if ra_compress.size > 0:
-                        dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
-                        id_compress = ma.array(arrow_t['id'], mask=mask).compressed()
-                    else:
-                        continue
-                else:
-                    ra_compress = arrow_t['ra']
-                    dec_compress = arrow_t['dec']
-                    id_compress = arrow_t['id']
+            ra_c, dec_c, id_c, mask = _compress_via_mask(arrow_t, 'id', region)
 
-                new_collection = ObjectCollection(ra_compress,
-                                                  dec_compress,
-                                                  id_compress,
-                                                  'star',
-                                                  hp,
-                                                  self,
-                                                  region=region,
-                                                  mask=mask,
+            if ra_c is not None:
+                new_collection = ObjectCollection(ra_c, dec_c, id_c,
+                                                  'star', hp, self,
+                                                  region=region, mask=mask,
                                                   readers=star_readers)
-                #                                  reader=rdr)
                 object_list.append_collection(new_collection)
-
-
 
         return object_list
 
