@@ -87,11 +87,11 @@ def _make_galaxy_flux_schema(logname):
     fields = [pa.field('galaxy_id', pa.int64()),
               # should flux fields be named e.g. lsst_cmodel_flux_u?
               pa.field('lsst_flux_u', pa.float32() , True),
-              pa.filed('lsst_flux_g', pa.float32() , True),
-              pa.filed('lsst_flux_r', pa.float32() , True),
-              pa.filed('lsst_flux_i', pa.float32() , True),
-              pa.filed('lsst_flux_z', pa.float32() , True),
-              pa.filed('lsst_flux_y', pa.float32() , True)]
+              pa.field('lsst_flux_g', pa.float32() , True),
+              pa.field('lsst_flux_r', pa.float32() , True),
+              pa.field('lsst_flux_i', pa.float32() , True),
+              pa.field('lsst_flux_z', pa.float32() , True),
+              pa.field('lsst_flux_y', pa.float32() , True)]
     return pa.schema(fields)
 
 def _make_star_schema():
