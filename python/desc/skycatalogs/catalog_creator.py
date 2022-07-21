@@ -272,6 +272,8 @@ class CatalogCreator:
         """
         import GCRCatalogs
 
+        self._cat = None
+
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)
 
         # Save cosmology in case we need to write parameters out later
@@ -281,6 +283,8 @@ class CatalogCreator:
 
         arrow_schema = _make_galaxy_schema(self._logname, self._sed_subdir,
                                            self._knots)
+        self._flux_arrow_schema = _make_galaxy_flux_schema(self._logname)
+
 
         for p in self._parts:
             self._logger.info(f'Starting on pixel {p}')
@@ -463,9 +467,9 @@ class CatalogCreator:
 
         if not config_file:
             config_file = self._written_config
-        self._cat = open_catalog(config_file)
+        if not self._cat:
+            self._cat = open_catalog(config_file)
 
-        self._flux_arrow_schema = _make_galaxy_flux_schema(self._logname)
         self._flux_template = self._cat.raw_config['object_types']['galaxy']['flux_file_template']
 
         self._logger.info('Creating galaxy flux files')
@@ -474,7 +478,7 @@ class CatalogCreator:
             self.create_galaxy_flux_pixel(p)
             self._logger.info(f'Completed pixel {p}')
 
-    def create_galaxy_flux_pixel(self, pixel, main_cat, arrow_schema):
+    def create_galaxy_flux_pixel(self, pixel):
         '''
         Create a parquet file for a single healpix pixel containing only
         galaxy id and LSST fluxes
@@ -488,6 +492,8 @@ class CatalogCreator:
         None
         '''
 
+        # For main catalog use self._cat
+        # For schema use self._flux_arrow_schema
         pass
 
     def create_pointsource_catalog(self, star_truth=None, sn_truth=None):
