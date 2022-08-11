@@ -18,7 +18,8 @@ there could be two subtypes for bulge components, differing in the
 form of their associated SEDs
 '''
 
-__all__ = ['BaseObject', 'ObjectCollection', 'ObjectList', 'OBJECT_TYPES']
+__all__ = ['BaseObject', 'ObjectCollection', 'ObjectList', 'OBJECT_TYPES',
+           'LSST_BANDS']
 GALAXY=1
 GALAXY_BULGE=2
 GALAXY_DISK=3
@@ -30,6 +31,8 @@ SN=7
 OBJECT_TYPES = {'galaxy' : GALAXY, 'bulge_basic' : GALAXY_BULGE,
                 'disk_basic' : GALAXY_DISK, 'knots_basic' : GALAXY_KNOTS,
                 'star' : STAR, 'agn' : AGN, 'sn' : SN}
+
+LSST_BANDS = ('ugrizy')
 
 class BaseObject(object):
     '''
@@ -360,7 +363,7 @@ class BaseObject(object):
         return [sed.calculateFlux(b) for b in bandpasses]
 
     def get_LSST_flux(self, band, cache=True):
-        if not band in 'ugrizy':
+        if not band in LSST_BANDS:
             return None
         att = f'flux_{band}'
         # Check if it's already an attribute
@@ -381,15 +384,19 @@ class BaseObject(object):
                 setattr(self, att, val)
             return val
 
-    def get_LSST_fluxes(self, cache=True):
+    def get_LSST_fluxes(self, cache=True, as_dict=True):
         '''
-        Return a dict of fluxes for LSST bandpasses
+        Return a dict of fluxes for LSST bandpasses or, if as_dict is False,
+        just a list in the same order as LSST_BANDS
         '''
-        fluxes = {}
-        for band in 'ugrizy':
+        fluxes = OrderedDict()
+        for band in LSST_BANDS:
             fluxes[band] = self.get_LSST_flux(band, cache)
 
-        return fluxes
+        if as_dict:
+            return fluxes
+        else:
+            return list(fluxes.values())
 
 class ObjectCollection(Sequence):
     '''
