@@ -13,6 +13,7 @@ from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
 from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
 from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance
+from desc.skycatalogs.objects.base_object import LSST_BANDS, BaseObject
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
@@ -196,6 +197,7 @@ class CatalogCreator:
         """
 
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
+        self._galaxy_stride = 1000000
         if pkg_root:
             self._pkg_root = pkg_root
         else:
@@ -312,7 +314,8 @@ class CatalogCreator:
         tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
 
         # Number of rows to include in a row group
-        stride = 1000000
+        #stride = 1000000
+        stride = self._galaxy_stride
 
         hp_filter = [f'healpix_pixel=={pixel}']
         if self._mag_cut:
@@ -399,8 +402,8 @@ class CatalogCreator:
         self._logger.debug('Made extinction')
 
         #  Write row groups of size stride (or less) until input is exhausted
-        last_row = len(df['galaxy_id']) - 1
-        u_bnd = min(stride, last_row)
+        last_row_ix = len(df['galaxy_id']) - 1
+        u_bnd = min(stride, last_row_ix + 1)
         l_bnd = 0
         rg_written = 0
         writer = None
@@ -443,7 +446,7 @@ class CatalogCreator:
             writer.write_table(out_table)
             rg_written += 1
             l_bnd = u_bnd
-            u_bnd = min(l_bnd + stride, last_row)
+            u_bnd = min(l_bnd + stride, last_row_ix + 1)
 
         writer.close()
         self._logger.debug(f'# row groups written: {rg_written}')
@@ -475,10 +478,10 @@ class CatalogCreator:
         self._logger.info('Creating galaxy flux files')
         for p in self._parts:
             self._logger.info(f'Starting on pixel {p}')
-            self.create_galaxy_flux_pixel(p)
+            self._create_galaxy_flux_pixel(p)
             self._logger.info(f'Completed pixel {p}')
 
-    def create_galaxy_flux_pixel(self, pixel):
+    def _create_galaxy_flux_pixel(self, pixel):
         '''
         Create a parquet file for a single healpix pixel containing only
         galaxy id and LSST fluxes
@@ -494,7 +497,49 @@ class CatalogCreator:
 
         # For main catalog use self._cat
         # For schema use self._flux_arrow_schema
-        pass
+        # output_template should be derived from value for flux_file_template
+        #  in main catalog config.  Cheat for now
+        output_template = 'galaxy_flux_{}.parquet'
+        stride = self._galaxy_stride
+
+        object_list = self._cat.get_objects_by_hp(pixel,
+                                                  obj_type_set={'galaxy'})
+        last_row_ix = len(object_list) - 1
+        writer = None
+        l_bnd = 0
+        u_bnd = min(last_row_ix + 1, stride)
+        ##o_list = object_list[l_bnd : u_bnd]
+        rg_written = 0
+        while u_bnd > l_bnd:
+            o_list = object_list[l_bnd : u_bnd]
+            self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
+            out_dict = {}
+            out_dict['galaxy_id'] = [o.get_native_attribute('galaxy_id') for o in o_list]
+            all_fluxes =  [o.get_LSST_fluxes(as_dict=False) for o in o_list]
+            all_fluxes_transpose = zip(*all_fluxes)
+            for i, band in enumerate(LSST_BANDS):
+                self._logger.debug(f'Band {band} is number {i}')
+                v = all_fluxes_transpose.__next__()
+                out_dict[f'lsst_flux_{band}'] = v
+                if i == 1:
+                    self._logger.debug(f'Len of flux column: {len(v)}')
+                    self._logger.debug(f'Type of flux column: {type(v)}')
+            out_df = pd.DataFrame.from_dict(out_dict)
+            out_table = pa.Table.from_pandas(out_df,
+                                             schema=self._flux_arrow_schema)
+            if not writer:
+                writer = pq.ParquetWriter(os.path.join(self._output_dir,
+                                                       output_template.format(pixel)),
+                                                       self._flux_arrow_schema)
+            writer.write_table(out_table)
+            l_bnd = u_bnd
+            u_bnd = min(l_bnd + stride, last_row_ix + 1)
+
+            rg_written +=1
+
+        writer.close()
+        self._logger.debug(f'# row groups written to flux file: {rg_written}')
+
 
     def create_pointsource_catalog(self, star_truth=None, sn_truth=None):
 
