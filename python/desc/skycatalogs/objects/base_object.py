@@ -200,6 +200,10 @@ class BaseObject(object):
         mag_f = self._belongs_to.sky_catalog.mag_norm_f
         th_bins = self._belongs_to.config.get_tophat_parameters()
 
+        # if values are all zeros no point in trying to convert
+        if max(th_val) == 0.0:
+            return th_bins, th_val, float('inf')
+
         lmbda,f_lambda,mag_norm,f_nu500 = convert_tophat_sed(th_bins, th_val,
                                           mag_f, redshift=r, wavelen_step=resolution)
         return lmbda, f_lambda, mag_norm
