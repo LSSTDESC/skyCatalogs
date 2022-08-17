@@ -555,8 +555,10 @@ class CatalogCreator:
 
         if not config_file:
             config_file = self.write_config(path_only=True)
-        if not self._cat:
-            self._cat = open_catalog(config_file)
+
+        # Always open catalog. If it was opened for galaxies earlier
+        # it won't know about star files.
+        self._cat = open_catalog(config_file)
 
         self._flux_template = self._cat.raw_config['object_types']['star']['flux_file_template']
 
@@ -593,9 +595,6 @@ class CatalogCreator:
 
         # Write out as a single rowgroup as was done for main catalog
         l_bnd = 0
-
-        ##### Temporary for debugging
-        ###u_bnd = 21
         u_bnd = last_row_ix + 1
 
         o_list = object_list[l_bnd : u_bnd]
