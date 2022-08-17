@@ -132,6 +132,7 @@ class CatalogCreator:
 
         self._sn_truth = None
         self._star_truth = None
+        self._cat = None
 
         self._parts = parts
         self._area_partition = area_partition
@@ -147,6 +148,7 @@ class CatalogCreator:
         self._output_dir = os.path.join(self._skycatalog_root,
                                         self._catalog_dir)
 
+        self._written_config = None
         self._config_path = config_path
         self._catalog_name = catalog_name
 
@@ -175,6 +177,7 @@ class CatalogCreator:
             self.create_galaxy_flux_catalog()
         elif catalog_type == ('pointsource'):
             self.create_pointsource_catalog()
+            self.create_pointsource_flux_catalog()
         else:
             raise NotImplemented(f'CatalogCreator.create: unsupported catalog type {catalog_type}')
 
@@ -201,7 +204,7 @@ class CatalogCreator:
 
         arrow_schema = make_galaxy_schema(self._logname, self._sed_subdir,
                                            self._knots)
-        self._flux_arrow_schema = make_galaxy_flux_schema(self._logname)
+        self._gal_flux_schema = make_galaxy_flux_schema(self._logname)
 
 
         for p in self._parts:
@@ -284,8 +287,6 @@ class CatalogCreator:
         if self._sed_subdir:
             #  Generate full paths for disk and bulge SED files, even though
             #  we don't actually write the files here
-            # Name of file can be <galaxy_id>_<cmp>.txt
-            # prepend subdirectory supplied as command-line arg.
             bulge_path = _generate_sed_path(df['galaxy_id'], self._sed_subdir,
                                             'bulge')
             disk_path =  _generate_sed_path(df['galaxy_id'], self._sed_subdir,
@@ -412,7 +413,7 @@ class CatalogCreator:
         '''
 
         # For main catalog use self._cat
-        # For schema use self._flux_arrow_schema
+        # For schema use self._gal_flux_schema
         # output_template should be derived from value for flux_file_template
         #  in main catalog config.  Cheat for now
         output_template = 'galaxy_flux_{}.parquet'
@@ -442,11 +443,11 @@ class CatalogCreator:
                     self._logger.debug(f'Type of flux column: {type(v)}')
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df,
-                                             schema=self._flux_arrow_schema)
+                                             schema=self._gal_flux_schema)
             if not writer:
                 writer = pq.ParquetWriter(os.path.join(self._output_dir,
                                                        output_template.format(pixel)),
-                                                       self._flux_arrow_schema)
+                                                       self._gal_flux_schema)
             writer.write_table(out_table)
             l_bnd = u_bnd
             u_bnd = min(l_bnd + stride, last_row_ix + 1)
@@ -479,12 +480,19 @@ class CatalogCreator:
         self._sn_truth = _sn_db
 
         arrow_schema = make_star_schema()
+        self._ps_flux_schema = make_star_flux_schema(self._logname)
         #  Need a way to indicate which object types to include; deal with that
         #  later.  For now, default is stars only.  Use default star parameter file.
         for p in self._parts:
             self._logger.debug(f'Point sources. Starting on pixel {p}')
             self.create_pointsource_pixel(p, arrow_schema, star_cat=_star_db)
             self._logger.debug(f'Completed pixel {p}')
+
+        # If we already did galaxies don't need to write config.
+        # And if we didn't, we don't have all the information needed
+        # for config
+        #if not self._written_config:
+        #    self.write_config()
 
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None,
                              sn_cat=None):
@@ -528,21 +536,118 @@ class CatalogCreator:
 
         return
 
-    def write_config(self, overwrite=False):
+    def create_pointsource_flux_catalog(self, config_file=None):
+        '''
+        Create a second file per healpixel containing just id and
+        LSST fluxes.  Use information in the main file to compute fluxes
+
+        Parameters
+        ----------
+        Path to config created in first stage so we can find the main
+        galaxy files.
+
+        Return
+        ------
+        None
+        '''
+
+        from desc.skycatalogs import open_catalog, SkyCatalog
+
+        if not config_file:
+            config_file = self.write_config(path_only=True)
+        if not self._cat:
+            self._cat = open_catalog(config_file)
+
+        self._flux_template = self._cat.raw_config['object_types']['star']['flux_file_template']
+
+        self._logger.info('Creating pointsource flux files')
+        for p in self._parts:
+            self._logger.info(f'Starting on pixel {p}')
+            self._create_pointsource_flux_pixel(p)
+            self._logger.info(f'Completed pixel {p}')
+
+    def _create_pointsource_flux_pixel(self, pixel):
+        '''
+        Create a parquet file for a single healpix pixel containing only
+        pointsource id and LSST fluxes
+
+        Parameters
+        ----------
+        Pixel         int
+
+        Return
+        ------
+        None
+        '''
+
+        # For main catalog use self._cat
+        # For schema use self._ps_flux_schema
+        # output_template should be derived from value for flux_file_template
+        #  in main catalog config.  Cheat for now
+        output_template = 'pointsource_flux_{}.parquet'
+
+        object_list = self._cat.get_objects_by_hp(pixel,
+                                                  obj_type_set={'star'})
+        last_row_ix = len(object_list) - 1
+        writer = None
+
+        # Write out as a single rowgroup as was done for main catalog
+        l_bnd = 0
+
+        ##### Temporary for debugging
+        ###u_bnd = 21
+        u_bnd = last_row_ix + 1
+
+        o_list = object_list[l_bnd : u_bnd]
+        self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
+        out_dict = {}
+        out_dict['id'] = [o.get_native_attribute('id') for o in o_list]
+        all_fluxes =  [o.get_LSST_fluxes(as_dict=False) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        for i, band in enumerate(LSST_BANDS):
+            self._logger.debug(f'Band {band} is number {i}')
+            v = all_fluxes_transpose.__next__()
+            out_dict[f'lsst_flux_{band}'] = v
+            if i == 1:
+                self._logger.debug(f'Len of flux column: {len(v)}')
+                self._logger.debug(f'Type of flux column: {type(v)}')
+        out_df = pd.DataFrame.from_dict(out_dict)
+        out_table = pa.Table.from_pandas(out_df,
+                                         schema=self._ps_flux_schema)
+        if not writer:
+            writer = pq.ParquetWriter(os.path.join(self._output_dir,
+                                                   output_template.format(pixel)),
+                                      self._ps_flux_schema)
+        writer.write_table(out_table)
+
+        writer.close()
+        ##self._logger.debug(f'# row groups written to flux file: {rg_written}')
+
+    def write_config(self, overwrite=False, path_only=False):
         '''
         Parameters
         ----------
         overwrite   boolean default False.   If true, overwrite existing
                     config of the same name
+        path_only   If true, just return the path; don't write anything
+
         Returns
         -------
-        None
+        Path to would-be config file if path_only is True;
+        else None
 
         Side-effects
         ------------
         Save path to config file written as instance variable
 
         '''
+        if not self._config_path:
+            self._config_path = self._output_dir
+
+        if path_only:
+            return os.path.join(self._config_path, self._catalog_name + '.yaml')
+
+
         config = create_config(self._catalog_name, self._logname)
         config.add_key('area_partition', self._area_partition)
         config.add_key('skycatalog_root', self._skycatalog_root)
@@ -562,7 +667,5 @@ class CatalogCreator:
         config.add_key('provenance', assemble_provenance(self._pkg_root,
                                                          inputs=inputs))
 
-        if not self._config_path:
-            self._config_path = self._output_dir
         self._written_config = config.write_config(self._config_path,
                                                    overwrite=overwrite)

@@ -1,4 +1,5 @@
 import pyarrow as pa
+import logging
 
 __all__ = ['make_galaxy_schema', 'make_galaxy_flux_schema', 'make_star_schema']
 
@@ -88,7 +89,7 @@ def make_star_schema():
               pa.field('MW_av', pa.float32(), True)]
     return pa.schema(fields)
 
-def make_star_flux_schema():
+def make_star_flux_schema(logname):
     '''
     Will make a separate parquet file with lsst flux for each band
     and id for joining with the main star file
