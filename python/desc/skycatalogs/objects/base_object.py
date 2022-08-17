@@ -353,12 +353,14 @@ class BaseObject(object):
             sed *= mu
         return sed
 
-    def get_flux(self, bandpass):
+    def get_flux(self, bandpass, sed=None):
         """
         Return the total object flux integrated over the bandpass
         in photons/sec/cm^2
+        Use supplied sed if there is one
         """
-        sed = self.get_total_observer_sed()
+        if not sed:
+            sed = self.get_total_observer_sed()
         return sed.calculateFlux(bandpass)
 
     def get_fluxes(self, bandpasses):
@@ -366,7 +368,7 @@ class BaseObject(object):
         sed = self.get_total_observer_sed()
         return [sed.calculateFlux(b) for b in bandpasses]
 
-    def get_LSST_flux(self, band, cache=True):
+    def get_LSST_flux(self, band, sed=None, cache=True):
         if not band in LSST_BANDS:
             return None
         att = f'flux_{band}'
@@ -383,7 +385,7 @@ class BaseObject(object):
         # These include LSST_u.dat, etc.
         else:
             bp = galsim.Bandpass(f'LSST_{band}.dat', 'nm')
-            val = self.get_flux(bp)
+            val = self.get_flux(bp, sed=sed)
             if cache:
                 setattr(self, att, val)
             return val
@@ -394,8 +396,9 @@ class BaseObject(object):
         just a list in the same order as LSST_BANDS
         '''
         fluxes = OrderedDict()
+        sed = self.get_total_observer_sed()
         for band in LSST_BANDS:
-            fluxes[band] = self.get_LSST_flux(band, cache)
+            fluxes[band] = self.get_LSST_flux(band, sed=sed, cache=cache)
 
         if as_dict:
             return fluxes

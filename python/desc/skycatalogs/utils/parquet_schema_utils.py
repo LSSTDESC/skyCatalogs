@@ -95,7 +95,7 @@ def make_star_flux_schema(logname):
     and id for joining with the main star file
     '''
     logger = logging.getLogger(logname)
-    logger.debug('Creating galaxy flux schema')
+    logger.debug('Creating star flux schema')
     fields = [pa.field('id', pa.int64()),
               pa.field('lsst_flux_u', pa.float32() , True),
               pa.field('lsst_flux_g', pa.float32() , True),
