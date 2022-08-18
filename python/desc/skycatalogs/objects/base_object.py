@@ -8,6 +8,9 @@ import astropy.units as u
 import warnings
 from dust_extinction.parameter_averages import F19
 import galsim
+import logging
+from galsim.errors import GalSimRangeError
+
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
 from desc.skycatalogs.utils.sed_utils import convert_tophat_sed
@@ -200,8 +203,8 @@ class BaseObject(object):
         mag_f = self._belongs_to.sky_catalog.mag_norm_f
         th_bins = self._belongs_to.config.get_tophat_parameters()
 
-        # if values are all zeros no point in trying to convert
-        if max(th_val) == 0.0:
+        # if values are all zeros or nearly no point in trying to convert
+        if max(th_val) < np.finfo('float').resolution:
             return th_bins, th_val, float('inf')
 
         lmbda,f_lambda,mag_norm,f_nu500 = convert_tophat_sed(th_bins, th_val,
@@ -359,9 +362,13 @@ class BaseObject(object):
         in photons/sec/cm^2
         Use supplied sed if there is one
         """
+
         if not sed:
             sed = self.get_total_observer_sed()
-        return sed.calculateFlux(bandpass)
+
+        flux = sed.calculateFlux(bandpass)
+
+        return flux
 
     def get_fluxes(self, bandpasses):
         # To avoid recomputing sed
@@ -398,7 +405,21 @@ class BaseObject(object):
         fluxes = OrderedDict()
         sed = self.get_total_observer_sed()
         for band in LSST_BANDS:
-            fluxes[band] = self.get_LSST_flux(band, sed=sed, cache=cache)
+            ##### temporary to debug error
+            try:
+                fluxes[band] = self.get_LSST_flux(band, sed=sed, cache=cache)
+            except GalSimRangeError as e:
+                logger = logging.getLogger('skyCatalogs.creator')
+                galaxy_id = self.get_native_attribute('galaxy_id')
+                logger.debug(f'galaxy_id: {galaxy_id}  band: {band}')
+                redshift = self.get_native_attribute('redshift')
+                logger.debug(f'redshift: {redshift}')
+                bulge_sed = self.get_native_attribute('sed_val_bulge')
+                logger.debug(f'Bulge sed: {bulge_sed}')
+                disk_sed = self.get_native_attribute('sed_val_disk')
+                logger.debug(f'Disk_sed: {disk_sed}')
+                logger.debug(f'GalSimRangeError: {e})
+                fluxes[band] = 0.0
 
         if as_dict:
             return fluxes

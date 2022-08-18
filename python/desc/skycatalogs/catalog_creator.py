@@ -348,11 +348,6 @@ class CatalogCreator:
                 out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]
                 out_dict['disk_sed_file_path'] = disk_path[l_bnd : u_bnd]
 
-            if self._logger.getEffectiveLevel() == logging.DEBUG:
-                for kd,i in out_dict.items():
-                    self._logger.debug(f'Key={kd}, type={type(i)}, len={len(i)}')
-            print_col = False
-
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
             if not writer:
