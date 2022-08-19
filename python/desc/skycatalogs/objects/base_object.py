@@ -418,7 +418,7 @@ class BaseObject(object):
                 logger.debug(f'Bulge sed: {bulge_sed}')
                 disk_sed = self.get_native_attribute('sed_val_disk')
                 logger.debug(f'Disk_sed: {disk_sed}')
-                logger.debug(f'GalSimRangeError: {e})
+                logger.debug(f'GalSimRangeError: {e}')
                 fluxes[band] = 0.0
 
         if as_dict:

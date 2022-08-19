@@ -493,20 +493,19 @@ if __name__ == '__main__':
     ###cfg_file_name = 'latest.yaml'
     cfg_file_name = 'future_latest.yaml'
     # cfs_filename = 'test_write_config_draft6.yaml'
+    skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
 
     if len(sys.argv) > 1:
         cfg_file_name = sys.argv[1]
     cfg_file = os.path.join('/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg',
                             cfg_file_name)
-    # cfg_file = os.path.join('/global/cscratch1/sd/jrbogart/desc/skycatalogs',
-    #                         cfg_file_name)
 
     # For tract 3828
     #   55.73604 < ra < 57.563452
     #  -37.19001 < dec < -35.702481
 
 
-    cat = open_catalog(cfg_file, skycatalog_root='/global/cscratch1/sd/jrbogart/desc/skycatalogs')
+    cat = open_catalog(cfg_file, skycatalog_root=skycatalog_root)
     hps = cat._find_all_hps()
     print('Found {} healpix pixels '.format(len(hps)))
     for h in hps: print(h)
