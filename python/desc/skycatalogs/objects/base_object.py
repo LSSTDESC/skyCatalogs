@@ -414,10 +414,6 @@ class BaseObject(object):
                 logger.debug(f'galaxy_id: {galaxy_id}  band: {band}')
                 redshift = self.get_native_attribute('redshift')
                 logger.debug(f'redshift: {redshift}')
-                bulge_sed = self.get_native_attribute('sed_val_bulge')
-                logger.debug(f'Bulge sed: {bulge_sed}')
-                disk_sed = self.get_native_attribute('sed_val_disk')
-                logger.debug(f'Disk_sed: {disk_sed}')
                 logger.debug(f'GalSimRangeError: {e}')
                 fluxes[band] = 0.0
 
