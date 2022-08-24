@@ -213,8 +213,10 @@ class CatalogCreator:
             if not self._main_only:
                 self.create_galaxy_flux_catalog()
         elif catalog_type == ('pointsource'):
-            self.create_pointsource_catalog()
-            self.create_pointsource_flux_catalog()
+            if not self._flux_only:
+                self.create_pointsource_catalog()
+            if not self._main_only:
+                self.create_pointsource_flux_catalog()
         else:
             raise NotImplemented(f'CatalogCreator.create: unsupported catalog type {catalog_type}')
 
