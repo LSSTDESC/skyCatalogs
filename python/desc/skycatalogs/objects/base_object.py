@@ -298,7 +298,6 @@ class BaseObject(object):
         # Apply magnorm. The SED is in units of photons/nm/cm^2/s
         # -0.9210340371976184 = -np.log(10)/2.5. Use to convert mag to flux
         flux_500 = np.exp(-0.9210340371976184 * magnorm)
-        ###sed = sed*flux_500*self.eff_area
         sed = sed*flux_500
 
         iAv, iRv, mwAv, mwRv = self.get_dust()

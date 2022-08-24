@@ -49,6 +49,13 @@ parser.add_argument('--catalog-name', default='skyCatalog',
                     will appear in the config and will be part of
                     the filename''')
 
+parser.add_argument('--overwrite-data', action='store_true',
+                    help='If supplied overwrite existing data files; else skip with message')
+parser.add_argument('--flux-only', action='store_true',
+                    help='If supplied only do flux files. Main files must already exist')
+parser.add_argument('--main-only', action='store_true',
+                    help='If supplied only do main files, not flux files')
+
 
 args = parser.parse_args()
 logname = 'skyCatalogs.creator'
@@ -77,7 +84,9 @@ creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          mag_cut=args.galaxy_magnitude_cut,
                          sed_subdir=args.sed_subdir,
                          knots_mag_cut=args.knots_magnitude_cut,
-                         knots=(not args.no_knots), logname=logname)
+                         knots=(not args.no_knots), logname=logname,
+                         overwrite_data=args.overwrite_data,
+                         flux_only=args.flux_only, main_only=args.main_only)
 
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:

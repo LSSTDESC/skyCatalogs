@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from multiprocessing import Process, Pipe
 from astropy.coordinates import SkyCoord
 import sqlite3
 from desc.skycatalogs.utils.common_utils import print_date
@@ -15,6 +16,8 @@ from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_mode
 from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance
 from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_schema, make_star_flux_schema
 from desc.skycatalogs.objects.base_object import LSST_BANDS, BaseObject
+
+from desc.skycatalogs.objects.base_object import ObjectCollection
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
@@ -71,6 +74,31 @@ def _generate_sed_path(ids, subdir, cmp):
     r = [f'{subdir}/{cmp}_{id}.txt' for id in ids]
     return r
 
+# Collection of galaxy objects for current row group, current pixel
+# Used while doing flux computation
+
+###def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd, out_dict):
+def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
+    '''
+    output connection
+    l_bnd, u_bnd     demarcates slice to process
+
+    returns
+                    dict with keys id, lsst_flux_u, ... lsst_flux_y
+    '''
+    out_dict = {}
+
+    o_list = galaxy_collection[l_bnd : u_bnd]
+    out_dict['galaxy_id'] = [o.get_native_attribute('galaxy_id') for o in o_list]
+    all_fluxes =  [o.get_LSST_fluxes(as_dict=False) for o in o_list]
+    all_fluxes_transpose = zip(*all_fluxes)
+    for i, band in enumerate(LSST_BANDS):
+        v = all_fluxes_transpose.__next__()
+        out_dict[f'lsst_flux_{band}'] = v
+
+    send_conn.send(out_dict)
+    ##return out_dict
+
 class CatalogCreator:
     def __init__(self, parts, area_partition, skycatalog_root=None,
                  catalog_dir='.', galaxy_truth=None,
@@ -78,7 +106,8 @@ class CatalogCreator:
                  output_type='parquet', mag_cut=None,
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator',
-                 pkg_root=None):
+                 pkg_root=None, overwrite_data=False, flux_only=False,
+                 main_only=False):
         """
         Store context for catalog creation
 
@@ -107,6 +136,11 @@ class CatalogCreator:
         knots           If True include knots
         logname         logname for Python logger
         pkg_root        defaults to three levels up from __file__
+        overwrite_data  If True, generate data whether or not file already
+                        exists.  If False (default) skip already-existing
+                        files. Output message in either case if file exists.
+        flux_only       Only create flux files, not main files
+        main_only       Only create main files, not flux files
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -159,6 +193,9 @@ class CatalogCreator:
         self._knots = knots
         self._logname = logname
         self._logger = logging.getLogger(logname)
+        self._overwrite_data = overwrite_data
+        self._flux_only = flux_only
+        self._main_only = main_only
 
     def create(self, catalog_type):
         """
@@ -173,8 +210,10 @@ class CatalogCreator:
         None
         """
         if catalog_type == ('galaxy'):
-            self.create_galaxy_catalog()
-            self.create_galaxy_flux_catalog()
+            if not self._flux_only:
+                self.create_galaxy_catalog()
+            if not self._main_only:
+                self.create_galaxy_flux_catalog()
         elif catalog_type == ('pointsource'):
             self.create_pointsource_catalog()
             self.create_pointsource_flux_catalog()
@@ -202,10 +241,9 @@ class CatalogCreator:
 
         self._mag_norm_f = MagNorm(self._cosmology)
 
-        arrow_schema = make_galaxy_schema(self._logname, self._sed_subdir,
-                                           self._knots)
-        self._gal_flux_schema = make_galaxy_flux_schema(self._logname)
-
+        arrow_schema = make_galaxy_schema(self._logname,
+                                              self._sed_subdir,
+                                              self._knots)
 
         for p in self._parts:
             self._logger.info(f'Starting on pixel {p}')
@@ -214,6 +252,11 @@ class CatalogCreator:
 
         # Now make config.   We need it for computing LSST fluxes for
         # the second part of the galaxy catalog
+        if not self._overwrite_data:
+            config_path = self.write_config(path_only=True)
+            if os.path.exists(config_path):
+                self._logger.info('Will not overwrite existing config file')
+                return
         self.write_config()
 
     def create_galaxy_pixel(self, pixel, gal_cat, arrow_schema):
@@ -225,8 +268,13 @@ class CatalogCreator:
         arrow_schema    schema to use for output file
         """
 
-        # Output filename template
-        output_template = 'galaxy_{}.parquet'
+        output_path = os.path.join(self._output_dir, f'galaxy_{pixel}.parquet')
+        if os.path.exists(output_path):
+            if self._overwrite_data:
+                self._logger.info(f'Overwriting file {output_path}')
+            else:
+                self._logger.info(f'Skipping regeneration of {output_path}')
+                return
 
         # Used to finding tophat parameters from cosmoDC2 column names
         tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
@@ -351,9 +399,8 @@ class CatalogCreator:
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
             if not writer:
-                writer = pq.ParquetWriter(os.path.join(
-                    self._output_dir, output_template.format(pixel)),
-                                          arrow_schema)
+                writer = pq.ParquetWriter(os.path.join(output_path,
+                                          arrow_schema))
 
             writer.write_table(out_table)
             rg_written += 1
@@ -380,10 +427,19 @@ class CatalogCreator:
 
         from desc.skycatalogs import open_catalog, SkyCatalog
 
+        self._gal_flux_schema = make_galaxy_flux_schema(self._logname)
+
         if not config_file:
-            config_file = self._written_config
+            #config_file = self._written_config
+            config_file = self.write_config(path_only=True)
         if not self._cat:
             self._cat = open_catalog(config_file)
+
+        # Might also open a main file and read its metadata to be sure
+        # the value for stride is correct.
+        # Especially need to do this if we want to support making flux
+        # files in a separate job activation.
+
 
         self._flux_template = self._cat.raw_config['object_types']['galaxy']['flux_file_template']
 
@@ -392,6 +448,7 @@ class CatalogCreator:
             self._logger.info(f'Starting on pixel {p}')
             self._create_galaxy_flux_pixel(p)
             self._logger.info(f'Completed pixel {p}')
+
 
     def _create_galaxy_flux_pixel(self, pixel):
         '''
@@ -407,45 +464,87 @@ class CatalogCreator:
         None
         '''
 
-        # For main catalog use self._cat
-        # For schema use self._gal_flux_schema
-        # output_template should be derived from value for flux_file_template
-        #  in main catalog config.  Cheat for now
-        output_template = 'galaxy_flux_{}.parquet'
+        output_filename = f'galaxy_flux_{pixel}.parquet'
+        output_path = os.path.join(self._output_dir, output_filename)
+
+        # Use same value for row group as was used for main file
         stride = self._galaxy_stride
 
         object_list = self._cat.get_objects_by_hp(pixel,
                                                   obj_type_set={'galaxy'})
-        last_row_ix = len(object_list) - 1
+        object_coll = object_list.get_collections()[0]
         writer = None
         l_bnd = 0
-        u_bnd = min(last_row_ix + 1, stride)
-        ##o_list = object_list[l_bnd : u_bnd]
+        u_bnd = min(len(object_coll), stride)
         rg_written = 0
         while u_bnd > l_bnd:
-            o_list = object_list[l_bnd : u_bnd]
+            o_list = object_coll[l_bnd : u_bnd]
             self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
-            out_dict = {}
-            out_dict['galaxy_id'] = [o.get_native_attribute('galaxy_id') for o in o_list]
-            all_fluxes =  [o.get_LSST_fluxes(as_dict=False) for o in o_list]
-            all_fluxes_transpose = zip(*all_fluxes)
-            for i, band in enumerate(LSST_BANDS):
-                self._logger.debug(f'Band {band} is number {i}')
-                v = all_fluxes_transpose.__next__()
-                out_dict[f'lsst_flux_{band}'] = v
-                if i == 1:
-                    self._logger.debug(f'Len of flux column: {len(v)}')
-                    self._logger.debug(f'Type of flux column: {type(v)}')
+
+            # prefetch everything we need. Getting a quantity for one object
+            # ensures the quantity is read for the whole row group
+            # (In fact currently all row groups are read, but that could and
+            # should change)
+            for att in ['galaxy_id', 'shear_1', 'shear_2', 'convergence',
+                        'redshift_hubble', 'MW_av', 'MW_rv', 'sed_val_bulge',
+                        'sed_val_disk', 'sed_val_knots'] :
+                v = o_list[0].get_native_attribute(att)
+
+            global _galaxy_collection
+            _galaxy_collection = object_coll
+
+            # Work up to ##### should be divided among workers
+
+            out_dict = {'galaxy_id': [], 'lsst_flux_u' : [],
+                        'lsst_flux_g' : [], 'lsst_flux_r' : [],
+                        'lsst_flux_i' : [], 'lsst_flux_z' : [],
+                        'lsst_flux_y' : []}
+
+            n_parallel = 4              # conservative
+
+            if n_parallel == 1:
+                n_per = u_bnd - l_bnd
+            else:
+                n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
+            l = l_bnd
+            u = min(l_bnd + n_per, u_bnd)
+            readers = []
+            tm = 600
+            ####global outs[]       if we need to avoid pickling
+            for i in range(n_parallel):
+                conn_rd, conn_wrt = Pipe(duplex=False)
+                ####outs[i] = dict()
+                readers.append(conn_rd)
+
+                # For debugging call directly
+                proc = Process(target=_do_galaxy_flux_chunk,
+                               name=f'proc_{i}',
+                               args=(conn_wrt, _galaxy_collection,l, u))
+                proc.start()
+                l = u
+                u = min(l + n_per, u_bnd)
+            self._logger.debug('Processes started')
+            for i in range(n_parallel):
+                ready = readers[i].poll(tm)
+                if not ready:
+                    self._logger.error(f'Process {i} timed out after {tm} sec')
+                    exit(1)
+                dat = readers[i].recv()
+                ###dat = outs[i]
+                for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
+                          'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
+                          'lsst_flux_y']:
+                    out_dict[k] += dat[k]
+
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df,
                                              schema=self._gal_flux_schema)
+
             if not writer:
-                writer = pq.ParquetWriter(os.path.join(self._output_dir,
-                                                       output_template.format(pixel)),
-                                                       self._gal_flux_schema)
+                writer = pq.ParquetWriter(output_path, self._gal_flux_schema)
             writer.write_table(out_table)
             l_bnd = u_bnd
-            u_bnd = min(l_bnd + stride, last_row_ix + 1)
+            u_bnd = min(l_bnd + stride, len(object_list))
 
             rg_written +=1
 
