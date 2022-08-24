@@ -77,7 +77,6 @@ def _generate_sed_path(ids, subdir, cmp):
 # Collection of galaxy objects for current row group, current pixel
 # Used while doing flux computation
 
-###def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd, out_dict):
 def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
     '''
     output connection
@@ -97,7 +96,6 @@ def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
         out_dict[f'lsst_flux_{band}'] = v
 
     send_conn.send(out_dict)
-    ##return out_dict
 
 class CatalogCreator:
     def __init__(self, parts, area_partition, skycatalog_root=None,
@@ -399,8 +397,7 @@ class CatalogCreator:
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
             if not writer:
-                writer = pq.ParquetWriter(os.path.join(output_path,
-                                          arrow_schema))
+                writer = pq.ParquetWriter(output_path, arrow_schema)
 
             writer.write_table(out_table)
             rg_written += 1
@@ -493,14 +490,13 @@ class CatalogCreator:
             global _galaxy_collection
             _galaxy_collection = object_coll
 
-            # Work up to ##### should be divided among workers
-
             out_dict = {'galaxy_id': [], 'lsst_flux_u' : [],
                         'lsst_flux_g' : [], 'lsst_flux_r' : [],
                         'lsst_flux_i' : [], 'lsst_flux_z' : [],
                         'lsst_flux_y' : []}
 
-            n_parallel = 4              # conservative
+            # Demonstrated n_parallel = 8 works well on cori. Try 16
+            n_parallel = 16
 
             if n_parallel == 1:
                 n_per = u_bnd - l_bnd
@@ -510,10 +506,8 @@ class CatalogCreator:
             u = min(l_bnd + n_per, u_bnd)
             readers = []
             tm = 600
-            ####global outs[]       if we need to avoid pickling
             for i in range(n_parallel):
                 conn_rd, conn_wrt = Pipe(duplex=False)
-                ####outs[i] = dict()
                 readers.append(conn_rd)
 
                 # For debugging call directly
@@ -530,7 +524,6 @@ class CatalogCreator:
                     self._logger.error(f'Process {i} timed out after {tm} sec')
                     exit(1)
                 dat = readers[i].recv()
-                ###dat = outs[i]
                 for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
                           'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
                           'lsst_flux_y']:
@@ -550,7 +543,6 @@ class CatalogCreator:
 
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
-
 
     def create_pointsource_catalog(self, star_truth=None, sn_truth=None):
 
