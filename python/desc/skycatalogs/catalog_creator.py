@@ -576,15 +576,8 @@ class CatalogCreator:
             self.create_pointsource_pixel(p, arrow_schema, star_cat=_star_db)
             self._logger.debug(f'Completed pixel {p}')
 
-        # If we already did galaxies don't need to write config.
-        # And if we didn't, we don't have all the information needed
-        # for config
-        #if not self._written_config:
-        #    self.write_config()
-
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None,
                              sn_cat=None):
-
         if not star_cat and not sn_cat:
             self._logger.info('No point source inputs specified')
             return
@@ -745,6 +738,9 @@ class CatalogCreator:
         config.add_key('MW_extinction_values', assemble_MW_extinction())
         config.add_key('Cosmology', assemble_cosmology(self._cosmology))
         config.add_key('object_types', assemble_object_types(self._pkg_root))
+
+        config.add_key('galaxy_magnitude_cut', self._mag_cut)
+        config.add_key('knots_magnitude_cut', self._knots_mag_cut)
 
         inputs = {'galaxy_truth' : self._galaxy_truth}
         if self._sn_truth:
