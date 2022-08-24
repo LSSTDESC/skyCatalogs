@@ -105,7 +105,7 @@ class CatalogCreator:
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator',
                  pkg_root=None, overwrite_data=False, flux_only=False,
-                 main_only=False):
+                 main_only=False, flux_parallel=16):
         """
         Store context for catalog creation
 
@@ -139,6 +139,7 @@ class CatalogCreator:
                         files. Output message in either case if file exists.
         flux_only       Only create flux files, not main files
         main_only       Only create main files, not flux files
+        flux_parallel   Number of processes to divide work of computing fluxes
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -194,6 +195,7 @@ class CatalogCreator:
         self._overwrite_data = overwrite_data
         self._flux_only = flux_only
         self._main_only = main_only
+        self._flux_parallel = flux_parallel
 
     def create(self, catalog_type):
         """
@@ -497,8 +499,7 @@ class CatalogCreator:
                         'lsst_flux_i' : [], 'lsst_flux_z' : [],
                         'lsst_flux_y' : []}
 
-            # Demonstrated n_parallel = 8 works well on cori. Try 16
-            n_parallel = 16
+            n_parallel = self._flux_parallel
 
             if n_parallel == 1:
                 n_per = u_bnd - l_bnd

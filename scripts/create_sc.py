@@ -55,6 +55,8 @@ parser.add_argument('--flux-only', action='store_true',
                     help='If supplied only do flux files. Main files must already exist')
 parser.add_argument('--main-only', action='store_true',
                     help='If supplied only do main files, not flux files')
+parser.add_argument('--flux-parallel' default=16, type=int,
+                    help='Number of processes to run in parallel when computing fluxes')
 
 
 args = parser.parse_args()
@@ -86,7 +88,8 @@ creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          knots_mag_cut=args.knots_magnitude_cut,
                          knots=(not args.no_knots), logname=logname,
                          overwrite_data=args.overwrite_data,
-                         flux_only=args.flux_only, main_only=args.main_only)
+                         flux_only=args.flux_only, main_only=args.main_only,
+                         flux_parallel=args.flux_parallel)
 
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
