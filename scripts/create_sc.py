@@ -55,7 +55,7 @@ parser.add_argument('--flux-only', action='store_true',
                     help='If supplied only do flux files. Main files must already exist')
 parser.add_argument('--main-only', action='store_true',
                     help='If supplied only do main files, not flux files')
-parser.add_argument('--flux-parallel' default=16, type=int,
+parser.add_argument('--flux-parallel', default=16, type=int,
                     help='Number of processes to run in parallel when computing fluxes')
 
 
