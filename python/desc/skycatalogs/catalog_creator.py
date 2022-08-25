@@ -508,7 +508,9 @@ class CatalogCreator:
             l = l_bnd
             u = min(l_bnd + n_per, u_bnd)
             readers = []
-            tm = 600
+            # Expect to be able to do about 1500/minute/process
+            tm = int((n_per*60)/800)  # Give ourselves a cushion
+            self._logger.info(f'Using timeout value {tm} for {n_per} sources')
             for i in range(n_parallel):
                 conn_rd, conn_wrt = Pipe(duplex=False)
                 readers.append(conn_rd)
