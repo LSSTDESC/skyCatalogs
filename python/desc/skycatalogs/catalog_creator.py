@@ -104,7 +104,7 @@ class CatalogCreator:
                  output_type='parquet', mag_cut=None,
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator',
-                 pkg_root=None, overwrite_data=False, flux_only=False,
+                 pkg_root=None, skip_done=False, flux_only=False,
                  main_only=False, flux_parallel=16):
         """
         Store context for catalog creation
@@ -134,9 +134,9 @@ class CatalogCreator:
         knots           If True include knots
         logname         logname for Python logger
         pkg_root        defaults to three levels up from __file__
-        overwrite_data  If True, generate data whether or not file already
-                        exists.  If False (default) skip already-existing
-                        files. Output message in either case if file exists.
+        skip_done       If True, skip over files which already exist. Otherwise
+                        (by default) overwrite with new version.
+                        Output info message in either case if file exists.
         flux_only       Only create flux files, not main files
         main_only       Only create main files, not flux files
         flux_parallel   Number of processes to divide work of computing fluxes
@@ -192,7 +192,7 @@ class CatalogCreator:
         self._knots = knots
         self._logname = logname
         self._logger = logging.getLogger(logname)
-        self._overwrite_data = overwrite_data
+        self._skip_done = skip_done
         self._flux_only = flux_only
         self._main_only = main_only
         self._flux_parallel = flux_parallel
@@ -254,7 +254,7 @@ class CatalogCreator:
 
         # Now make config.   We need it for computing LSST fluxes for
         # the second part of the galaxy catalog
-        if not self._overwrite_data:
+        if self._skip_done:
             config_path = self.write_config(path_only=True)
             if os.path.exists(config_path):
                 self._logger.info('Will not overwrite existing config file')
@@ -272,7 +272,7 @@ class CatalogCreator:
 
         output_path = os.path.join(self._output_dir, f'galaxy_{pixel}.parquet')
         if os.path.exists(output_path):
-            if self._overwrite_data:
+            if not self._skip_done:
                 self._logger.info(f'Overwriting file {output_path}')
             else:
                 self._logger.info(f'Skipping regeneration of {output_path}')
@@ -468,6 +468,13 @@ class CatalogCreator:
         output_filename = f'galaxy_flux_{pixel}.parquet'
         output_path = os.path.join(self._output_dir, output_filename)
 
+        if os.path.exists(output_path):
+            if not self._skip_done:
+                self._logger.info(f'Overwriting file {output_path}')
+            else:
+                self._logger.info(f'Skipping regeneration of {output_path}')
+                return
+
         # Use same value for row group as was used for main file
         stride = self._galaxy_stride
 
@@ -585,7 +592,15 @@ class CatalogCreator:
             self._logger.info('No point source inputs specified')
             return
 
-        output_template = 'pointsource_{}.parquet'
+        output_filename = f'pointsource_{pixel}.parquet'
+        output_path = os.path.join(self._output_dir, output_filename)
+
+        if os.path.exists(output_path):
+            if not self._skip_done:
+                self._logger.info(f'Overwriting file {output_path}')
+            else:
+                self._logger.info(f'Skipping regeneration of {output_path}')
+                return
 
         if star_cat:
             # Get data for this pixel
@@ -609,8 +624,7 @@ class CatalogCreator:
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
             self._logger.debug('Created arrow table from dataframe')
 
-            writer = pq.ParquetWriter(os.path.join(
-                self._output_dir, output_template.format(pixel)), arrow_schema)
+            writer = pq.ParquetWriter(output_path, arrow_schema)
             writer.write_table(out_table)
 
             writer.close()
@@ -659,7 +673,7 @@ class CatalogCreator:
 
         Parameters
         ----------
-        Pixel         int
+        pixel         int
 
         Return
         ------
@@ -670,7 +684,15 @@ class CatalogCreator:
         # For schema use self._ps_flux_schema
         # output_template should be derived from value for flux_file_template
         #  in main catalog config.  Cheat for now
-        output_template = 'pointsource_flux_{}.parquet'
+        output_filename = f'pointsource_flux_{pixel}.parquet'
+        output_path = os.path.join(self._output_dir, output_filename)
+
+        if os.path.exists(output_path):
+            if not self._skip_done:
+                self._logger.info(f'Overwriting file {output_path}')
+            else:
+                self._logger.info(f'Skipping regeneration of {output_path}')
+                return
 
         object_list = self._cat.get_objects_by_hp(pixel,
                                                   obj_type_set={'star'})
@@ -698,9 +720,7 @@ class CatalogCreator:
         out_table = pa.Table.from_pandas(out_df,
                                          schema=self._ps_flux_schema)
         if not writer:
-            writer = pq.ParquetWriter(os.path.join(self._output_dir,
-                                                   output_template.format(pixel)),
-                                      self._ps_flux_schema)
+            writer = pq.ParquetWriter(output_path, self._ps_flux_schema)
         writer.write_table(out_table)
 
         writer.close()

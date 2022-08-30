@@ -49,8 +49,8 @@ parser.add_argument('--catalog-name', default='skyCatalog',
                     will appear in the config and will be part of
                     the filename''')
 
-parser.add_argument('--overwrite-data', action='store_true',
-                    help='If supplied overwrite existing data files; else skip with message')
+parser.add_argument('--skip-done', action='store_true',
+                    help='If supplied skip existing data files; else overwrite with message')
 parser.add_argument('--flux-only', action='store_true',
                     help='If supplied only do flux files. Main files must already exist')
 parser.add_argument('--main-only', action='store_true',
@@ -87,7 +87,7 @@ creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          sed_subdir=args.sed_subdir,
                          knots_mag_cut=args.knots_magnitude_cut,
                          knots=(not args.no_knots), logname=logname,
-                         overwrite_data=args.overwrite_data,
+                         skip_done=args.skip_done,
                          flux_only=args.flux_only, main_only=args.main_only,
                          flux_parallel=args.flux_parallel)
 
