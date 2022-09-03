@@ -43,6 +43,9 @@ class BaseObject(object):
     Likely need a variant for SSO.
     '''
 
+    _bp_path_init = False
+    _bp_path = 0
+
     _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501],[0, 1, 0]),
                              wave_type='nm').withZeropoint('AB')
     def __init__(self, ra, dec, id, object_type, redshift=None,
@@ -374,6 +377,40 @@ class BaseObject(object):
         sed = self.get_total_observer_sed()
         return [sed.calculateFlux(b) for b in bandpasses]
 
+    def _get_bp_dir():
+        '''
+        If throughputs can be found, return that directory. Else
+        return None and caller should use GalSim defaults
+        '''
+        if BaseObject._bp_path_init:
+            if BaseObject._bp_path:
+                return BaseObject._bp_path
+            else:
+                return None
+
+        BaseObject._bp_path_init = True
+
+        rubin_sim_dir = os.getenv('RUBIN_SIM_DATA_DIR', None)
+
+        if rubin_sim_dir:
+            bp_path = os.path.join(rubin_sim_dir, 'throughputs', 'baseline')
+            if os.path.exists(bp_path):
+                BaseObject._bp_path = bp_path
+                # Should be info log message
+                print(f'INFO: Using rubin sim dir {rubin_sim_dir}')
+                return bp_path
+        else:
+            bp_path = os.path.join(os.getenv('HOME'), 'rubin_sim_data',
+                                   'throughputs', 'baseline')
+            # Should be info log message
+            print(f'INFO: using rubin sim dir rubin_sim_data under HOME')
+            if os.path.exists(bp_path):
+                BaseObject._bp_path = bp_path
+                return bp_path
+
+        print('WARNING: No rubin sim data dir found. Using GalSim bandpasses')
+        return None
+
     def get_LSST_flux(self, band, sed=None, cache=True):
         if not band in LSST_BANDS:
             return None
@@ -386,15 +423,22 @@ class BaseObject(object):
         if att in self.native_columns:
             return self.get_native_attribute(att)
 
-        # galsim keeps standard bandpass files under
-        # os.path.join(galsim.meta_data.share_dir, 'bandpass').
-        # These include LSST_u.dat, etc.
+        bp_dir = BaseObject._get_bp_dir()
+        if bp_dir:
+            fname = f'total_{band}.dat'
+            bp_path = os.path.join(bp_dir, fname)
         else:
-            bp = galsim.Bandpass(f'LSST_{band}.dat', 'nm')
-            val = self.get_flux(bp, sed=sed)
-            if cache:
-                setattr(self, att, val)
-            return val
+            # galsim keeps standard bandpass files under
+            # os.path.join(galsim.meta_data.share_dir, 'bandpass').
+            # These include LSST_u.dat, etc.
+            bp_path = f'LSST_{band}.dat'
+
+        bp = galsim.Bandpass(bp_path, 'nm')
+
+        val = self.get_flux(bp, sed=sed)
+        if cache:
+            setattr(self, att, val)
+        return val
 
     def get_LSST_fluxes(self, cache=True, as_dict=True):
         '''
