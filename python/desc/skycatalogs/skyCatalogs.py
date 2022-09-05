@@ -302,7 +302,7 @@ class SkyCatalog(object):
         if self.verbose:
             print("Region ", region)
             print("obj_type_set ", obj_type_set)
-        if self._config['area_partition']['partition_type'] == 'healpix':
+        if self._config['area_partition']['type'] == 'healpix':
             hps = self.get_hps_by_region(region)
 
         # otherwise raise a not-supported exception
