@@ -26,7 +26,7 @@ parser.add_argument('--no-galaxies', action='store_true',
                     help='if used galaxy catalogs will NOT be created')
 parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
                     help='healpix pixels for which catalogs will be created')
-parser.add_argument('--skycatalog_root',
+parser.add_argument('--skycatalog-root',
                     help='Root directory for sky catalogs, typically site-dependent. If not specified, use value of environment variable SKYCATALOG_ROOT')
 parser.add_argument('--catalog-dir', help='directory for output files relative to skycatalog_root',
                     default='.')

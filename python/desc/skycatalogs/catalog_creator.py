@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import math
 import logging
@@ -435,7 +436,8 @@ class CatalogCreator:
             #config_file = self._written_config
             config_file = self.write_config(path_only=True)
         if not self._cat:
-            self._cat = open_catalog(config_file)
+            self._cat = open_catalog(config_file,
+                                     skycatalog_root=self._skycatalog_root)
 
         # Might also open a main file and read its metadata to be sure
         # the value for stride is correct.
@@ -535,7 +537,7 @@ class CatalogCreator:
                 ready = readers[i].poll(tm)
                 if not ready:
                     self._logger.error(f'Process {i} timed out after {tm} sec')
-                    exit(1)
+                    sys.exit(1)
                 dat = readers[i].recv()
                 for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
                           'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
@@ -579,7 +581,6 @@ class CatalogCreator:
         self._sn_truth = _sn_db
 
         arrow_schema = make_star_schema()
-        self._ps_flux_schema = make_star_flux_schema(self._logname)
         #  Need a way to indicate which object types to include; deal with that
         #  later.  For now, default is stars only.  Use default star parameter file.
         for p in self._parts:
@@ -652,6 +653,7 @@ class CatalogCreator:
 
         from desc.skycatalogs import open_catalog, SkyCatalog
 
+        self._ps_flux_schema = make_star_flux_schema(self._logname)
         if not config_file:
             config_file = self.write_config(path_only=True)
 
@@ -659,7 +661,8 @@ class CatalogCreator:
 
         # Always open catalog. If it was opened for galaxies earlier
         # it won't know about star files.
-        self._cat = open_catalog(config_file)
+        self._cat = open_catalog(config_file,
+                                 skycatalog_root=self._skycatalog_root)
 
         self._flux_template = self._cat.raw_config['object_types']['star']['flux_file_template']
 
