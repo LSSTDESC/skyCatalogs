@@ -1,5 +1,5 @@
 from collections.abc import Sequence, Iterable
-from collections import namedtuple, OrderedDict
+from collections import namedtuple
 import os
 import gzip
 import itertools
@@ -377,7 +377,7 @@ class BaseObject(object):
         sed = self.get_total_observer_sed()
         return [sed.calculateFlux(b) for b in bandpasses]
 
-    def _get_bp_dir():
+    def get_bp_dir():
         '''
         If throughputs can be found, return that directory. Else
         return None and caller should use GalSim defaults
@@ -389,6 +389,7 @@ class BaseObject(object):
                 return None
 
         BaseObject._bp_path_init = True
+        logger = logging.getLogger('skyCatalogs.creator')
 
         rubin_sim_dir = os.getenv('RUBIN_SIM_DATA_DIR', None)
 
@@ -396,19 +397,17 @@ class BaseObject(object):
             bp_path = os.path.join(rubin_sim_dir, 'throughputs', 'baseline')
             if os.path.exists(bp_path):
                 BaseObject._bp_path = bp_path
-                # Should be info log message
-                print(f'INFO: Using rubin sim dir {rubin_sim_dir}')
+                logger.info(f'Using rubin sim dir {rubin_sim_dir}')
                 return bp_path
         else:
             bp_path = os.path.join(os.getenv('HOME'), 'rubin_sim_data',
                                    'throughputs', 'baseline')
-            # Should be info log message
-            print(f'INFO: using rubin sim dir rubin_sim_data under HOME')
+            logger.info(f'Using rubin sim dir rubin_sim_data under HOME')
             if os.path.exists(bp_path):
                 BaseObject._bp_path = bp_path
                 return bp_path
 
-        print('WARNING: No rubin sim data dir found. Using GalSim bandpasses')
+        logger.warning("No rubin sim data dir found. Using GalSim's LSST bandpasses")
         return None
 
     def get_LSST_flux(self, band, sed=None, cache=True):
@@ -423,7 +422,7 @@ class BaseObject(object):
         if att in self.native_columns:
             return self.get_native_attribute(att)
 
-        bp_dir = BaseObject._get_bp_dir()
+        bp_dir = BaseObject.get_bp_dir()
         if bp_dir:
             fname = f'total_{band}.dat'
             bp_path = os.path.join(bp_dir, fname)
@@ -445,7 +444,7 @@ class BaseObject(object):
         Return a dict of fluxes for LSST bandpasses or, if as_dict is False,
         just a list in the same order as LSST_BANDS
         '''
-        fluxes = OrderedDict()
+        fluxes = dict()
         sed = self.get_total_observer_sed()
         for band in LSST_BANDS:
             ##### temporary to debug error
@@ -574,20 +573,15 @@ class ObjectCollection(Sequence):
 
     def get_native_attributes(self, attribute_list):
         '''
-        Return requested attributes as an OrderedDict. Keys are column names.
+        Return requested attributes as dict. Keys are column names.
         Use our mask if we have one
         '''
         remaining = set(attribute_list)
-        final_d = OrderedDict()
+        final_d = dict()
         for r in self._rdrs:
-            to_read = []
-            new_remaining = remaining
-            for a in remaining:
-                if a in r.columns:
-                    to_read.append(a)
-                    new_remaining.remove(a)
+            to_read = remaining.intersection(r.columns)
             d = r.read_columns(to_read, self._mask)
-            remaining = new_remaining
+            remaining.difference_update(to_read)
             for k in d:
                 final_d[k] = d[k]
 
@@ -596,7 +590,7 @@ class ObjectCollection(Sequence):
             print(f'Unknown column or columns {remaining}')
             return None
 
-        return d
+        return final_d
 
     def get_native_attributes_iterator(self, attribute_names):
         '''
