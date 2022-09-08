@@ -1,6 +1,7 @@
 import os
 import yaml
 import git
+import logging
 from jsonschema import validate
 
 from desc.skycatalogs.utils.exceptions import NoSchemaVersionError, ConfigDuplicateKeyError
@@ -28,8 +29,9 @@ class Config(object):
     A wrapper around the dict which is the contents of a Sky Catalog
     config file which understands some of the semantics
     '''
-    def __init__(self, cfg):
+    def __init__(self, cfg, logname=None):
         self._cfg = cfg
+        self._logname = logname
 
     def list_sed_models(self):
         return self._cfg['SED_models'].keys()
@@ -138,20 +140,44 @@ class Config(object):
             raise ConfigDuplicateKeyError(k)
         self._cfg[k] = v
 
-    def write_config(self, dirpath, filename=None):
+    def write_config(self, dirpath, filename=None, overwrite=False):
         '''
         Export self to yaml document and write to specified directory.
         If filename is None the file will be named after catalog_name
+
+        Parameters
+        ----------
+        dirpath        Directory to which file will be written
+        filename       If supplied, use for filename
+        overwrite      By default do not overwrite existing file with same path
+
+        Return
+        ------
+        Full path of output config
         '''
         ###self.validate()   skip for now
 
         if not filename:
             filename = self._cfg['catalog_name'] + '.yaml'
 
-        with open(os.path.join(dirpath, filename), "w") as f:
-            yaml.dump(self._cfg, f)
+        outpath = os.path.join(dirpath, filename)
+        if not overwrite:
+            try:
+                with open(outpath, mode='x') as f:
+                    yaml.dump(self._cfg, f)
+            except FileExistsError:
+                if self._logname:
+                    logger = logging.getLogger(self._logname)
+                    logger.warning('Config.write_config: Will not overwrite pre-existing config file ' + outpath)
+                else:
+                    print('Config.write_config: Will not overwrite pre-existing config file ' + outpath)
+                return
 
+        else:
+            with open(outpath, mode='w') as f:
+                yaml.dump(self._cfg, f)
 
+        return outpath
 
 
 def _find_schema_path(schema_spec):
@@ -163,11 +189,11 @@ def _find_schema_path(schema_spec):
     here = os.path.dirname(__file__)
     return os.path.join(here, '../../../../cfg', fname)
 
-def create_config(catalog_name, schema_version=None):
+def create_config(catalog_name, logname=None, schema_version=None):
     if not schema_version:
         schema_version = _CURRENT_SCHEMA_VERSION
     return Config({'catalog_name' : catalog_name,
-                   'schema_version' : schema_version})
+                   'schema_version' : schema_version}, logname)
 
 def assemble_cosmology(cosmology):
     d = {k : cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',

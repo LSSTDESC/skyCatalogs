@@ -54,6 +54,36 @@ def _get_intersecting_hps(hp_ordering, nside, region):
         pixels = healpy.query_disc(nside, center, radius_rad, inclusive=True,
                                    nest=False)
         return pixels
+
+def _compress_via_mask(tbl, id_column, region):
+    '''
+    Parameters
+    ----------
+    tbl          data table including columns named "ra", "dec", and id_column
+    id_column    string
+    region       mask should restrict to this region (or not at all if None)
+
+    Returns
+    -------
+    4 values ra, dec, id, mask
+    If objects are in the region, ra, dec, id correspond to those objects.
+    mask will mask off unused objects
+    If there are no objects in the region, all return values are None
+
+    '''
+    if region is not None:
+        mask = _compute_mask(region, tbl['ra'], tbl['dec'])
+        masked_ra = ma.array(tbl['ra'], mask=mask)
+        ra_compress = masked_ra.compressed()
+        if ra_compress.size > 0:
+            dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
+            id_compress = ma.array(tbl[id_column], mask=mask).compressed()
+            return ra_compress, dec_compress, id_compress, mask
+        else:
+            return None,None,None,None
+    else:
+        return tbl['ra'], tbl['dec'], tbl[id_column],None
+
 def _compute_mask(region, ra, dec):
     '''
     Compute mask according to region for provided data
@@ -177,7 +207,7 @@ class SkyCatalog(object):
         '''
         For each healpix with files matching pattern in the directory,
         update _hp_info as needed to keep track of all files for that healpix
-        and the object types included in those files.   Also..
+        and the object types included in those files.
 
         Returns
         -------
@@ -195,20 +225,31 @@ class SkyCatalog(object):
         hp_set = set()
         for f in files:
             for ot in o_types:
-                if 'file_template' in o_types[ot]:
-                    m = re.match(o_types[ot]['file_template'], f)
+                # find all keys containing the string 'file_template'
+                template_keys = [k for k in o_types[ot] if 'file_template' in k]
+                ##if 'file_template' in o_types[ot]:
+                ##    m = re.match(o_types[ot]['file_template'], f)
+                for k in template_keys:
+                    m = re.match(o_types[ot][k], f)
                     if m:
                         hp = int(m['healpix'])
                         hp_set.add(hp)
 
                         if hp not in self._hp_info:
                             self._hp_info[hp] = {'files' : {f : None},
-                                                 'object_types' : {ot : f}}
+                                                 #'object_types' : {ot : f}}
+                                                 # Value of 'object_types' is now a list
+                                                 'object_types' : {ot : [f]}}
                         else:
                             this_hp = self._hp_info[hp]
+                            # Value of 'object_types' is now a list
                             if f not in this_hp['files'] :
                                 this_hp['files'][f] = None
-                            this_hp['object_types'][ot] = f
+                            if ot in this_hp['object_types']:
+                                this_hp['object_types'][ot].append(f)
+                            else:
+                                #this_hp['object_types'][ot] = f
+                                this_hp['object_types'][ot] = [f]
         return hp_set
 
     def get_hps_by_region(self, region):
@@ -301,9 +342,16 @@ class SkyCatalog(object):
     def get_objects_by_hp(self, hp, region=None, obj_type_set=None,
                           datetime=None):
         '''
-        Find all object
-        # Find the right Sky Catalog file or files (depends on obj_type_set)
-        # Get file handle(s) and store if we don't already have it (them)
+        Find all objects in the healpixl (and region if specified)
+        of requested types
+
+        Parameters
+        ----------
+        hp     The healpix pixel.
+        region If supplied defines a disk or box. Return only object contained
+               in it
+        obj_type_set   Type of objects to fetch.  Defaults to all
+        datetime       Ignored for now; no support for moving objects
 
         Returns
         -------
@@ -326,99 +374,77 @@ class SkyCatalog(object):
                     parents.add(self._config['object_types'][ot]['parent'])
             obj_types = obj_types.union(parents)
 
-        # Associate object types with readers.  May be > one type per reader
-        rdr_ot = dict()
+        # Find the right Sky Catalog file or files (depends on obj_type_set)
+        # Get file handle(s) and store if we don't already have it (them)
+
+        # Associate object types with files and files with readers.
+        # May be > one type per reader (e.g. different kinds of point sources
+        # stored in a single file)
+        # Also may be more than one file per type (galaxy has two)
+        rdr_ot = dict()   # maps readers to set of object types it reads
 
         for ot in obj_types:
+            # FInd files associated with this type
             if 'file_template' in self._config['object_types'][ot]:
-                f = self._hp_info[hp]['object_types'][ot]
+                f_list = self._hp_info[hp]['object_types'][ot]
             elif 'parent' in self._config['object_types'][ot]:
-                f = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
-            if f not in self._hp_info[hp]:
-                the_reader = parquet_reader.ParquetReader(os.path.join(self._cat_dir,f), mask=None)
-                self._hp_info[hp][f] = the_reader
-            the_reader = self._hp_info[hp][f]
-            if the_reader in rdr_ot:
-                rdr_ot[the_reader].add(ot)
-            else:
-                rdr_ot[the_reader] = set([ot])
+                f_list = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
+
+            for f in f_list:
+                if self._hp_info[hp]['files'][f] is None:            # no reader yet
+                    full_path = os.path.join(self._cat_dir, f)
+                    the_reader = parquet_reader.ParquetReader(full_path, mask=None)
+                    #self._hp_info[hp][f] = the_reader
+                    self._hp_info[hp]['files'][f] = the_reader
+                else:
+                    the_reader = self._hp_info[hp]['files'][f]
+                # associate object type with this reader
+                if the_reader in rdr_ot:
+                    rdr_ot[the_reader].add(ot)
+                else:
+                    rdr_ot[the_reader] = set([ot])
 
         # Now get minimal columns for objects using the readers
+        galaxy_readers = []
+        star_readers = []
+
+        # First make a pass to separate out the readers
         for rdr in rdr_ot:
             if 'galaxy' in rdr_ot[rdr]:
-                arrow_t = rdr.read_columns(G_COLUMNS, None) # or read_row_group
-                # Make a boolean array, value set to 1 for objects
-                # outside the region
-                if region is not None:
-                    # This belongs in a separate routine
-                    mask = _compute_mask(region, arrow_t['ra'], arrow_t['dec'])
+                galaxy_readers.append(rdr)
+            elif 'star' in rdr_ot[rdr]:
+                star_readers.append(rdr)
 
-                else:
-                    mask = None
+        # Make galaxy collection
+        for rdr in galaxy_readers:
+            if 'ra' not in rdr.columns:
+                continue
+            arrow_t = rdr.read_columns(G_COLUMNS, None)
 
-                if mask is not None:
-                    masked_ra = ma.array(arrow_t['ra'], mask=mask)
-                    if self.verbose:
-                        print("Masked array size: ", masked_ra.size)
-                        print("Masked array compressed size: ", masked_ra.compressed().size)
-                    ra_compress = masked_ra.compressed()
-                    if ra_compress.size > 0:
-                        dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
-                        id_compress = ma.array(arrow_t['galaxy_id'], mask=mask).compressed()
-                    else:
-                        continue
-                else:
-                    ra_compress = arrow_t['ra']
-                    dec_compress = arrow_t['dec']
-                    id_compress = arrow_t['galaxy_id']
+            ra_c, dec_c, id_c, mask = _compress_via_mask(arrow_t, 'galaxy_id',
+                                                         region)
 
-                new_collection = ObjectCollection(ra_compress,
-                                                  dec_compress,
-                                                  id_compress,
-                                                  'galaxy',
-                                                  hp,
-                                                  self,
-                                                  region=region,
-                                                  mask=mask,
-                                                  reader=rdr)
+            if ra_c is not None:
+                new_collection = ObjectCollection(ra_c, dec_c, id_c,
+                                                  'galaxy', hp, self,
+                                                  region=region, mask=mask,
+                                                  readers=galaxy_readers)
                 object_list.append_collection(new_collection)
 
-                # Now do the same for point sources
-            if 'star' in rdr_ot[rdr]:
-                arrow_t = rdr.read_columns(PS_COLUMNS, None) # or read_row_group
-                # Make a boolean array, value set to 1 for objects
-                # outside the region
-                if region is not None:
-                    # This belongs in a separate routine
-                    mask = _compute_mask(region, arrow_t['ra'], arrow_t['dec'])
-                else:
-                    mask = None
+        # Make point source collection
+        for rdr in star_readers:
+            if 'ra' not in rdr.columns:
+                continue
+            arrow_t = rdr.read_columns(PS_COLUMNS, None)
 
-                if mask is not None:
-                    masked_ra = ma.array(arrow_t['ra'], mask=mask)
-                    ra_compress = masked_ra.compressed()
-                    if ra_compress.size > 0:
-                        dec_compress = ma.array(arrow_t['dec'], mask=mask).compressed()
-                        id_compress = ma.array(arrow_t['id'], mask=mask).compressed()
-                    else:
-                        continue
-                else:
-                    ra_compress = arrow_t['ra']
-                    dec_compress = arrow_t['dec']
-                    id_compress = arrow_t['id']
+            ra_c, dec_c, id_c, mask = _compress_via_mask(arrow_t, 'id', region)
 
-                new_collection = ObjectCollection(ra_compress,
-                                                  dec_compress,
-                                                  id_compress,
-                                                  'star',
-                                                  hp,
-                                                  self,
-                                                  region=region,
-                                                  mask=mask,
-                                                  reader=rdr)
+            if ra_c is not None:
+                new_collection = ObjectCollection(ra_c, dec_c, id_c,
+                                                  'star', hp, self,
+                                                  region=region, mask=mask,
+                                                  readers=star_readers)
                 object_list.append_collection(new_collection)
-
-
 
         return object_list
 
@@ -466,6 +492,8 @@ def open_catalog(config_file, mp=False, skycatalog_root=None):
 if __name__ == '__main__':
     ###cfg_file_name = 'latest.yaml'
     cfg_file_name = 'future_latest.yaml'
+    # cfs_filename = 'test_write_config_draft6.yaml'
+    skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
 
     if len(sys.argv) > 1:
         cfg_file_name = sys.argv[1]
@@ -477,7 +505,7 @@ if __name__ == '__main__':
     #  -37.19001 < dec < -35.702481
 
 
-    cat = open_catalog(cfg_file, skycatalog_root='/global/cscratch1/sd/jrbogart/desc/skycatalogs')
+    cat = open_catalog(cfg_file, skycatalog_root=skycatalog_root)
     hps = cat._find_all_hps()
     print('Found {} healpix pixels '.format(len(hps)))
     for h in hps: print(h)

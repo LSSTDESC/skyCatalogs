@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import math
 import logging
@@ -7,18 +8,23 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from multiprocessing import Process, Pipe
 from astropy.coordinates import SkyCoord
 import sqlite3
 from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
 from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
 from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance
+from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_schema, make_star_flux_schema
+from desc.skycatalogs.objects.base_object import LSST_BANDS, BaseObject
+
+from desc.skycatalogs.objects.base_object import ObjectCollection
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
 
 """
-Code to create a sky catalog for a particular object type
+Code to create a sky catalog for particular object types
 """
 
 #####pixels = [9556, 9683, 9684, 9812, 9813, 9940]
@@ -27,75 +33,6 @@ __all__ = ['CatalogCreator']
 
 _MW_rv_constant = 3.1
 
-# This schema is not the same as the one taken from the data,
-# probably because of the indexing in the schema derived from a pandas df.
-def _make_galaxy_schema(logname, sed_subdir=False, knots=True):
-    fields = [pa.field('galaxy_id', pa.int64()),
-              pa.field('ra', pa.float64() , True),
-##                       metadata={"units" : "radians"}),
-              pa.field('dec', pa.float64() , True),
-##                       metadata={"units" : "radians"}),
-              pa.field('redshift', pa.float64(), True),
-              pa.field('redshift_hubble', pa.float64(), True),
-              pa.field('peculiar_velocity', pa.float64(), True),
-              pa.field('shear_1', pa.float64(), True),
-              pa.field('shear_2', pa.float64(), True),
-              pa.field('convergence', pa.float64(), True),
-              pa.field('size_bulge_true', pa.float32(), True),
-              pa.field('size_minor_bulge_true', pa.float32(), True),
-              pa.field('sersic_bulge', pa.float32(), True),
-              pa.field('size_disk_true', pa.float32(), True),
-              pa.field('size_minor_disk_true', pa.float32(), True),
-              pa.field('sersic_disk', pa.float32(), True),
-              pa.field('position_angle_unlensed', pa.float64(), True),
-              pa.field('sed_val_bulge',
-                       pa.list_(pa.float64()), True),
-              pa.field('sed_val_disk',
-                       pa.list_(pa.float64()), True),
-              pa.field('bulge_magnorm', pa.float64(), True),
-              pa.field('disk_magnorm', pa.float64(), True),
-              pa.field('MW_rv', pa.float32(), True),
-              pa.field('MW_av', pa.float32(), True)]
-    logger = logging.getLogger(logname)
-    if knots:
-        logger.debug("knots requested")
-        fields.append(pa.field('sed_val_knots',
-                               pa.list_(pa.float64()), True))
-        ### For sizes API can alias to disk sizes
-        ###  position angle, shears and convergence are all
-        ###  galaxy-wide quantities.
-        fields.append(pa.field('n_knots', pa.float32(), True))
-        fields.append(pa.field('knots_magnorm', pa.float64(), True))
-
-    if sed_subdir:
-        fields.append(pa.field('bulge_sed_file_path', pa.string(), True))
-        fields.append(pa.field('disk_sed_file_path', pa.string(), True))
-
-    debug_out = ''
-    for f in fields:
-        debug_out += f'{f.name}\n'
-    logger.debug(debug_out)
-    return pa.schema(fields)
-
-
-def _make_star_schema():
-    '''
-    Minimal schema for non-variable stars.  For variables will need to add fields
-    to express variability.   Will also likely have to make changes to accomodate SNe.
-    If AGN also go in this file will need to include gamma1, gamma2, kappa.
-    Could add field for galactic extinction model, but currently it's always 'CCM'
-    so will put it in config.
-    '''
-    fields = [pa.field('object_type', pa.string(), False),
-              pa.field('id', pa.int64(), False),
-              pa.field('ra', pa.float64(), False),
-              pa.field('dec', pa.float64(), False),
-              pa.field('host_galaxy_id', pa.int64(), True),
-              pa.field('magnorm', pa.float64(), True),
-              pa.field('sed_filepath', pa.string(), True),
-              pa.field('MW_rv', pa.float32(), True),
-              pa.field('MW_av', pa.float32(), True)]
-    return pa.schema(fields)
 
 _Av_adjustment = 2.742
 def _make_MW_extinction(ra, dec):
@@ -138,14 +75,38 @@ def _generate_sed_path(ids, subdir, cmp):
     r = [f'{subdir}/{cmp}_{id}.txt' for id in ids]
     return r
 
+# Collection of galaxy objects for current row group, current pixel
+# Used while doing flux computation
+
+def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
+    '''
+    output connection
+    l_bnd, u_bnd     demarcates slice to process
+
+    returns
+                    dict with keys id, lsst_flux_u, ... lsst_flux_y
+    '''
+    out_dict = {}
+
+    o_list = galaxy_collection[l_bnd : u_bnd]
+    out_dict['galaxy_id'] = [o.get_native_attribute('galaxy_id') for o in o_list]
+    all_fluxes =  [o.get_LSST_fluxes(as_dict=False) for o in o_list]
+    all_fluxes_transpose = zip(*all_fluxes)
+    for i, band in enumerate(LSST_BANDS):
+        v = all_fluxes_transpose.__next__()
+        out_dict[f'lsst_flux_{band}'] = v
+
+    send_conn.send(out_dict)
+
 class CatalogCreator:
     def __init__(self, parts, area_partition, skycatalog_root=None,
-                 catalog_dir='.', galaxy_truth=None, write_config=False,
+                 catalog_dir='.', galaxy_truth=None,
                  config_path=None, catalog_name='skyCatalog',
                  output_type='parquet', mag_cut=None,
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator',
-                 pkg_root=None):
+                 pkg_root=None, skip_done=False, flux_only=False,
+                 main_only=False, flux_parallel=16):
         """
         Store context for catalog creation
 
@@ -162,10 +123,11 @@ class CatalogCreator:
         catalog_dir     Directory relative to skycatalog_root where catalog
                         will be written.  Defaults to '.'
         galaxy_truth    GCRCatalogs name for galaxy truth (e.g. cosmoDC2)
-        write_config    If True, write config file. Default is False
         config_path     Where to write config file. Default is data
-                        directory. Ignored if write_config
-                        is False.
+                        directory.
+        catalog_name    If a config file is written this value is saved
+                        there and is also part of the filename of the
+                        config file.
         output_type     A format.  For now only parquet is supported
         mag_cut         If not None, exclude galaxies with mag_r > mag_cut
         sed_subdir      In instcat entry, prepend this value to SED filename
@@ -173,12 +135,19 @@ class CatalogCreator:
         knots           If True include knots
         logname         logname for Python logger
         pkg_root        defaults to three levels up from __file__
+        skip_done       If True, skip over files which already exist. Otherwise
+                        (by default) overwrite with new version.
+                        Output info message in either case if file exists.
+        flux_only       Only create flux files, not main files
+        main_only       Only create main files, not flux files
+        flux_parallel   Number of processes to divide work of computing fluxes
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
         """
 
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
+        self._galaxy_stride = 1000000
         if pkg_root:
             self._pkg_root = pkg_root
         else:
@@ -197,6 +166,7 @@ class CatalogCreator:
 
         self._sn_truth = None
         self._star_truth = None
+        self._cat = None
 
         self._parts = parts
         self._area_partition = area_partition
@@ -212,6 +182,10 @@ class CatalogCreator:
         self._output_dir = os.path.join(self._skycatalog_root,
                                         self._catalog_dir)
 
+        self._written_config = None
+        self._config_path = config_path
+        self._catalog_name = catalog_name
+
         self._output_type = output_type
         self._mag_cut = mag_cut
         self._sed_subdir = sed_subdir
@@ -219,6 +193,10 @@ class CatalogCreator:
         self._knots = knots
         self._logname = logname
         self._logger = logging.getLogger(logname)
+        self._skip_done = skip_done
+        self._flux_only = flux_only
+        self._main_only = main_only
+        self._flux_parallel = flux_parallel
 
     def create(self, catalog_type):
         """
@@ -228,21 +206,36 @@ class CatalogCreator:
         ----------
         catalog_type   string    Currently 'galaxy' and 'pointsource' are
                                  the only values allowed
+        Return
+        ------
+        None
         """
         if catalog_type == ('galaxy'):
-            return self.create_galaxy_catalog()
+            if not self._flux_only:
+                self.create_galaxy_catalog()
+            if not self._main_only:
+                self.create_galaxy_flux_catalog()
         elif catalog_type == ('pointsource'):
-            return self.create_pointsource_catalog()
+            if not self._flux_only:
+                self.create_pointsource_catalog()
+            if not self._main_only:
+                self.create_pointsource_flux_catalog()
         else:
             raise NotImplemented(f'CatalogCreator.create: unsupported catalog type {catalog_type}')
 
     def create_galaxy_catalog(self):
         """
+        Create the 'main' galaxy catalog, including everything except
+        LSST fluxes
+
         Returns
         -------
-        Dict describing catalog produced
+        None
+
         """
         import GCRCatalogs
+
+        self._cat = None
 
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)
 
@@ -251,13 +244,23 @@ class CatalogCreator:
 
         self._mag_norm_f = MagNorm(self._cosmology)
 
-        arrow_schema = _make_galaxy_schema(self._logname, self._sed_subdir,
-                                           self._knots)
+        arrow_schema = make_galaxy_schema(self._logname,
+                                              self._sed_subdir,
+                                              self._knots)
 
         for p in self._parts:
             self._logger.info(f'Starting on pixel {p}')
             self.create_galaxy_pixel(p, gal_cat, arrow_schema)
             self._logger.info(f'Completed pixel {p}')
+
+        # Now make config.   We need it for computing LSST fluxes for
+        # the second part of the galaxy catalog
+        if self._skip_done:
+            config_path = self.write_config(path_only=True)
+            if os.path.exists(config_path):
+                self._logger.info('Will not overwrite existing config file')
+                return
+        self.write_config()
 
     def create_galaxy_pixel(self, pixel, gal_cat, arrow_schema):
         """
@@ -268,15 +271,21 @@ class CatalogCreator:
         arrow_schema    schema to use for output file
         """
 
-        # Output filename template
-        output_template = 'galaxy_{}.parquet'
+        output_path = os.path.join(self._output_dir, f'galaxy_{pixel}.parquet')
+        if os.path.exists(output_path):
+            if not self._skip_done:
+                self._logger.info(f'Overwriting file {output_path}')
+            else:
+                self._logger.info(f'Skipping regeneration of {output_path}')
+                return
 
         # Used to finding tophat parameters from cosmoDC2 column names
         tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
         tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
 
         # Number of rows to include in a row group
-        stride = 1000000
+        #stride = 1000000
+        stride = self._galaxy_stride
 
         hp_filter = [f'healpix_pixel=={pixel}']
         if self._mag_cut:
@@ -329,8 +338,6 @@ class CatalogCreator:
         if self._sed_subdir:
             #  Generate full paths for disk and bulge SED files, even though
             #  we don't actually write the files here
-            # Name of file can be <galaxy_id>_<cmp>.txt
-            # prepend subdirectory supplied as command-line arg.
             bulge_path = _generate_sed_path(df['galaxy_id'], self._sed_subdir,
                                             'bulge')
             disk_path =  _generate_sed_path(df['galaxy_id'], self._sed_subdir,
@@ -363,8 +370,8 @@ class CatalogCreator:
         self._logger.debug('Made extinction')
 
         #  Write row groups of size stride (or less) until input is exhausted
-        last_row = len(df['galaxy_id']) - 1
-        u_bnd = min(stride, last_row)
+        last_row_ix = len(df['galaxy_id']) - 1
+        u_bnd = min(stride, last_row_ix + 1)
         l_bnd = 0
         rg_written = 0
         writer = None
@@ -392,25 +399,165 @@ class CatalogCreator:
                 out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]
                 out_dict['disk_sed_file_path'] = disk_path[l_bnd : u_bnd]
 
-            if self._logger.getEffectiveLevel() == logging.DEBUG:
-                for kd,i in out_dict.items():
-                    self._logger.debug(f'Key={kd}, type={type(i)}, len={len(i)}')
-            print_col = False
-
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
             if not writer:
-                writer = pq.ParquetWriter(os.path.join(
-                    self._output_dir, output_template.format(pixel)),
-                                          arrow_schema)
+                writer = pq.ParquetWriter(output_path, arrow_schema)
 
             writer.write_table(out_table)
             rg_written += 1
             l_bnd = u_bnd
-            u_bnd = min(l_bnd + stride, last_row)
+            u_bnd = min(l_bnd + stride, last_row_ix + 1)
 
         writer.close()
         self._logger.debug(f'# row groups written: {rg_written}')
+
+    def create_galaxy_flux_catalog(self, config_file=None):
+        '''
+        Create a second file per healpixel containing just galaxy id and
+        LSST fluxes.  Use information in the main file to compute fluxes
+
+        Parameters
+        ----------
+        Path to config created in first stage so we can find the main
+        galaxy files.
+
+        Return
+        ------
+        None
+        '''
+
+        from desc.skycatalogs import open_catalog, SkyCatalog
+
+        self._gal_flux_schema = make_galaxy_flux_schema(self._logname)
+        BaseObject.get_bp_dir()
+
+        if not config_file:
+            #config_file = self._written_config
+            config_file = self.write_config(path_only=True)
+        if not self._cat:
+            self._cat = open_catalog(config_file,
+                                     skycatalog_root=self._skycatalog_root)
+
+        # Might also open a main file and read its metadata to be sure
+        # the value for stride is correct.
+        # Especially need to do this if we want to support making flux
+        # files in a separate job activation.
+
+
+        self._flux_template = self._cat.raw_config['object_types']['galaxy']['flux_file_template']
+
+        self._logger.info('Creating galaxy flux files')
+        for p in self._parts:
+            self._logger.info(f'Starting on pixel {p}')
+            self._create_galaxy_flux_pixel(p)
+            self._logger.info(f'Completed pixel {p}')
+
+
+    def _create_galaxy_flux_pixel(self, pixel):
+        '''
+        Create a parquet file for a single healpix pixel containing only
+        galaxy id and LSST fluxes
+
+        Parameters
+        ----------
+        Pixel         int
+
+        Return
+        ------
+        None
+        '''
+
+        output_filename = f'galaxy_flux_{pixel}.parquet'
+        output_path = os.path.join(self._output_dir, output_filename)
+
+        if os.path.exists(output_path):
+            if not self._skip_done:
+                self._logger.info(f'Overwriting file {output_path}')
+            else:
+                self._logger.info(f'Skipping regeneration of {output_path}')
+                return
+
+        # Use same value for row group as was used for main file
+        stride = self._galaxy_stride
+
+        object_list = self._cat.get_objects_by_hp(pixel,
+                                                  obj_type_set={'galaxy'})
+        object_coll = object_list.get_collections()[0]
+        writer = None
+        l_bnd = 0
+        u_bnd = min(len(object_coll), stride)
+        rg_written = 0
+        while u_bnd > l_bnd:
+            o_list = object_coll[l_bnd : u_bnd]
+            self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
+
+            # prefetch everything we need. Getting a quantity for one object
+            # ensures the quantity is read for the whole row group
+            # (In fact currently all row groups are read, but that could and
+            # should change)
+            for att in ['galaxy_id', 'shear_1', 'shear_2', 'convergence',
+                        'redshift_hubble', 'MW_av', 'MW_rv', 'sed_val_bulge',
+                        'sed_val_disk', 'sed_val_knots'] :
+                v = o_list[0].get_native_attribute(att)
+
+            global _galaxy_collection
+            _galaxy_collection = object_coll
+
+            out_dict = {'galaxy_id': [], 'lsst_flux_u' : [],
+                        'lsst_flux_g' : [], 'lsst_flux_r' : [],
+                        'lsst_flux_i' : [], 'lsst_flux_z' : [],
+                        'lsst_flux_y' : []}
+
+            n_parallel = self._flux_parallel
+
+            if n_parallel == 1:
+                n_per = u_bnd - l_bnd
+            else:
+                n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
+            l = l_bnd
+            u = min(l_bnd + n_per, u_bnd)
+            readers = []
+            # Expect to be able to do about 1500/minute/process
+            tm = int((n_per*60)/500)  # Give ourselves a cushion
+            self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+            for i in range(n_parallel):
+                conn_rd, conn_wrt = Pipe(duplex=False)
+                readers.append(conn_rd)
+
+                # For debugging call directly
+                proc = Process(target=_do_galaxy_flux_chunk,
+                               name=f'proc_{i}',
+                               args=(conn_wrt, _galaxy_collection,l, u))
+                proc.start()
+                l = u
+                u = min(l + n_per, u_bnd)
+            self._logger.debug('Processes started')
+            for i in range(n_parallel):
+                ready = readers[i].poll(tm)
+                if not ready:
+                    self._logger.error(f'Process {i} timed out after {tm} sec')
+                    sys.exit(1)
+                dat = readers[i].recv()
+                for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
+                          'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
+                          'lsst_flux_y']:
+                    out_dict[k] += dat[k]
+
+            out_df = pd.DataFrame.from_dict(out_dict)
+            out_table = pa.Table.from_pandas(out_df,
+                                             schema=self._gal_flux_schema)
+
+            if not writer:
+                writer = pq.ParquetWriter(output_path, self._gal_flux_schema)
+            writer.write_table(out_table)
+            l_bnd = u_bnd
+            u_bnd = min(l_bnd + stride, len(object_list))
+
+            rg_written +=1
+
+        writer.close()
+        self._logger.debug(f'# row groups written to flux file: {rg_written}')
 
     def create_pointsource_catalog(self, star_truth=None, sn_truth=None):
 
@@ -424,7 +571,7 @@ class CatalogCreator:
 
         Returns
         -------
-        Dict describing catalog produced
+        None
         """
 
         # For now fixed location for star, SNe parameter files.
@@ -433,7 +580,7 @@ class CatalogCreator:
         self._star_truth = _star_db
         self._sn_truth = _sn_db
 
-        arrow_schema = _make_star_schema()
+        arrow_schema = make_star_schema()
         #  Need a way to indicate which object types to include; deal with that
         #  later.  For now, default is stars only.  Use default star parameter file.
         for p in self._parts:
@@ -443,12 +590,19 @@ class CatalogCreator:
 
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None,
                              sn_cat=None):
-
         if not star_cat and not sn_cat:
             self._logger.info('No point source inputs specified')
             return
 
-        output_template = 'pointsource_{}.parquet'
+        output_filename = f'pointsource_{pixel}.parquet'
+        output_path = os.path.join(self._output_dir, output_filename)
+
+        if os.path.exists(output_path):
+            if not self._skip_done:
+                self._logger.info(f'Overwriting file {output_path}')
+            else:
+                self._logger.info(f'Skipping regeneration of {output_path}')
+                return
 
         if star_cat:
             # Get data for this pixel
@@ -472,8 +626,7 @@ class CatalogCreator:
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
             self._logger.debug('Created arrow table from dataframe')
 
-            writer = pq.ParquetWriter(os.path.join(
-                self._output_dir, output_template.format(pixel)), arrow_schema)
+            writer = pq.ParquetWriter(output_path, arrow_schema)
             writer.write_table(out_table)
 
             writer.close()
@@ -483,8 +636,128 @@ class CatalogCreator:
 
         return
 
-    def write_config(self, config_path, catalog_name, overwrite=False):
-        config = create_config(catalog_name)
+    def create_pointsource_flux_catalog(self, config_file=None):
+        '''
+        Create a second file per healpixel containing just id and
+        LSST fluxes.  Use information in the main file to compute fluxes
+
+        Parameters
+        ----------
+        Path to config created in first stage so we can find the main
+        galaxy files.
+
+        Return
+        ------
+        None
+        '''
+
+        from desc.skycatalogs import open_catalog, SkyCatalog
+
+        self._ps_flux_schema = make_star_flux_schema(self._logname)
+        if not config_file:
+            config_file = self.write_config(path_only=True)
+
+        BaseObject.get_bp_dir()
+
+        # Always open catalog. If it was opened for galaxies earlier
+        # it won't know about star files.
+        self._cat = open_catalog(config_file,
+                                 skycatalog_root=self._skycatalog_root)
+
+        self._flux_template = self._cat.raw_config['object_types']['star']['flux_file_template']
+
+        self._logger.info('Creating pointsource flux files')
+        for p in self._parts:
+            self._logger.info(f'Starting on pixel {p}')
+            self._create_pointsource_flux_pixel(p)
+            self._logger.info(f'Completed pixel {p}')
+
+    def _create_pointsource_flux_pixel(self, pixel):
+        '''
+        Create a parquet file for a single healpix pixel containing only
+        pointsource id and LSST fluxes
+
+        Parameters
+        ----------
+        pixel         int
+
+        Return
+        ------
+        None
+        '''
+
+        # For main catalog use self._cat
+        # For schema use self._ps_flux_schema
+        # output_template should be derived from value for flux_file_template
+        #  in main catalog config.  Cheat for now
+        output_filename = f'pointsource_flux_{pixel}.parquet'
+        output_path = os.path.join(self._output_dir, output_filename)
+
+        if os.path.exists(output_path):
+            if not self._skip_done:
+                self._logger.info(f'Overwriting file {output_path}')
+            else:
+                self._logger.info(f'Skipping regeneration of {output_path}')
+                return
+
+        object_list = self._cat.get_objects_by_hp(pixel,
+                                                  obj_type_set={'star'})
+        last_row_ix = len(object_list) - 1
+        writer = None
+
+        # Write out as a single rowgroup as was done for main catalog
+        l_bnd = 0
+        u_bnd = last_row_ix + 1
+
+        o_list = object_list[l_bnd : u_bnd]
+        self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
+        out_dict = {}
+        out_dict['id'] = [o.get_native_attribute('id') for o in o_list]
+        all_fluxes =  [o.get_LSST_fluxes(as_dict=False) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        for i, band in enumerate(LSST_BANDS):
+            self._logger.debug(f'Band {band} is number {i}')
+            v = all_fluxes_transpose.__next__()
+            out_dict[f'lsst_flux_{band}'] = v
+            if i == 1:
+                self._logger.debug(f'Len of flux column: {len(v)}')
+                self._logger.debug(f'Type of flux column: {type(v)}')
+        out_df = pd.DataFrame.from_dict(out_dict)
+        out_table = pa.Table.from_pandas(out_df,
+                                         schema=self._ps_flux_schema)
+        if not writer:
+            writer = pq.ParquetWriter(output_path, self._ps_flux_schema)
+        writer.write_table(out_table)
+
+        writer.close()
+        ##self._logger.debug(f'# row groups written to flux file: {rg_written}')
+
+    def write_config(self, overwrite=False, path_only=False):
+        '''
+        Parameters
+        ----------
+        overwrite   boolean default False.   If true, overwrite existing
+                    config of the same name
+        path_only   If true, just return the path; don't write anything
+
+        Returns
+        -------
+        Path to would-be config file if path_only is True;
+        else None
+
+        Side-effects
+        ------------
+        Save path to config file written as instance variable
+
+        '''
+        if not self._config_path:
+            self._config_path = self._output_dir
+
+        if path_only:
+            return os.path.join(self._config_path, self._catalog_name + '.yaml')
+
+
+        config = create_config(self._catalog_name, self._logname)
         config.add_key('area_partition', self._area_partition)
         config.add_key('skycatalog_root', self._skycatalog_root)
         config.add_key('catalog_dir' , self._catalog_dir)
@@ -495,6 +768,9 @@ class CatalogCreator:
         config.add_key('Cosmology', assemble_cosmology(self._cosmology))
         config.add_key('object_types', assemble_object_types(self._pkg_root))
 
+        config.add_key('galaxy_magnitude_cut', self._mag_cut)
+        config.add_key('knots_magnitude_cut', self._knots_mag_cut)
+
         inputs = {'galaxy_truth' : self._galaxy_truth}
         if self._sn_truth:
             inputs['sn_truth'] = self._sn_truth
@@ -503,6 +779,5 @@ class CatalogCreator:
         config.add_key('provenance', assemble_provenance(self._pkg_root,
                                                          inputs=inputs))
 
-        if not config_path:
-            config_path = self._output_dir
-        config.write_config(config_path, filename=(catalog_name + '.yaml'))
+        self._written_config = config.write_config(self._config_path,
+                                                   overwrite=overwrite)

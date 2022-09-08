@@ -26,8 +26,8 @@ parser.add_argument('--no-galaxies', action='store_true',
                     help='if used galaxy catalogs will NOT be created')
 parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
                     help='healpix pixels for which catalogs will be created')
-parser.add_argument('--skycatalog_root',
-                    help='Root directory for sky catalogs, typically site-dependent. If not specified, use value environment variable SKYCATALOG_ROOT')
+parser.add_argument('--skycatalog-root',
+                    help='Root directory for sky catalogs, typically site-dependent. If not specified, use value of environment variable SKYCATALOG_ROOT')
 parser.add_argument('--catalog-dir', help='directory for output files relative to skycatalog_root',
                     default='.')
 parser.add_argument('--sed-subdir', help='subdirectory to prepend to paths of galaxy SEDs as written to the sky catalog', default='galaxyTopHatSED')
@@ -39,17 +39,24 @@ parser.add_argument('--knots-magnitude-cut', default=27.0, type=float,
                     help='Galaxies with i-magnitude above this cut get no knots')
 parser.add_argument('--no-knots', action='store_true', help='If supplied omit knots component. Default is False')
 
-parser.add_argument('--write-config', action='store_true',
-                    help='''If present output config for the new catalog.
-                    Path is determined by --config-path.''')
 parser.add_argument('--config-path', default=None, help='''
                     Output path for config file. If no value,
                     config will be written to same location as data,
-                    with filenmame taken from catalog-name''')
+                    with filenmame taken from catalog-name.
+                    A config file is written iff galaxies are requested''')
 parser.add_argument('--catalog-name', default='skyCatalog',
                     help='''If write-config option is used, this value
                     will appear in the config and will be part of
                     the filename''')
+
+parser.add_argument('--skip-done', action='store_true',
+                    help='If supplied skip existing data files; else overwrite with message')
+parser.add_argument('--flux-only', action='store_true',
+                    help='If supplied only do flux files. Main files must already exist')
+parser.add_argument('--main-only', action='store_true',
+                    help='If supplied only do main files, not flux files')
+parser.add_argument('--flux-parallel', default=16, type=int,
+                    help='Number of processes to run in parallel when computing fluxes')
 
 
 args = parser.parse_args()
@@ -74,12 +81,16 @@ parts = args.pixels
 
 creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          catalog_dir=args.catalog_dir,
-                         write_config=args.write_config,
                          config_path=args.config_path,
+                         catalog_name=args.catalog_name,
                          mag_cut=args.galaxy_magnitude_cut,
                          sed_subdir=args.sed_subdir,
                          knots_mag_cut=args.knots_magnitude_cut,
-                         knots=(not args.no_knots), logname=logname)
+                         knots=(not args.no_knots), logname=logname,
+                         skip_done=args.skip_done,
+                         flux_only=args.flux_only, main_only=args.main_only,
+                         flux_parallel=args.flux_parallel)
+
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
     logger.info("Creating galaxy catalogs")
@@ -89,8 +100,6 @@ if not args.no_pointsources:
     logger.info("Creating point source catalogs")
     creator.create('pointsource')
 
-if args.write_config:
-    creator.write_config(args.config_path, args.catalog_name)
 
 logger.info('All done')
 print_date()

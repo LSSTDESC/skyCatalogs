@@ -1,5 +1,5 @@
 from collections.abc import Sequence, Iterable
-from collections import namedtuple, OrderedDict
+from collections import namedtuple
 import os
 import gzip
 import itertools
@@ -8,6 +8,9 @@ import astropy.units as u
 import warnings
 from dust_extinction.parameter_averages import F19
 import galsim
+import logging
+from galsim.errors import GalSimRangeError
+
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
 from desc.skycatalogs.utils.sed_utils import convert_tophat_sed
@@ -18,7 +21,8 @@ there could be two subtypes for bulge components, differing in the
 form of their associated SEDs
 '''
 
-__all__ = ['BaseObject', 'ObjectCollection', 'ObjectList', 'OBJECT_TYPES']
+__all__ = ['BaseObject', 'ObjectCollection', 'ObjectList', 'OBJECT_TYPES',
+           'LSST_BANDS']
 GALAXY=1
 GALAXY_BULGE=2
 GALAXY_DISK=3
@@ -31,11 +35,16 @@ OBJECT_TYPES = {'galaxy' : GALAXY, 'bulge_basic' : GALAXY_BULGE,
                 'disk_basic' : GALAXY_DISK, 'knots_basic' : GALAXY_KNOTS,
                 'star' : STAR, 'agn' : AGN, 'sn' : SN}
 
+LSST_BANDS = ('ugrizy')
+
 class BaseObject(object):
     '''
     Abstract base class for static (in position coordinates) objects.
     Likely need a variant for SSO.
     '''
+
+    _bp_path_init = False
+    _bp_path = 0
 
     _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501],[0, 1, 0]),
                              wave_type='nm').withZeropoint('AB')
@@ -197,6 +206,10 @@ class BaseObject(object):
         mag_f = self._belongs_to.sky_catalog.mag_norm_f
         th_bins = self._belongs_to.config.get_tophat_parameters()
 
+        # if values are all zeros or nearly no point in trying to convert
+        if max(th_val) < np.finfo('float').resolution:
+            return th_bins, th_val, float('inf')
+
         lmbda,f_lambda,mag_norm,f_nu500 = convert_tophat_sed(th_bins, th_val,
                                           mag_f, redshift=r, wavelen_step=resolution)
         return lmbda, f_lambda, mag_norm
@@ -288,7 +301,6 @@ class BaseObject(object):
         # Apply magnorm. The SED is in units of photons/nm/cm^2/s
         # -0.9210340371976184 = -np.log(10)/2.5. Use to convert mag to flux
         flux_500 = np.exp(-0.9210340371976184 * magnorm)
-        ###sed = sed*flux_500*self.eff_area
         sed = sed*flux_500
 
         iAv, iRv, mwAv, mwRv = self.get_dust()
@@ -346,21 +358,60 @@ class BaseObject(object):
             sed *= mu
         return sed
 
-    def get_flux(self, bandpass):
+    def get_flux(self, bandpass, sed=None):
         """
         Return the total object flux integrated over the bandpass
         in photons/sec/cm^2
+        Use supplied sed if there is one
         """
-        sed = self.get_total_observer_sed()
-        return sed.calculateFlux(bandpass)
+
+        if not sed:
+            sed = self.get_total_observer_sed()
+
+        flux = sed.calculateFlux(bandpass)
+
+        return flux
 
     def get_fluxes(self, bandpasses):
         # To avoid recomputing sed
         sed = self.get_total_observer_sed()
         return [sed.calculateFlux(b) for b in bandpasses]
 
-    def get_LSST_flux(self, band, cache=True):
-        if not band in 'ugrizy':
+    def get_bp_dir():
+        '''
+        If throughputs can be found, return that directory. Else
+        return None and caller should use GalSim defaults
+        '''
+        if BaseObject._bp_path_init:
+            if BaseObject._bp_path:
+                return BaseObject._bp_path
+            else:
+                return None
+
+        BaseObject._bp_path_init = True
+        logger = logging.getLogger('skyCatalogs.creator')
+
+        rubin_sim_dir = os.getenv('RUBIN_SIM_DATA_DIR', None)
+
+        if rubin_sim_dir:
+            bp_path = os.path.join(rubin_sim_dir, 'throughputs', 'baseline')
+            if os.path.exists(bp_path):
+                BaseObject._bp_path = bp_path
+                logger.info(f'Using rubin sim dir {rubin_sim_dir}')
+                return bp_path
+        else:
+            bp_path = os.path.join(os.getenv('HOME'), 'rubin_sim_data',
+                                   'throughputs', 'baseline')
+            logger.info(f'Using rubin sim dir rubin_sim_data under HOME')
+            if os.path.exists(bp_path):
+                BaseObject._bp_path = bp_path
+                return bp_path
+
+        logger.warning("No rubin sim data dir found. Using GalSim's LSST bandpasses")
+        return None
+
+    def get_LSST_flux(self, band, sed=None, cache=True):
+        if not band in LSST_BANDS:
             return None
         att = f'flux_{band}'
         # Check if it's already an attribute
@@ -371,25 +422,47 @@ class BaseObject(object):
         if att in self.native_columns:
             return self.get_native_attribute(att)
 
-        # galsim keeps standard bandpass files under
-        # os.path.join(galsim.meta_data.share_dir, 'bandpass').
-        # These include LSST_u.dat, etc.
+        bp_dir = BaseObject.get_bp_dir()
+        if bp_dir:
+            fname = f'total_{band}.dat'
+            bp_path = os.path.join(bp_dir, fname)
         else:
-            bp = galsim.Bandpass(f'LSST_{band}.dat', 'nm')
-            val = self.get_flux(bp)
-            if cache:
-                setattr(self, att, val)
-            return val
+            # galsim keeps standard bandpass files under
+            # os.path.join(galsim.meta_data.share_dir, 'bandpass').
+            # These include LSST_u.dat, etc.
+            bp_path = f'LSST_{band}.dat'
 
-    def get_LSST_fluxes(self, cache=True):
-        '''
-        Return a dict of fluxes for LSST bandpasses
-        '''
-        fluxes = {}
-        for band in 'ugrizy':
-            fluxes[band] = self.get_LSST_flux(band, cache)
+        bp = galsim.Bandpass(bp_path, 'nm')
 
-        return fluxes
+        val = self.get_flux(bp, sed=sed)
+        if cache:
+            setattr(self, att, val)
+        return val
+
+    def get_LSST_fluxes(self, cache=True, as_dict=True):
+        '''
+        Return a dict of fluxes for LSST bandpasses or, if as_dict is False,
+        just a list in the same order as LSST_BANDS
+        '''
+        fluxes = dict()
+        sed = self.get_total_observer_sed()
+        for band in LSST_BANDS:
+            ##### temporary to debug error
+            try:
+                fluxes[band] = self.get_LSST_flux(band, sed=sed, cache=cache)
+            except GalSimRangeError as e:
+                logger = logging.getLogger('skyCatalogs.creator')
+                galaxy_id = self.get_native_attribute('galaxy_id')
+                logger.debug(f'galaxy_id: {galaxy_id}  band: {band}')
+                redshift = self.get_native_attribute('redshift')
+                logger.debug(f'redshift: {redshift}')
+                logger.debug(f'GalSimRangeError: {e}')
+                fluxes[band] = 0.0
+
+        if as_dict:
+            return fluxes
+        else:
+            return list(fluxes.values())
 
 class ObjectCollection(Sequence):
     '''
@@ -399,27 +472,30 @@ class ObjectCollection(Sequence):
     rather than a single number.  There are some additional methods
     '''
     def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
-                 region=None, mask=None, reader=None):
+                 region=None, mask=None, readers=None):
         '''
         Minimum information needed for static objects.
         specified, has already been used by the caller to generate mask.
-        ra, dec, id must be array-like.
-        object_type  may be either single value or array-like.
+        ra, dec, id must be array-like and the same length
+        object_type  may be either single value or array-like (could be
+        useful if more than one object type is stored in the same file)
         partition_id (e.g. healpix id)
         sky_catalog instance of SkyCatalog class
         (redshift should probably be ditched; no need for it)
         (similarly for region with current code structure. Information
         needed is encoded in mask)
+
         mask  indices to be masked off, e.g. because region does not
               include the entire healpix pixel
-        All arrays must be the same length
+        readers one per file associated with the type(s). (Galaxy info
+              is stored in two files)
 
 
         '''
         self._ra = np.array(ra)
         self._dec = np.array(dec)
         self._id = np.array(id)
-        self._rdr = reader
+        self._rdrs = readers
         self._partition_id = partition_id
         self._sky_catalog = sky_catalog   # might not need this
         self._config = Config(sky_catalog.raw_config)
@@ -458,7 +534,10 @@ class ObjectCollection(Sequence):
         May not include quantities which are constant for all objects
         of this type
         '''
-        return self._rdr.columns
+        columns = set()
+        for rdr in self._rdrs:
+            columns = columns.union(rdr.columns)
+        return columns
 
     @property
     def subcomponents(self):
@@ -483,20 +562,35 @@ class ObjectCollection(Sequence):
         val = getattr(self, attribute_name, None)
         if val is not None: return val
 
-        d = self._rdr.read_columns([attribute_name], self._mask)
-        if not d:
-            return None
-        val = d[attribute_name]
-        setattr(self, attribute_name, val)
-        return val
+        for r in self._rdrs:
+            if attribute_name in r.columns:
+                d = r.read_columns([attribute_name], self._mask)
+                if not d:
+                    return None
+                val = d[attribute_name]
+                setattr(self, attribute_name, val)
+                return val
 
     def get_native_attributes(self, attribute_list):
         '''
-        Return requested attributes as an OrderedDict. Keys are column names.
+        Return requested attributes as dict. Keys are column names.
         Use our mask if we have one
         '''
-        df = self._rdr.read_columns(attribute_list, self._mask)
-        return df
+        remaining = set(attribute_list)
+        final_d = dict()
+        for r in self._rdrs:
+            to_read = remaining.intersection(r.columns)
+            d = r.read_columns(to_read, self._mask)
+            remaining.difference_update(to_read)
+            for k in d:
+                final_d[k] = d[k]
+
+        if len(remaining) > 0:
+            # raise exception?   log error?
+            print(f'Unknown column or columns {remaining}')
+            return None
+
+        return final_d
 
     def get_native_attributes_iterator(self, attribute_names):
         '''
