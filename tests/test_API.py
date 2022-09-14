@@ -3,8 +3,10 @@ Unit tests for SkyCatalogs API
 """
 
 import unittest
+import os
+from pathlib import Path
 
-# Not currently lused
+# Not currently used
 #import pandas as pd
 #import numpy as np
 
@@ -18,8 +20,10 @@ class APITester(unittest.TestCase):
         '''
         Open the catalog
         '''
-        cfg_path = '/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg/to_translate.yaml'
-        self._cat = open_catalog(cfg_path)
+        skycatalog_root = os.path.join(Path(__file__).resolve().parents[1],
+                                       'data')
+        cfg_path = os.path.join(skycatalog_root, 'ci_sample', 'skyCatalog.yaml')
+        self._cat = open_catalog(cfg_path, skycatalog_root=skycatalog_root)
 
 
     def tearDown(self):
@@ -40,12 +44,12 @@ class APITester(unittest.TestCase):
         ra_max_tract = 57.564
         dec_min_tract = -37.190
         dec_max_tract = -35.702
-        ##ra_min_small = 56.0
-        ##ra_max_small = 56.2
-        ra_min_small = 55.9
-        ra_max_small = 56.1
-        dec_min_small = -36.2
-        dec_max_small = -36.0
+
+        # Catalogs for testing are sparse, so make a large box
+        ra_min_small = 55.8
+        ra_max_small = 56.4
+        dec_min_small = -36.5
+        dec_max_small = -35.9
 
         rgn = Box(ra_min_small, ra_max_small, dec_min_small, dec_max_small)
 
@@ -57,8 +61,6 @@ class APITester(unittest.TestCase):
         print('Invoke get_objects_by_region with box region')
         object_list = cat.get_objects_by_region(rgn,
                                                 obj_type_set=set(['galaxy']) )
-        # Try out get_objects_by_hp with no region
-        #colls = cat.get_objects_by_hp(9812, None, set(['galaxy']) )
 
         print('Number of collections returned:  ', object_list.collection_count)
 
@@ -80,12 +82,12 @@ class APITester(unittest.TestCase):
                 print(c[other], '\nid=', c[other].id, ' ra=', c[other].ra, ' dec=',
                       c[other].dec,
                       ' belongs_index=', c[other]._belongs_index)
-            slice_late = c[163994:163997]
-            print('\nobjects indexed 163994 through 163996')
+            slice_late = c[len_coll - 5:len_coll - 2]
+            print(f'\nobjects indexed {len_coll - 5}  through {len_coll - 3}')
+
             for o in slice_late:
-                if o < len_coll:
-                    print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
-                          o._belongs_index)
+                print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
+                      o._belongs_index)
 
         print('Total object count: ', len(object_list))
 
@@ -109,7 +111,8 @@ class APITester(unittest.TestCase):
         def print_from_objects(label, obj_list):
             '''
         Print out information from supplied object list, accessed
-        both from list and from collections it comes from
+        both from list and from collections it comes from. Values
+        returned should be the same
         Parameters
         ----------
         label      string       Identify the list
@@ -119,17 +122,19 @@ class APITester(unittest.TestCase):
             colls = obj_list.get_collections()
 
             print(f'Total objects: {len(obj_list)}  # collections {len(colls)}')
+
             obj0 = obj_list[0]
-            obj0c0 = colls[0][0]
+            obj0 = colls[0][0]
             native_columns = obj0.native_columns
             for att in ['object_type', 'redshift', 'id', 'galaxy_id']:
-                print(f'Getting attribute {att}')
+
                 if att in native_columns:
                     v0 = (obj_list[0]).get_native_attribute(att)
                     v0c0 = (colls[0][0]).get_native_attribute(att)
                     print(f'For attribute {att} obj_list 1st value: {v0}; coll 1st value: {v0c0}')
+                    assert v0 == v0c0
                 else:
-                    print(f'No native attribute {att} for this object')
+                    print(f'No native attribute "{att}" for this object')
         ####   end of included function for printing
 
         hp = 9556
