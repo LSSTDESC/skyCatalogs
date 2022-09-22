@@ -10,10 +10,10 @@ from pathlib import Path
 #import pandas as pd
 #import numpy as np
 
-from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog, Box
+from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog, Box, Disk
 from desc.skycatalogs.skyCatalogs import _get_intersecting_hps
+from desc.skycatalogs.objects.base_object import BaseObject
 
-# This only works if my scratch area is accessible in the run environment
 class APITester(unittest.TestCase):
 
     def setUp(self):
@@ -31,7 +31,8 @@ class APITester(unittest.TestCase):
 
     def testAPI_region(self):
         '''
-        Should be broken down into separate small tests
+        Exercise get_objects_by_region for box and disk and parts of the
+        interfaces for BaseObject, ObjectCollection and ObjectList
         '''
         cat = self._cat
 
@@ -39,11 +40,11 @@ class APITester(unittest.TestCase):
         hps = cat._find_all_hps()
         print('Found {} healpix pixels '.format(len(hps)))
         for h in hps: print(h)
+        assert(set(hps) == {9556, 9683, 9684, 9812, 9813, 9940})
 
-        ra_min_tract = 55.736
-        ra_max_tract = 57.564
-        dec_min_tract = -37.190
-        dec_max_tract = -35.702
+        # These hps are the ones covering tract 3828
+        # For this tract ra is between 55.736 and 57.564
+        # dec is between -37.190 and -35.702
 
         # Catalogs for testing are sparse, so make a large box
         ra_min_small = 55.8
@@ -57,20 +58,23 @@ class APITester(unittest.TestCase):
 
         print("For region ", rgn)
         print("intersecting pixels are ", intersect_hps)
+        assert(set(intersect_hps) == {9683, 9684, 9812})
 
-        print('Invoke get_objects_by_region with box region')
         object_list = cat.get_objects_by_region(rgn,
                                                 obj_type_set=set(['galaxy']) )
 
-        print('Number of collections returned:  ', object_list.collection_count)
-
+        print('Number of collections returned for box:  ',
+              object_list.collection_count)
+        assert(object_list.collection_count == 2)
         colls = object_list.get_collections()
         for c in colls:
             len_coll = len(c)
             print(f"For hpid {c.get_partition_id()} found {len_coll} objects")
             print("First object: ")
-            print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
+            print('id=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
                   ' belongs_index=', c[0]._belongs_index)
+            fluxes = c[0].get_LSST_fluxes()
+            assert(len(fluxes) == 6)
 
             print("Slice [1:3]")
             slice13 = c[1:3]
@@ -79,7 +83,7 @@ class APITester(unittest.TestCase):
                       o._belongs_index)
                 other = min(1000, len_coll - 1)
                 print(f"Object {other}")
-                print(c[other], '\nid=', c[other].id, ' ra=', c[other].ra, ' dec=',
+                print('id=', c[other].id, ' ra=', c[other].ra, ' dec=',
                       c[other].dec,
                       ' belongs_index=', c[other]._belongs_index)
             slice_late = c[len_coll - 5:len_coll - 2]
@@ -92,16 +96,44 @@ class APITester(unittest.TestCase):
         print('Total object count: ', len(object_list))
 
         obj = object_list[0]
-        print("Type of element in object_list:", type(obj))
+        assert(type(obj) == BaseObject)
 
         redshift0 = object_list[0].get_native_attribute('redshift')
         print('First redshift: ', redshift0)
 
         sed_bulges = colls[0].get_native_attribute('sed_val_bulge')
 
-        print("first bulge sed:")
-        for v in sed_bulges[0]:
-            print(v)
+        #print("first bulge sed:")
+        #for v in sed_bulges[0]:
+        #    print(v)
+
+        # Now disk.  Get all known object types
+        rgn = Disk(56.6, -36.4, 1800)
+        object_list = cat.get_objects_by_region(rgn)
+        print('Number of collections returned for disk: ',
+              object_list.collection_count)
+        colls = object_list.get_collections()
+        assert(len(object_list.get_collections()) == object_list.collection_count)
+        assert(object_list.collection_count == 4)
+
+        total_object_count = 0
+        for c in colls:
+            len_coll = len(c)
+            total_object_count += len_coll
+            print(f"For hpid {c.get_partition_id()} found {len_coll} objects")
+            if c._object_type_unique:
+                print(f"    of object type {c._object_type_unique}")
+            print("First object: ")
+            print('id=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
+                  ' belongs_index=', c[0]._belongs_index, ' object_type=',
+                  c[0].object_type)
+        assert(type(c[0]) == BaseObject)
+
+
+        print('List len: ', len(object_list))
+        print('Sum over collections: ', total_object_count)
+        assert(total_object_count == len(object_list))
+
 
 
     def testAPI_hp(self):
