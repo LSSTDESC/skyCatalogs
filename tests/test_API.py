@@ -75,6 +75,7 @@ class APITester(unittest.TestCase):
                   ' belongs_index=', c[0]._belongs_index)
             fluxes = c[0].get_LSST_fluxes()
             assert(len(fluxes) == 6)
+            print('Found fluxes')
 
             print("Slice [1:3]")
             slice13 = c[1:3]
@@ -127,7 +128,11 @@ class APITester(unittest.TestCase):
             print('id=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
                   ' belongs_index=', c[0]._belongs_index, ' object_type=',
                   c[0].object_type)
-        assert(type(c[0]) == BaseObject)
+            fluxes = c[0].get_LSST_fluxes()
+            assert(len(fluxes) == 6)
+            print('Found fluxes')
+
+            assert(type(c[0]) == BaseObject)
 
 
         print('List len: ', len(object_list))
