@@ -9,6 +9,7 @@ import numpy as np
 import numpy.ma as ma
 import pyarrow.parquet as pq
 from astropy import units
+from desc.skycatalogs.objects.base_object import load_lsst_bandpasses
 from desc.skycatalogs.objects import *
 from desc.skycatalogs.readers import *
 from desc.skycatalogs.readers import ParquetReader
@@ -485,6 +486,8 @@ def open_catalog(config_file, mp=False, skycatalog_root=None):
     -------
     SkyCatalog
     '''
+    # Get LSST bandpasses in case we need to compute fluxes
+    load_lsst_bandpasses()
     with open(config_file) as f:
         return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
                           mp=mp)

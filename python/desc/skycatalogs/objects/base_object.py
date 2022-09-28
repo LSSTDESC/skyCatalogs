@@ -22,7 +22,7 @@ form of their associated SEDs
 '''
 
 __all__ = ['BaseObject', 'ObjectCollection', 'ObjectList', 'OBJECT_TYPES',
-           'LSST_BANDS']
+           'LSST_BANDS', 'load_lsst_bandpasses']
 GALAXY=1
 GALAXY_BULGE=2
 GALAXY_DISK=3
@@ -37,14 +37,48 @@ OBJECT_TYPES = {'galaxy' : GALAXY, 'bulge_basic' : GALAXY_BULGE,
 
 LSST_BANDS = ('ugrizy')
 
+def load_lsst_bandpasses():
+    '''
+    Read in lsst bandpasses from standard place, trim, and store in global dict
+    Returns: The dict
+
+    '''
+    global lsst_bandpasses
+    lsst_bandpasses = dict()
+    rubin_sim_dir = os.getenv('RUBIN_SIM_DATA_DIR', None)
+    if rubin_sim_dir:
+        bp_dir = os.path.join(rubin_sim_dir, 'throughputs', 'baseline')
+
+        if os.path.exists(bp_dir):
+            BaseObject._bp_path = bp_dir
+            #logger.info(f'Using rubin sim dir {rubin_sim_dir}')
+        else:
+            bp_dir = os.path.join(os.getenv('HOME'), 'rubin_sim_data',
+                                   'throughputs', 'baseline')
+            #logger.info(f'Using rubin sim dir rubin_sim_data under HOME')
+            if os.path.exists(bp_dir):
+                BaseObject._bp_path = bp_dir
+            else:
+                #logger.info('Using galsim built-in bandpasses')
+                bp_dir = None
+                fname_fmt = 'LSST_{band}.dat'
+        for band in LSST_BANDS:
+            if bp_dir:
+                bp_full_path = os.path.join(bp_dir, f'total_{band}.dat')
+            else:
+                bp_full_path = f'LSST_{band}.dat'
+            lsst_bandpasses[band] = galsim.Bandpass(bp_full_path, 'nm').thin()
+
+    return lsst_bandpasses
+
 class BaseObject(object):
     '''
     Abstract base class for static (in position coordinates) objects.
     Likely need a variant for SSO.
     '''
 
-    _bp_path_init = False
-    _bp_path = 0
+    ## _bp_path_init = False
+    ## _bp_path = 0
 
     _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501],[0, 1, 0]),
                              wave_type='nm').withZeropoint('AB')
@@ -377,38 +411,38 @@ class BaseObject(object):
         sed = self.get_total_observer_sed()
         return [sed.calculateFlux(b) for b in bandpasses]
 
-    def get_bp_dir():
-        '''
-        If throughputs can be found, return that directory. Else
-        return None and caller should use GalSim defaults
-        '''
-        if BaseObject._bp_path_init:
-            if BaseObject._bp_path:
-                return BaseObject._bp_path
-            else:
-                return None
+    # def get_bp_dir():
+    #     '''
+    #     If throughputs can be found, return that directory. Else
+    #     return None and caller should use GalSim defaults
+    #     '''
+    #     if BaseObject._bp_path_init:
+    #         if BaseObject._bp_path:
+    #             return BaseObject._bp_path
+    #         else:
+    #             return None
 
-        BaseObject._bp_path_init = True
-        logger = logging.getLogger('skyCatalogs.creator')
+    #     BaseObject._bp_path_init = True
+    #     logger = logging.getLogger('skyCatalogs.creator')
 
-        rubin_sim_dir = os.getenv('RUBIN_SIM_DATA_DIR', None)
+    #     rubin_sim_dir = os.getenv('RUBIN_SIM_DATA_DIR', None)
 
-        if rubin_sim_dir:
-            bp_path = os.path.join(rubin_sim_dir, 'throughputs', 'baseline')
-            if os.path.exists(bp_path):
-                BaseObject._bp_path = bp_path
-                logger.info(f'Using rubin sim dir {rubin_sim_dir}')
-                return bp_path
-        else:
-            bp_path = os.path.join(os.getenv('HOME'), 'rubin_sim_data',
-                                   'throughputs', 'baseline')
-            logger.info(f'Using rubin sim dir rubin_sim_data under HOME')
-            if os.path.exists(bp_path):
-                BaseObject._bp_path = bp_path
-                return bp_path
+    #     if rubin_sim_dir:
+    #         bp_path = os.path.join(rubin_sim_dir, 'throughputs', 'baseline')
+    #         if os.path.exists(bp_path):
+    #             BaseObject._bp_path = bp_path
+    #             logger.info(f'Using rubin sim dir {rubin_sim_dir}')
+    #             return bp_path
+    #     else:
+    #         bp_path = os.path.join(os.getenv('HOME'), 'rubin_sim_data',
+    #                                'throughputs', 'baseline')
+    #         logger.info(f'Using rubin sim dir rubin_sim_data under HOME')
+    #         if os.path.exists(bp_path):
+    #             BaseObject._bp_path = bp_path
+    #             return bp_path
 
-        logger.warning("No rubin sim data dir found. Using GalSim's LSST bandpasses")
-        return None
+    #     logger.warning("No rubin sim data dir found. Using GalSim's LSST bandpasses")
+    #     return None
 
     def get_LSST_flux(self, band, sed=None, cache=True):
         if not band in LSST_BANDS:
@@ -422,19 +456,22 @@ class BaseObject(object):
         if att in self.native_columns:
             return self.get_native_attribute(att)
 
-        bp_dir = BaseObject.get_bp_dir()
-        if bp_dir:
-            fname = f'total_{band}.dat'
-            bp_path = os.path.join(bp_dir, fname)
-        else:
-            # galsim keeps standard bandpass files under
-            # os.path.join(galsim.meta_data.share_dir, 'bandpass').
-            # These include LSST_u.dat, etc.
-            bp_path = f'LSST_{band}.dat'
+        # bp_dir = BaseObject.get_bp_dir()
+        # if bp_dir:
+        #     fname = f'total_{band}.dat'
+        #     bp_path = os.path.join(bp_dir, fname)
+        # else:
+        #     # galsim keeps standard bandpass files under
+        #     # os.path.join(galsim.meta_data.share_dir, 'bandpass').
+        #     # These include LSST_u.dat, etc.
+        #     bp_path = f'LSST_{band}.dat'
 
-        bp = galsim.Bandpass(bp_path, 'nm')
+        # bp = galsim.Bandpass(bp_path, 'nm')
 
-        val = self.get_flux(bp, sed=sed)
+        # val = self.get_flux(bp, sed=sed)
+
+        val = self.get_flux(lsst_bandpasses[band])
+
         if cache:
             setattr(self, att, val)
         return val
