@@ -470,7 +470,7 @@ class BaseObject(object):
 
         # val = self.get_flux(bp, sed=sed)
 
-        val = self.get_flux(lsst_bandpasses[band])
+        val = self.get_flux(lsst_bandpasses[band], sed=sed)
 
         if cache:
             setattr(self, att, val)
