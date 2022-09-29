@@ -433,7 +433,6 @@ class CatalogCreator:
         from desc.skycatalogs import open_catalog, SkyCatalog
 
         self._gal_flux_schema = make_galaxy_flux_schema(self._logname)
-        ###BaseObject.get_bp_dir()
 
         if not config_file:
             #config_file = self._written_config

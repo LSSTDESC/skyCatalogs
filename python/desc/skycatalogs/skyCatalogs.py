@@ -325,6 +325,8 @@ class SkyCatalog(object):
     def get_object_iterator_by_region(self, region=None, obj_type_set=None,
                                       max_chunk=None, datetime=None):
         '''
+        Not yet implemented.
+
         Parameters
         ----------
         region         Either a box or a circle (each represented as
@@ -361,6 +363,7 @@ class SkyCatalog(object):
         object_list = ObjectList()
 
         if hp not in self._hp_info:
+            print(f'WARNING: In SkyCatalog.get_objects_by_hp healpixel {hp} intersects region but has no catalog file')
             return object_list
 
         G_COLUMNS = ['galaxy_id', 'ra', 'dec']
@@ -472,7 +475,7 @@ class SkyCatalog(object):
         pass
 
 
-def open_catalog(config_file, mp=False, skycatalog_root=None):
+def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     '''
     Parameters
     ----------
@@ -493,7 +496,7 @@ def open_catalog(config_file, mp=False, skycatalog_root=None):
     load_lsst_bandpasses()
     with open(config_file) as f:
         return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
-                          mp=mp)
+                          mp=mp, verbose=verbose)
 
 if __name__ == '__main__':
     ###cfg_file_name = 'latest.yaml'
