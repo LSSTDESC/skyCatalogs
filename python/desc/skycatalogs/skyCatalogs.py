@@ -360,6 +360,9 @@ class SkyCatalog(object):
         '''
         object_list = ObjectList()
 
+        if hp not in self._hp_info:
+            return object_list
+
         G_COLUMNS = ['galaxy_id', 'ra', 'dec']
         PS_COLUMNS = ['object_type', 'id', 'ra', 'dec']
         if self.verbose:
