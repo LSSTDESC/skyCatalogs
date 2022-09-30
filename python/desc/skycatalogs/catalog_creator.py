@@ -96,7 +96,10 @@ def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
         v = all_fluxes_transpose.__next__()
         out_dict[f'lsst_flux_{band}'] = v
 
-    send_conn.send(out_dict)
+    if send_conn:
+        send_conn.send(out_dict)
+    else:
+        return out_dict
 
 class CatalogCreator:
     def __init__(self, parts, area_partition, skycatalog_root=None,
@@ -430,7 +433,6 @@ class CatalogCreator:
         from desc.skycatalogs import open_catalog, SkyCatalog
 
         self._gal_flux_schema = make_galaxy_flux_schema(self._logname)
-        BaseObject.get_bp_dir()
 
         if not config_file:
             #config_file = self._written_config
@@ -518,31 +520,37 @@ class CatalogCreator:
             l = l_bnd
             u = min(l_bnd + n_per, u_bnd)
             readers = []
-            # Expect to be able to do about 1500/minute/process
-            tm = int((n_per*60)/500)  # Give ourselves a cushion
-            self._logger.info(f'Using timeout value {tm} for {n_per} sources')
-            for i in range(n_parallel):
-                conn_rd, conn_wrt = Pipe(duplex=False)
-                readers.append(conn_rd)
 
-                # For debugging call directly
-                proc = Process(target=_do_galaxy_flux_chunk,
-                               name=f'proc_{i}',
-                               args=(conn_wrt, _galaxy_collection,l, u))
-                proc.start()
-                l = u
-                u = min(l + n_per, u_bnd)
-            self._logger.debug('Processes started')
-            for i in range(n_parallel):
-                ready = readers[i].poll(tm)
-                if not ready:
-                    self._logger.error(f'Process {i} timed out after {tm} sec')
-                    sys.exit(1)
-                dat = readers[i].recv()
-                for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
-                          'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
-                          'lsst_flux_y']:
-                    out_dict[k] += dat[k]
+            if n_parallel == 1:
+                out_dict = _do_galaxy_flux_chunk(None, _galaxy_collection,
+                                                 l, u)
+            else:
+                # Expect to be able to do about 1500/minute/process
+                tm = int((n_per*60)/500)  # Give ourselves a cushion
+                self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+                for i in range(n_parallel):
+                    conn_rd, conn_wrt = Pipe(duplex=False)
+                    readers.append(conn_rd)
+
+                    # For debugging call directly
+                    proc = Process(target=_do_galaxy_flux_chunk,
+                                   name=f'proc_{i}',
+                                   args=(conn_wrt, _galaxy_collection,l, u))
+                    proc.start()
+                    l = u
+                    u = min(l + n_per, u_bnd)
+
+                self._logger.debug('Processes started')
+                for i in range(n_parallel):
+                    ready = readers[i].poll(tm)
+                    if not ready:
+                        self._logger.error(f'Process {i} timed out after {tm} sec')
+                        sys.exit(1)
+                    dat = readers[i].recv()
+                    for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
+                              'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
+                              'lsst_flux_y']:
+                        out_dict[k] += dat[k]
 
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df,
@@ -656,8 +664,6 @@ class CatalogCreator:
         self._ps_flux_schema = make_star_flux_schema(self._logname)
         if not config_file:
             config_file = self.write_config(path_only=True)
-
-        BaseObject.get_bp_dir()
 
         # Always open catalog. If it was opened for galaxies earlier
         # it won't know about star files.

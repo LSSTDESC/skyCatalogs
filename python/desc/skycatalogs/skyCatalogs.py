@@ -9,6 +9,7 @@ import numpy as np
 import numpy.ma as ma
 import pyarrow.parquet as pq
 from astropy import units
+from desc.skycatalogs.objects.base_object import load_lsst_bandpasses
 from desc.skycatalogs.objects import *
 from desc.skycatalogs.readers import *
 from desc.skycatalogs.readers import ParquetReader
@@ -324,6 +325,8 @@ class SkyCatalog(object):
     def get_object_iterator_by_region(self, region=None, obj_type_set=None,
                                       max_chunk=None, datetime=None):
         '''
+        Not yet implemented.
+
         Parameters
         ----------
         region         Either a box or a circle (each represented as
@@ -358,6 +361,10 @@ class SkyCatalog(object):
         ObjectList containing sky objects in the region and the hp
         '''
         object_list = ObjectList()
+
+        if hp not in self._hp_info:
+            print(f'WARNING: In SkyCatalog.get_objects_by_hp healpixel {hp} intersects region but has no catalog file')
+            return object_list
 
         G_COLUMNS = ['galaxy_id', 'ra', 'dec']
         PS_COLUMNS = ['object_type', 'id', 'ra', 'dec']
@@ -468,7 +475,7 @@ class SkyCatalog(object):
         pass
 
 
-def open_catalog(config_file, mp=False, skycatalog_root=None):
+def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     '''
     Parameters
     ----------
@@ -485,9 +492,11 @@ def open_catalog(config_file, mp=False, skycatalog_root=None):
     -------
     SkyCatalog
     '''
+    # Get LSST bandpasses in case we need to compute fluxes
+    load_lsst_bandpasses()
     with open(config_file) as f:
         return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
-                          mp=mp)
+                          mp=mp, verbose=verbose)
 
 if __name__ == '__main__':
     ###cfg_file_name = 'latest.yaml'
