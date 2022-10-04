@@ -1,0 +1,18 @@
+This directory contains randomly-selected samples of objects from
+all_hp.  Those files were generated with a magnitude cut of 29.0
+
+See utility select_random.py, currently not in git but available
+under ${HOME}/desc_git/sky_catalogs/local/tests
+
+Sample files for galaxies and stars (both main file and flux file) exist
+for healpix pixels
+9556
+9683
+9684
+9812
+9813
+9940
+
+Each main file has data for no more than 500 sources (can be less if there
+happened to be duplicates).  Flux files were then generated in the usual
+way from the main files so cover the same sources.

@@ -3,23 +3,27 @@ Unit tests for SkyCatalogs API
 """
 
 import unittest
+import os
+from pathlib import Path
 
-# Not currently lused
+# Not currently used
 #import pandas as pd
 #import numpy as np
 
-from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog, Box
+from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog, Box, Disk
 from desc.skycatalogs.skyCatalogs import _get_intersecting_hps
+from desc.skycatalogs.objects.base_object import BaseObject
 
-# This only works if my scratch area is accessible in the run environment
 class APITester(unittest.TestCase):
 
     def setUp(self):
         '''
         Open the catalog
         '''
-        cfg_path = '/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg/to_translate.yaml'
-        self._cat = open_catalog(cfg_path)
+        skycatalog_root = os.path.join(Path(__file__).resolve().parents[1],
+                                       'data')
+        cfg_path = os.path.join(skycatalog_root, 'ci_sample', 'skyCatalog.yaml')
+        self._cat = open_catalog(cfg_path, skycatalog_root=skycatalog_root)
 
 
     def tearDown(self):
@@ -27,7 +31,8 @@ class APITester(unittest.TestCase):
 
     def testAPI_region(self):
         '''
-        Should be broken down into separate small tests
+        Exercise get_objects_by_region for box and disk and parts of the
+        interfaces for BaseObject, ObjectCollection and ObjectList
         '''
         cat = self._cat
 
@@ -35,17 +40,17 @@ class APITester(unittest.TestCase):
         hps = cat._find_all_hps()
         print('Found {} healpix pixels '.format(len(hps)))
         for h in hps: print(h)
+        assert(set(hps) == {9556, 9683, 9684, 9812, 9813, 9940})
 
-        ra_min_tract = 55.736
-        ra_max_tract = 57.564
-        dec_min_tract = -37.190
-        dec_max_tract = -35.702
-        ##ra_min_small = 56.0
-        ##ra_max_small = 56.2
-        ra_min_small = 55.9
-        ra_max_small = 56.1
-        dec_min_small = -36.2
-        dec_max_small = -36.0
+        # These hps are the ones covering tract 3828
+        # For this tract ra is between 55.736 and 57.564
+        # dec is between -37.190 and -35.702
+
+        # Catalogs for testing are sparse, so make a large box
+        ra_min_small = 55.8
+        ra_max_small = 56.4
+        dec_min_small = -36.5
+        dec_max_small = -35.9
 
         rgn = Box(ra_min_small, ra_max_small, dec_min_small, dec_max_small)
 
@@ -53,22 +58,24 @@ class APITester(unittest.TestCase):
 
         print("For region ", rgn)
         print("intersecting pixels are ", intersect_hps)
+        assert(set(intersect_hps) == {9683, 9684, 9812})
 
-        print('Invoke get_objects_by_region with box region')
         object_list = cat.get_objects_by_region(rgn,
                                                 obj_type_set=set(['galaxy']) )
-        # Try out get_objects_by_hp with no region
-        #colls = cat.get_objects_by_hp(9812, None, set(['galaxy']) )
 
-        print('Number of collections returned:  ', object_list.collection_count)
-
+        print('Number of collections returned for box:  ',
+              object_list.collection_count)
+        assert(object_list.collection_count == 2)
         colls = object_list.get_collections()
         for c in colls:
             len_coll = len(c)
             print(f"For hpid {c.get_partition_id()} found {len_coll} objects")
             print("First object: ")
-            print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
+            print('id=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
                   ' belongs_index=', c[0]._belongs_index)
+            fluxes = c[0].get_LSST_fluxes()
+            assert(len(fluxes) == 6)
+            print('Found fluxes')
 
             print("Slice [1:3]")
             slice13 = c[1:3]
@@ -77,29 +84,61 @@ class APITester(unittest.TestCase):
                       o._belongs_index)
                 other = min(1000, len_coll - 1)
                 print(f"Object {other}")
-                print(c[other], '\nid=', c[other].id, ' ra=', c[other].ra, ' dec=',
+                print('id=', c[other].id, ' ra=', c[other].ra, ' dec=',
                       c[other].dec,
                       ' belongs_index=', c[other]._belongs_index)
-            slice_late = c[163994:163997]
-            print('\nobjects indexed 163994 through 163996')
+            slice_late = c[len_coll - 5:len_coll - 2]
+            print(f'\nobjects indexed {len_coll - 5}  through {len_coll - 3}')
+
             for o in slice_late:
-                if o < len_coll:
-                    print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
-                          o._belongs_index)
+                print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
+                      o._belongs_index)
 
         print('Total object count: ', len(object_list))
 
         obj = object_list[0]
-        print("Type of element in object_list:", type(obj))
+        assert(type(obj) == BaseObject)
 
         redshift0 = object_list[0].get_native_attribute('redshift')
         print('First redshift: ', redshift0)
 
         sed_bulges = colls[0].get_native_attribute('sed_val_bulge')
 
-        print("first bulge sed:")
-        for v in sed_bulges[0]:
-            print(v)
+        #print("first bulge sed:")
+        #for v in sed_bulges[0]:
+        #    print(v)
+
+        # Now disk.  Get all known object types
+        rgn = Disk(56.6, -36.4, 1800)
+        object_list = cat.get_objects_by_region(rgn)
+        print('Number of collections returned for disk: ',
+              object_list.collection_count)
+        colls = object_list.get_collections()
+        assert(len(object_list.get_collections()) == object_list.collection_count)
+        assert(object_list.collection_count == 4)
+
+        total_object_count = 0
+        for c in colls:
+            len_coll = len(c)
+            total_object_count += len_coll
+            print(f"For hpid {c.get_partition_id()} found {len_coll} objects")
+            if c._object_type_unique:
+                print(f"    of object type {c._object_type_unique}")
+            print("First object: ")
+            print('id=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
+                  ' belongs_index=', c[0]._belongs_index, ' object_type=',
+                  c[0].object_type)
+            fluxes = c[0].get_LSST_fluxes()
+            assert(len(fluxes) == 6)
+            print('Found fluxes')
+
+            assert(type(c[0]) == BaseObject)
+
+
+        print('List len: ', len(object_list))
+        print('Sum over collections: ', total_object_count)
+        assert(total_object_count == len(object_list))
+
 
 
     def testAPI_hp(self):
@@ -109,7 +148,8 @@ class APITester(unittest.TestCase):
         def print_from_objects(label, obj_list):
             '''
         Print out information from supplied object list, accessed
-        both from list and from collections it comes from
+        both from list and from collections it comes from. Values
+        returned should be the same
         Parameters
         ----------
         label      string       Identify the list
@@ -119,17 +159,19 @@ class APITester(unittest.TestCase):
             colls = obj_list.get_collections()
 
             print(f'Total objects: {len(obj_list)}  # collections {len(colls)}')
+
             obj0 = obj_list[0]
-            obj0c0 = colls[0][0]
+            obj0 = colls[0][0]
             native_columns = obj0.native_columns
             for att in ['object_type', 'redshift', 'id', 'galaxy_id']:
-                print(f'Getting attribute {att}')
+
                 if att in native_columns:
                     v0 = (obj_list[0]).get_native_attribute(att)
                     v0c0 = (colls[0][0]).get_native_attribute(att)
                     print(f'For attribute {att} obj_list 1st value: {v0}; coll 1st value: {v0c0}')
+                    assert v0 == v0c0
                 else:
-                    print(f'No native attribute {att} for this object')
+                    print(f'No native attribute "{att}" for this object')
         ####   end of included function for printing
 
         hp = 9556

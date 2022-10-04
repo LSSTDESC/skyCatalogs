@@ -116,7 +116,7 @@ def _compute_mask(region, ra, dec):
         # Rather than comparing arcs, it is equivalent to compare chords
         # (or square of chord length)
         diff = p_vec - c_vec
-        obj_chord_sq = np.sum(np.square(p_vec - c_vec),1)
+        obj_chord_sq = np.sum(np.square(p_vec - c_vec),axis=1)
 
         # This is to be compared to square of chord for angle a corresponding
         # to disk radius.  That's 4(sin(a/2)^2)
@@ -228,8 +228,6 @@ class SkyCatalog(object):
             for ot in o_types:
                 # find all keys containing the string 'file_template'
                 template_keys = [k for k in o_types[ot] if 'file_template' in k]
-                ##if 'file_template' in o_types[ot]:
-                ##    m = re.match(o_types[ot]['file_template'], f)
                 for k in template_keys:
                     m = re.match(o_types[ot][k], f)
                     if m:
@@ -238,8 +236,6 @@ class SkyCatalog(object):
 
                         if hp not in self._hp_info:
                             self._hp_info[hp] = {'files' : {f : None},
-                                                 #'object_types' : {ot : f}}
-                                                 # Value of 'object_types' is now a list
                                                  'object_types' : {ot : [f]}}
                         else:
                             this_hp = self._hp_info[hp]
@@ -249,7 +245,6 @@ class SkyCatalog(object):
                             if ot in this_hp['object_types']:
                                 this_hp['object_types'][ot].append(f)
                             else:
-                                #this_hp['object_types'][ot] = f
                                 this_hp['object_types'][ot] = [f]
         return hp_set
 
@@ -271,7 +266,6 @@ class SkyCatalog(object):
             self._config['area_partition']['ordering'],
             self._config['area_partition']['nside'],
             region)
-            #.intersection(self._hps.keys())
 
     def get_object_type_names(self):
         '''
@@ -401,7 +395,6 @@ class SkyCatalog(object):
                 if self._hp_info[hp]['files'][f] is None:            # no reader yet
                     full_path = os.path.join(self._cat_dir, f)
                     the_reader = parquet_reader.ParquetReader(full_path, mask=None)
-                    #self._hp_info[hp][f] = the_reader
                     self._hp_info[hp]['files'][f] = the_reader
                 else:
                     the_reader = self._hp_info[hp]['files'][f]
