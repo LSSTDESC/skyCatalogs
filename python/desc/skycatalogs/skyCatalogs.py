@@ -53,6 +53,14 @@ class PolygonalRegion:
         '''
         return self._convex_polygon.getVertices()
 
+    def get_vertices_radec(self):
+        v3d = self.get_vertices()
+        vertices_radec = []
+        for v in v3d:
+            vertices_radec.append((LonLat.longitudeOf(v).asDegrees(),
+                                   LonLat.latitudeOf(v).asDegrees()))
+        return vertices_radec
+
     def get_containment_mask(self, ra, dec, included=True):
         '''
         Parameters
@@ -74,8 +82,7 @@ class PolygonalRegion:
         else:
             return np.logical_not(mask)
 
-_aDisk = Disk(1.0, 1.0, 1.0)
-_aBox = Box(-1.0, 1.0, -2.0, 2.0)
+###_aDisk = Disk(1.0, 1.0, 1.0)
 
 # This function should maybe be moved to utils
 def _get_intersecting_hps(hp_ordering, nside, region):
@@ -89,7 +96,6 @@ def _get_intersecting_hps(hp_ordering, nside, region):
     '''
     # First convert region description to an array (4,3) with (x,y,z) coords
     # for each vertex
-    ##if type(region) == type(_aBox):
     if isinstance(region, Box):
         vec = healpy.pixelfunc.ang2vec([region.ra_min, region.ra_max,
                                         region.ra_max, region.ra_min],
@@ -129,8 +135,42 @@ def _compress_via_mask(tbl, id_column, region):
     If there are no objects in the region, all return values are None
 
     '''
+    import time
     if region is not None:
-        mask = _compute_mask(region, tbl['ra'], tbl['dec'])
+        if isinstance(region, PolygonalRegion):        # special case
+            # Find bounding box
+            vertices = region.get_vertices_radec()  # list of (ra, dec)
+            ra_max = max([v[0] for v in vertices])
+            ra_min = min([v[0] for v in vertices])
+            dec_max = max([v[1] for v in vertices])
+            dec_min = min([v[1] for v in vertices])
+            bnd_box = Box(ra_min, ra_max, dec_min, dec_max)
+            # Compute mask for that box
+            mask = _compute_mask(bnd_box, tbl['ra'], tbl['dec'])
+            # Save index array (indices for 0's in mask array)
+            ixes = [i for i in range(mask.size) if mask[i] == False]
+            # Get compressed ra, dec
+            masked_ra = ma.array(tbl['ra'], mask=mask)
+            ra_compress = masked_ra.compressed()
+            if ra_compress.size == 0:
+                return None, None, None, None
+            dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
+            # Compute polygon mask for the compressed array
+            #t0 = time.time()
+            poly_mask = _compute_mask(region, ra_compress, dec_compress)
+            #t_interval = time.time() - t0
+            #print('Time for trimmed poly mask: ', t_interval)
+            # For any non-zero elts in polygon mask, set corresponding
+            #        elt in full mask array to True.
+            #t0 = time.time()
+            for i, e in enumerate(poly_mask):
+                if e == True:
+                    mask[ixes[i]] = True
+            #t_interval = time.time() - t0
+            #print('Time for merge: ', t_interval)
+        else:
+            mask = _compute_mask(region, tbl['ra'], tbl['dec'])
+
         masked_ra = ma.array(tbl['ra'], mask=mask)
         ra_compress = masked_ra.compressed()
         if ra_compress.size > 0:
@@ -155,12 +195,13 @@ def _compute_mask(region, ra, dec):
 
     '''
     mask = None
-    if type(region) == type(_aBox):
+    if isinstance(region, Box):
         mask = np.logical_or((ra < region.ra_min),
                              (ra > region.ra_max))
         mask = np.logical_or(mask, (dec < region.dec_min))
         mask = np.logical_or(mask, (dec > region.dec_max))
-    if type(region) == type(_aDisk):
+    #if type(region) == type(_aDisk):
+    if isinstance(region, Disk):
         # Change positions to 3d vectors to measure distance
         p_vec = healpy.pixelfunc.ang2vec(ra, dec, lonlat=True)
 
