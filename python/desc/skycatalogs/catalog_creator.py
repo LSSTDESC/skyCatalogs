@@ -446,7 +446,6 @@ class CatalogCreator:
         # Especially need to do this if we want to support making flux
         # files in a separate job activation.
 
-
         self._flux_template = self._cat.raw_config['object_types']['galaxy']['flux_file_template']
 
         self._logger.info('Creating galaxy flux files')
@@ -560,7 +559,7 @@ class CatalogCreator:
                 writer = pq.ParquetWriter(output_path, self._gal_flux_schema)
             writer.write_table(out_table)
             l_bnd = u_bnd
-            u_bnd = min(l_bnd + stride, len(object_list))
+            u_bnd = min(l_bnd + stride, len(object_coll))
 
             rg_written +=1
 
