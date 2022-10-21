@@ -10,10 +10,12 @@ import numpy.ma as ma
 import pyarrow.parquet as pq
 from astropy import units
 from desc.skycatalogs.objects.base_object import load_lsst_bandpasses
+from desc.skycatalogs.objects.base_object import  CatalogContext
 from desc.skycatalogs.objects import *
 from desc.skycatalogs.readers import *
 from desc.skycatalogs.readers import ParquetReader
-from desc.skycatalogs.utils.sed_utils import MagNorm, create_cosmology
+###from desc.skycatalogs.utils.sed_utils import MagNorm, create_cosmology
+from desc.skycatalogs.utils.sed_tools import ObservedSedFactory, Extinguisher
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
 
@@ -179,15 +181,30 @@ class SkyCatalog(object):
         self._hp_info = dict()
         hps = self._find_all_hps()
 
-        cosmology = create_cosmology(config['Cosmology'])
-        self._magnorm_f = MagNorm(cosmology)
+        # Replace this with ObservedSedFactory, which does a lot more
+        # cosmology = create_cosmology(config['Cosmology'])
+        # self._magnorm_f = MagNorm(cosmology)
+
+        self._observed_sed_factory = ObservedSedFactory(config)
+        self._extinguisher = Extinguisher(self.observed_sed_factory)
+
+        # Make our properties accessible to BaseObject, etc.
+        self.catalog_context = CatalogContext(self)
 
     @property
-    def mag_norm_f(self):
-        '''
-        Return function object used to calculate mag_norm
-        '''
-        return self._magnorm_f
+    def observed_sed_factory(self):
+        return self._observed_sed_factory
+
+    @property
+    def extinguisher(self):
+        return self._extinguisher
+
+    # @property
+    # def mag_norm_f(self):
+    #     '''
+    #     Return function object used to calculate mag_norm
+    #     '''
+    #     return self._magnorm_f
 
     @property
     def raw_config(self):
@@ -195,6 +212,14 @@ class SkyCatalog(object):
         Return config, typically uploaded from yaml.
         '''
         return self._config
+
+    @property
+    def observed_sed_factory(self):
+        return self._observed_sed_factory
+
+    @property
+    def extinguisher(self):
+        return self._extinguisher
 
     # One might check that the config is complete and well-formed
     #  - for example require certain keys, such as catalog_name,
@@ -229,7 +254,7 @@ class SkyCatalog(object):
                 # find all keys containing the string 'file_template'
                 template_keys = [k for k in o_types[ot] if 'file_template' in k]
                 for k in template_keys:
-                    m = re.match(o_types[ot][k], f)
+                    m = re.fullmatch(o_types[ot][k], f)
                     if m:
                         hp = int(m['healpix'])
                         hp_set.add(hp)

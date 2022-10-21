@@ -13,7 +13,9 @@ from galsim.errors import GalSimRangeError
 
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
-from desc.skycatalogs.utils.sed_utils import convert_tophat_sed
+##from desc.skycatalogs.utils.sed_utils import convert_tophat_sed
+from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
+from desc.skycatalogs.utils.sed_tools import Extinguisher, AB_mag
 
 '''
 Main object types.   There are also may be subtypes. For example,
@@ -22,7 +24,7 @@ form of their associated SEDs
 '''
 
 __all__ = ['BaseObject', 'ObjectCollection', 'ObjectList', 'OBJECT_TYPES',
-           'LSST_BANDS', 'load_lsst_bandpasses']
+           'LSST_BANDS', 'load_lsst_bandpasses', 'CatalogContext']
 GALAXY=1
 GALAXY_BULGE=2
 GALAXY_DISK=3
@@ -36,6 +38,14 @@ OBJECT_TYPES = {'galaxy' : GALAXY, 'bulge_basic' : GALAXY_BULGE,
                 'star' : STAR, 'agn' : AGN, 'sn' : SN}
 
 LSST_BANDS = ('ugrizy')
+
+# global for easy access for code run within mp
+
+class CatalogContext:
+    def __init__(self, the_sky_cat):
+        global sky_cat
+        self._sky_cat = the_sky_cat
+        sky_cat = the_sky_cat
 
 def load_lsst_bandpasses():
     '''
@@ -126,10 +136,10 @@ class BaseObject(object):
             return self._belongs_to.partition_id
         else:
             return None
+
     @property
     def belongs_to(self):
         return self._belongs_to
-
 
     @property
     def native_columns(self):
@@ -192,9 +202,9 @@ class BaseObject(object):
 
         Returns
         -------
-        A triple (lambda, f_lambda, mag_norm) where the first two are
-                 parallel floating point arrays and the last is a scalar.
-                 lambda is in nm.   f_lambda is in erg/(cm**2 * s * nm)
+        A pair (sed, mag_norm) for a star or (sed, f_nu500) for a galaxy
+               component.  sed is a galsim sed.  f_nu500 is tophat value for
+               the component at 500 nm
         '''
 
         if self._object_type == 'star':
@@ -204,46 +214,35 @@ class BaseObject(object):
             if resolution:
                 warnings.warn(f'get_sed: resolution argument ignored for object type {self._object_type}')
             mag_norm = self.get_native_attribute('magnorm')
+            rel_path = self.get_native_attribute('sed_filepath')
+
             fpath = os.path.join(os.getenv('SIMS_SED_LIBRARY_DIR'),
                                  self.get_native_attribute('sed_filepath'))
-            lmbda = []
-            f_lambda = []
-            with gzip.open(fpath, mode='rt') as f:
-                ln = (f.readline()).strip()
-                while ln:
-                    if len(ln) == 0:
-                        ln = (f.readline()).strip()
-                        continue
-                    if ln[0] == '#':
-                        ln = (f.readline()).strip()
-                        continue
-                    atoms = ln.split()
-                    lmbda.append(float(atoms[0]))
-                    f_lambda.append(float(atoms[1]))
-                    ln = (f.readline()).strip()
-            return lmbda, f_lambda, mag_norm
 
+            return sky_cat.observed_sed_factory.create_pointsource(rel_path), mag_norm
         if self._object_type != 'galaxy':
             raise ValueError('get_sed function only available for stars and galaxy components')
-        if not resolution:
-            resolution = 1.0
         if component not in ['disk', 'bulge', 'knots']:
             raise ValueError(f'Cannot fetch SED for component type {component}')
 
         th_val = self.get_native_attribute(f'sed_val_{component}')
         if  th_val is None:   #  values for this component are not in the file
             raise ValueError(f'{component} not part of this catalog')
-        r = self.get_native_attribute('redshift_hubble')
-        mag_f = self._belongs_to.sky_catalog.mag_norm_f
-        th_bins = self._belongs_to.config.get_tophat_parameters()
 
         # if values are all zeros or nearly no point in trying to convert
         if max(th_val) < np.finfo('float').resolution:
-            return th_bins, th_val, float('inf')
+            return None, 0.0
 
-        lmbda,f_lambda,mag_norm,f_nu500 = convert_tophat_sed(th_bins, th_val,
-                                          mag_f, redshift=r, wavelen_step=resolution)
-        return lmbda, f_lambda, mag_norm
+        f_nu500 = th_val[sky_cat.observed_sed_factory.ix_500nm]
+
+        r_h = self.get_native_attribute('redshift_hubble')
+        r = self.get_native_attribute('redshift')
+
+        sed = sky_cat.observed_sed_factory.create(th_val, r_h, r)
+
+        ###lmbda,f_lambda,mag_norm,f_nu500 = convert_tophat_sed(th_bins, th_val,
+        ###                                  mag_f, redshift=r, wavelen_step=resolution)
+        return sed, f_nu500
 
     def get_dust(self):
         """Return the Av, Rv parameters for internal and Milky Way extinction."""
@@ -319,19 +318,19 @@ class BaseObject(object):
 
         The SEDs are computed assuming exposure times of 1 second.
         """
-        wl, flambda, magnorm = self.get_sed(component=component)
-        if np.isinf(magnorm):
-            # This subcomponent has zero emission so return None.
-            return None
-
         # Create a galsim.SED for this subcomponent.
-        sed_lut = galsim.LookupTable(wl, flambda)
-        sed = galsim.SED(sed_lut, wave_type='nm', flux_type='flambda')
-        sed = sed.withMagnitude(0, self._bp500)
+        if self._object_type == 'star':   # or other pointsource
+            sed, magnorm = self.get_sed(component=component)
+            # The SED is in units of photons/nm/cm^2/s
+            # -0.9210340371976184 = -np.log(10)/2.5. Use to convert mag to flux
+            flux_500 = np.exp(-0.9210340371976184 * magnorm)
+        else:
+            sed, flux_500 = self.get_sed(component=component)
+            if sed is None:
+                # This subcomponent has zero emission so return None.
+                return None
 
-        # Apply magnorm. The SED is in units of photons/nm/cm^2/s
-        # -0.9210340371976184 = -np.log(10)/2.5. Use to convert mag to flux
-        flux_500 = np.exp(-0.9210340371976184 * magnorm)
+        sed = sed.withMagnitude(0, self._bp500)
         sed = sed*flux_500
 
         iAv, iRv, mwAv, mwRv = self.get_dust()
@@ -340,24 +339,13 @@ class BaseObject(object):
             # to be the same for all subcomponents.
             pass  #TODO add implementation for internal extinction.
 
-        if 'redshift' in self.native_columns:
-            redshift = self.get_native_attribute('redshift')
-            sed = sed.atRedshift(redshift)
+        # redshift already applied by create or create_pointsource
+        # if 'redshift' in self.native_columns:
+        #     redshift = self.get_native_attribute('redshift')
+        #     sed = sed.atRedshift(redshift)
 
         # Apply Milky Way extinction.
-        extinction = F19(Rv=mwRv)
-        # Use SED wavelengths
-        wl = sed.wave_list
-        # Restrict to the range where F19 can be evaluated. F19.x_range is
-        # in units of 1/micron, so convert to nm.
-        wl_min = 1e3/F19.x_range[1]
-        wl_max = 1e3/F19.x_range[0]
-        wl = wl[np.where((wl_min < wl) & (wl < wl_max))]
-        ext = extinction.extinguish(wl*u.nm, Av=mwAv)
-        spec = galsim.LookupTable(wl, ext)
-        mw_ext = galsim.SED(spec, wave_type='nm', flux_type='1')
-        sed = sed*mw_ext
-
+        sed = sky_cat.extinguisher.extinguish(sed, mwAv)
         return sed
 
     def get_observer_sed_components(self):
@@ -486,7 +474,7 @@ class ObjectCollection(Sequence):
         self._partition_id = partition_id
         self._sky_catalog = sky_catalog   # might not need this
         self._config = Config(sky_catalog.raw_config)
-        self._mag_norm_f = sky_catalog.mag_norm_f
+        ###self._mag_norm_f = sky_catalog.mag_norm_f
         self._mask = mask
 
         # Maybe the following is silly and object_type should always be stored
