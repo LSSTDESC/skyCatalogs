@@ -129,7 +129,7 @@ class ObservedSedFactory:
         '''
         Return a galsim SED from information in a file
         '''
-        fpath = os.path.join(self.sims_sed_libary_dir, rel_path)
+        fpath = os.path.join(self.sims_sed_library_dir, rel_path)
 
         sed = galsim.SED(fpath, wave_type='nm', flux_type='flambda')
         if redshift > 0:
