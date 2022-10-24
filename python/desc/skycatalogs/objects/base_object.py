@@ -324,14 +324,15 @@ class BaseObject(object):
             # The SED is in units of photons/nm/cm^2/s
             # -0.9210340371976184 = -np.log(10)/2.5. Use to convert mag to flux
             flux_500 = np.exp(-0.9210340371976184 * magnorm)
+            sed = sed.withMagnitude(0, self._bp500)
+            sed = sed*flux_500
         else:
-            sed, flux_500 = self.get_sed(component=component)
+            # For galaxy components sed already has correct normalization
+            sed, _ = self.get_sed(component=component)
             if sed is None:
                 # This subcomponent has zero emission so return None.
                 return None
 
-        sed = sed.withMagnitude(0, self._bp500)
-        sed = sed*flux_500
 
         iAv, iRv, mwAv, mwRv = self.get_dust()
         if iAv > 0:
@@ -340,9 +341,6 @@ class BaseObject(object):
             pass  #TODO add implementation for internal extinction.
 
         # redshift already applied by create or create_pointsource
-        # if 'redshift' in self.native_columns:
-        #     redshift = self.get_native_attribute('redshift')
-        #     sed = sed.atRedshift(redshift)
 
         # Apply Milky Way extinction.
         sed = sky_cat.extinguisher.extinguish(sed, mwAv)

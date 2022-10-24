@@ -93,9 +93,6 @@ class ObservedSedFactory:
         Given tophat values from cosmoDC2 produce redshifted sed.
         Does not apply extinction.
         '''
-        # Insert 0 value to line up with wl, nu
-        ## no, don't
-        ##Lnu = np.insert(Lnu, 0, 0.0)
         # Compute Llambda in units of W/nm
         Llambda = (Lnu*self._to_W_per_Hz*(self.nu[:-1] - self.nu[1:])
                    /(self.wl[1:] - self.wl[:-1]))
@@ -106,7 +103,6 @@ class ObservedSedFactory:
         my_Llambda += self.pre_val
         for i in range(len(Llambda)):
             # Dealt with wl already in __init__
-            #my_wl.extend((self.wl[i], self.wl[i+1] - delta_wl))
             my_Llambda.extend((Llambda[i], Llambda[i]))
 
         # Convert to (unredshifted) flux given redshift_hubble.
@@ -116,7 +112,6 @@ class ObservedSedFactory:
         flambda *= (1e7/1e4)  # (erg/joule)*(m**2/cm**2)
 
         # Create the lookup table.
-        #lut = galsim.LookupTable(my_wl, flambda, interpolant='nearest')
         lut = galsim.LookupTable(self.wl_deltas, flambda, interpolant='nearest')
 
         # Create the SED object and apply redshift.
