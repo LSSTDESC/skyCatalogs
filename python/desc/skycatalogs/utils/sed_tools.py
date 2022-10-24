@@ -31,10 +31,6 @@ class ObservedSedFactory:
 
         wl0.append(bins[-1][0] + bins[-1][1])
 
-        #wl0 = [0.0] + wl0
-        # Prepend a 1nm bin
-        ## no, don't
-        ##wl0 = [wl0[0] - 10.0] + wl0
         wl0 = 0.1*np.array(wl0)
         self.wl = np.array(wl0)
         self.nu = self._clight/(self.wl*1e-9)  # frequency in Hz

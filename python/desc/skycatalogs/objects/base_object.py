@@ -472,7 +472,6 @@ class ObjectCollection(Sequence):
         self._partition_id = partition_id
         self._sky_catalog = sky_catalog   # might not need this
         self._config = Config(sky_catalog.raw_config)
-        ###self._mag_norm_f = sky_catalog.mag_norm_f
         self._mask = mask
 
         # Maybe the following is silly and object_type should always be stored
