@@ -14,7 +14,6 @@ from desc.skycatalogs.objects.base_object import  CatalogContext
 from desc.skycatalogs.objects import *
 from desc.skycatalogs.readers import *
 from desc.skycatalogs.readers import ParquetReader
-###from desc.skycatalogs.utils.sed_utils import MagNorm, create_cosmology
 from desc.skycatalogs.utils.sed_tools import ObservedSedFactory, Extinguisher
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
@@ -181,11 +180,9 @@ class SkyCatalog(object):
         self._hp_info = dict()
         hps = self._find_all_hps()
 
-        # Replace this with ObservedSedFactory, which does a lot more
-        # cosmology = create_cosmology(config['Cosmology'])
-        # self._magnorm_f = MagNorm(cosmology)
-
-        self._observed_sed_factory = ObservedSedFactory(config)
+        self._observed_sed_factory =\
+            ObservedSedFactory(config['SED_models']['tophat']['bins'],
+                               config['Cosmology'])
         self._extinguisher = Extinguisher(self.observed_sed_factory)
 
         # Make our properties accessible to BaseObject, etc.
@@ -198,13 +195,6 @@ class SkyCatalog(object):
     @property
     def extinguisher(self):
         return self._extinguisher
-
-    # @property
-    # def mag_norm_f(self):
-    #     '''
-    #     Return function object used to calculate mag_norm
-    #     '''
-    #     return self._magnorm_f
 
     @property
     def raw_config(self):
@@ -583,26 +573,32 @@ if __name__ == '__main__':
             print(o.object_type)
             if o.object_type == 'star':
                 print(o.get_instcat_entry())
-                (lmbda, f_lambda, magnorm) = o.get_sed(resolution=1.0)
+                #(lmbda, f_lambda, magnorm) = o.get_sed(resolution=1.0)
+                sed, magnorm = o.get_sed(resolution=1.0)
                 print('For star magnorm: ', magnorm)
                 if magnorm < 1000:
-                    print('Length of sed: ', len(lmbda))
-                    for i in range(10):
-                        print(sed_fmt.format(lmbda[i], f_lambda[i]))
-                    mid = int(len(lmbda)/2)
-                    for i in range(mid-5, mid+5):
-                        print("ix=",i,"  ", sed_fmt.format(lmbda[i], f_lambda[i]))
+                    print('Length of sed: ', len(sed.wave_list))
+                    # for i in range(10):
+                    #     print(sed_fmt.format(lmbda[i], f_lambda[i]))
+                    # mid = int(len(lmbda)/2)
+                    # for i in range(mid-5, mid+5):
+                    #     print("ix=",i,"  ", sed_fmt.format(lmbda[i], f_lambda[i]))
 
             else:
                 for cmp in ['disk', 'bulge', 'knots']:
                     print(cmp)
                     if cmp in o.subcomponents:
                         print(o.get_instcat_entry(component=cmp))
-                        (lmbda, f_lambda, magnorm) = o.get_sed(cmp)
-                        print('magnorm: ', magnorm)
-                        if magnorm < 1000:
-                            for i in range(10):
-                                print(sed_fmt.format(lmbda[i], f_lambda[i]))
+                        #(lmbda, f_lambda, magnorm) = o.get_sed(cmp)
+                        (sed, f_nu500) = o.get_sed(cmp)
+                        if sed:
+                            print('Length of sed table: ', len(sed.wave_list))
+                        else:
+                            print('All-zero sed')
+                            #print('magnorm: ', magnorm)
+                        #if magnorm < 1000:
+                        #    for i in range(10):
+                        #        print(sed_fmt.format(lmbda[i], f_lambda[i]))
                 # Try out old wrapper functions
                 print("\nget_dust:")
                 i_av, i_rv, g_av, g_rv = o.get_dust()

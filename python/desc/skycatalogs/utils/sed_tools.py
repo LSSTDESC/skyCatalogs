@@ -11,13 +11,13 @@ from numpy.random import default_rng
 from dust_extinction.parameter_averages import F19
 import galsim
 
-__all__ = ['ObservedSedFactory', 'Extinguisher', 'AB_mag']
+__all__ = ['ObservedSedFactory', 'Extinguisher', 'AB_mag', 'get_star_sed_path']
 class ObservedSedFactory:
     _clight = 3e8  # m/s
-    _to_W_per_Hz = 4.4659e13  # conversion of cosmoDC2 tophat Lnu values to W/Hz
-    def __init__(self, config, delta_wl=0.001):
+    _to_W_per_Hz = 4.4659e13 # conversion of cosmoDC2 tophat Lnu values to W/Hz
+    def __init__(self, th_definition, cosmology, delta_wl=0.001):
         # Get wavelength and frequency bin boundaries.
-        bins = config['SED_models']['tophat']['bins']
+        bins = th_definition
         wl0 = [_[0] for _ in bins]
 
         # Find index of original bin which includes 500 nm == 5000 ang
@@ -57,7 +57,9 @@ class ObservedSedFactory:
         # parameters.  This code is based on/borrowed from
         # https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/cosmodc2.py#L128
         cosmo_astropy_allowed = FlatLambdaCDM.__init__.__code__.co_varnames[1:]
-        cosmo_astropy = {k: v for k, v in config['Cosmology'].items()
+        ##cosmo_astropy = {k: v for k, v in config['Cosmology'].items()
+        ##                 if k in cosmo_astropy_allowed}
+        cosmo_astropy = {k: v for k, v in cosmology.items()
                          if k in cosmo_astropy_allowed}
         self.cosmology = FlatLambdaCDM(**cosmo_astropy)
 
@@ -127,6 +129,13 @@ class ObservedSedFactory:
             sed = sed.atRedshift(redshift)
         return sed
 
+    def magnorm(self, tophat_values, z_H):
+        one_Jy = 1e-26  # W/Hz/m**2
+        Lnu = tophat_values[self.ix_500nm]*self._to_W_per_Hz  # convert to W/Hz
+        Fnu = Lnu/4/np.pi/self.dl(z_H)**2
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return -2.5*np.log10(Fnu/one_Jy) + 8.90
+
 class Extinguisher:
     '''
     Applies extinction to a SED
@@ -154,7 +163,7 @@ class Extinguisher:
 
     def extinguish(self, sed, mwAv):
         ext = self.extinction.extinguish(self.wl_deltas_u, Av=mwAv)
-        spec = galsim.LookupTable(self.wl_deltas, ext)
+        spec = galsim.LookupTable(self.wl_deltas, ext, interpolant='linear')
         mw_ext = galsim.SED(spec, wave_type='nm', flux_type='1')
         sed = sed*mw_ext
 
@@ -171,3 +180,44 @@ class AB_mag:
                           band, bp in bps.items()}
     def __call__(self, flux, band):
         return -2.5*np.log10(flux/self.ab_fluxes[band])
+
+_standard_dict = {'lte' : 'starSED/phoSimMLT',
+                  'bergeron' : 'starSED/wDs',
+                  'km|kp' : 'starSED/kurucz'}
+
+def get_star_sed_path(filename, name_to_folder=_standard_dict):
+    '''
+    Return numpy array of full paths relative to SIMS_SED_LIBRARY_DIR,
+    given filenames
+
+    Parameters
+    ----------
+    filename       list of strings. Usually full filename but may be missing final ".gz"
+    name_to_folder dict mapping regular expression (to be matched with
+                   filename) to relative path for containing directory
+
+    Returns
+    -------
+    Full path for file, relative to SIMS_SED_LIBRARY_DIR
+    '''
+
+    compiled = { re.compile(k) : v for (k, v) in name_to_folder.items()}
+
+    path_list = []
+    for f in filename:
+        m = None
+        matched = False
+        for k,v in compiled.items():
+            f = f.strip()
+            m = k.match(f)
+            if m:
+                p = os.path.join(v, f)
+                if not p.endswith('.gz'):
+                    p = p + '.gz'
+                path_list.append(p)
+                matched = True
+                break
+
+        if not matched:
+            raise ValueError(f'get_star_sed_path: Filename {f} does not match any known patterns')
+    return np.array(path_list)
