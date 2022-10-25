@@ -12,7 +12,8 @@ from multiprocessing import Process, Pipe
 from astropy.coordinates import SkyCoord
 import sqlite3
 from desc.skycatalogs.utils.common_utils import print_date
-from desc.skycatalogs.utils.sed_utils import MagNorm, NORMWV_IX, get_star_sed_path
+###from desc.skycatalogs.utils.sed_utils import get_star_sed_path
+from desc.skycatalogs.utils.sed_tools import ObservedSedFactory, get_star_sed_path
 from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
 from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance
 from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_schema, make_star_flux_schema
@@ -201,6 +202,8 @@ class CatalogCreator:
         self._main_only = main_only
         self._flux_parallel = flux_parallel
 
+        self._obs_sed_factory = None
+
     def create(self, catalog_type):
         """
         Create catalog of specified type, using stored context.
@@ -245,7 +248,7 @@ class CatalogCreator:
         # Save cosmology in case we need to write parameters out later
         self._cosmology = gal_cat.cosmology
 
-        self._mag_norm_f = MagNorm(self._cosmology)
+        ###self._mag_norm_f = MagNorm(self._cosmology)
 
         arrow_schema = make_galaxy_schema(self._logname,
                                               self._sed_subdir,
@@ -317,6 +320,9 @@ class CatalogCreator:
             return start_width[0]
         self._sed_bins.sort(key=_bin_start_key)
 
+        self._obs_sed_factory = ObservedSedFactory(self._sed_bins,
+                                                   assemble_cosmology(self._cosmology))
+
         def _sed_bulge_key(s):
             return int(re.match(tophat_bulge_re, s)['start'])
         def _sed_disk_key(s):
@@ -363,10 +369,14 @@ class CatalogCreator:
             knots_seds = (np.array([df[kdn] for kdn in sed_knot_names]).T).tolist()
 
         #  Compute mag_norm from TH sed and redshift
-        bulge_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(bulge_seds, df['redshiftHubble']) ]
-        disk_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(disk_seds, df['redshiftHubble']) ]
+        ###bulge_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(bulge_seds, df['redshiftHubble']) ]
+        bulge_magnorm = [self._obs_sed_factory.magnorm(s, r) for (s, r)\
+                         in zip(bulge_seds, df['redshiftHubble']) ]
+        disk_magnorm = [self._obs_sed_factory.magnorm(s, r) for (s, r)\
+                        in zip(disk_seds, df['redshiftHubble']) ]
         if self._knots:
-            knots_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(knots_seds, df['redshiftHubble']) ]
+            knots_magnorm = [self._obs_sed_factory.magnorm(s, r) for (s, r)\
+                             in zip(knots_seds, df['redshiftHubble']) ]
 
         MW_rv = np.full_like(df['sersic_bulge'], _MW_rv_constant)
         MW_av = _make_MW_extinction(df['ra'], df['dec'])
