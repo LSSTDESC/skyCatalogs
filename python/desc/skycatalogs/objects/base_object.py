@@ -243,7 +243,15 @@ class BaseObject(object):
 
         return sed, f_nu500
 
-    #### def write_sed(self, component=None, resolution
+    def write_sed(self, sed_file_path, component=None, resolution=None):
+        sed, _ = self.get_sed(component=component, resolution=None)
+
+        wl = sed.wave_list
+        flambda = [sed(w) for w in wl]
+
+        with open(sed_file_path, 'w') as sed_file:
+            for lam, flam in zip(wl, flambda):
+                sed_file.write(f'{lam} {flam}\n')
 
     def get_dust(self):
         """Return the Av, Rv parameters for internal and Milky Way extinction."""

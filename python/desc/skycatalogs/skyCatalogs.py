@@ -597,6 +597,7 @@ if __name__ == '__main__':
                                 print(sed.wave_list)
                                 print('Simple sed values:')
                                 print([sed(w) for w in sed.wave_list])
+                                o.write_sed('simple_sed.txt', component=cmp)
                                 sed_fine, _ = o.get_sed(component=cmp,
                                                         resolution=1.0)
                                 print('Bin width = 1 nm')
