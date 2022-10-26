@@ -15,6 +15,7 @@ from desc.skycatalogs.objects import *
 from desc.skycatalogs.readers import *
 from desc.skycatalogs.readers import ParquetReader
 from desc.skycatalogs.utils.sed_tools import ObservedSedFactory, Extinguisher
+from desc.skycatalogs.utils.config_utils import Config
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
 
@@ -142,7 +143,7 @@ class SkyCatalog(object):
         skycatalog_root: If not None, overrides value in config or
                          in environment variable SKYCATALOG_ROOT
         '''
-        self._config = config
+        self._config = Config(config)
         self._logger = logging.getLogger('skyCatalogs.client')
         self._logger.setLevel(loglevel)
         ch = logging.StreamHandler()
@@ -181,7 +182,7 @@ class SkyCatalog(object):
         hps = self._find_all_hps()
 
         self._observed_sed_factory =\
-            ObservedSedFactory(config['SED_models']['tophat']['bins'],
+            ObservedSedFactory(self._config.get_tophat_parameters(),
                                config['Cosmology'])
         self._extinguisher = Extinguisher(self.observed_sed_factory)
 
@@ -578,27 +579,17 @@ if __name__ == '__main__':
                 print('For star magnorm: ', magnorm)
                 if magnorm < 1000:
                     print('Length of sed: ', len(sed.wave_list))
-                    # for i in range(10):
-                    #     print(sed_fmt.format(lmbda[i], f_lambda[i]))
-                    # mid = int(len(lmbda)/2)
-                    # for i in range(mid-5, mid+5):
-                    #     print("ix=",i,"  ", sed_fmt.format(lmbda[i], f_lambda[i]))
-
             else:
                 for cmp in ['disk', 'bulge', 'knots']:
                     print(cmp)
                     if cmp in o.subcomponents:
                         print(o.get_instcat_entry(component=cmp))
-                        #(lmbda, f_lambda, magnorm) = o.get_sed(cmp)
-                        (sed, f_nu500) = o.get_sed(cmp)
+                        sed, f_nu500 = o.get_sed(cmp)
                         if sed:
                             print('Length of sed table: ', len(sed.wave_list))
                         else:
                             print('All-zero sed')
-                            #print('magnorm: ', magnorm)
-                        #if magnorm < 1000:
-                        #    for i in range(10):
-                        #        print(sed_fmt.format(lmbda[i], f_lambda[i]))
+
                 # Try out old wrapper functions
                 print("\nget_dust:")
                 i_av, i_rv, g_av, g_rv = o.get_dust()

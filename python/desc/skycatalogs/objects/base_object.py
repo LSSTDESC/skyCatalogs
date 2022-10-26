@@ -240,8 +240,6 @@ class BaseObject(object):
 
         sed = sky_cat.observed_sed_factory.create(th_val, r_h, r)
 
-        ###lmbda,f_lambda,mag_norm,f_nu500 = convert_tophat_sed(th_bins, th_val,
-        ###                                  mag_f, redshift=r, wavelen_step=resolution)
         return sed, f_nu500
 
     def get_dust(self):
@@ -420,7 +418,7 @@ class BaseObject(object):
         fluxes = dict()
         sed = self.get_total_observer_sed()
         for band in LSST_BANDS:
-            ##### temporary to debug error
+            ##### temporary to debug error, now apparently fixed
             try:
                 fluxes[band] = self.get_LSST_flux(band, sed=sed, cache=cache)
             except GalSimRangeError as e:
