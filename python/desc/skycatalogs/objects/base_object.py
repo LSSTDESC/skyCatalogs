@@ -185,7 +185,7 @@ class BaseObject(object):
                        object type is 'galaxy')
         Returns: A string formatted like a line in an instance catalog
         '''
-        if self.object_type == 'galaxay':
+        if self.object_type == 'galaxy':
             if component not in self.subcomponents:
                 return ''
         return form_object_string(self, band, component)
@@ -198,7 +198,7 @@ class BaseObject(object):
         component    one of 'bulge', 'disk', 'knots' for now. Other components
                      may be supported.  Ignored for stars
         resolution   desired resolution of lambda in nanometers. Ignored
-                     for stars; defaults to 1.0 for galaxy components
+                     for stars.
 
         Returns
         -------
@@ -238,9 +238,12 @@ class BaseObject(object):
         r_h = self.get_native_attribute('redshift_hubble')
         r = self.get_native_attribute('redshift')
 
-        sed = sky_cat.observed_sed_factory.create(th_val, r_h, r)
+        sed = sky_cat.observed_sed_factory.create(th_val, r_h, r,
+                                                     resolution=resolution)
 
         return sed, f_nu500
+
+    #### def write_sed(self, component=None, resolution
 
     def get_dust(self):
         """Return the Av, Rv parameters for internal and Milky Way extinction."""

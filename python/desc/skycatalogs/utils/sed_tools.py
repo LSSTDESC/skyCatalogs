@@ -86,7 +86,7 @@ class ObservedSedFactory:
         MPC_TO_METER = 3.085677581491367e+22
         return self.cosmology.luminosity_distance(z).value*MPC_TO_METER
 
-    def create(self, Lnu, redshift_hubble, redshift):
+    def create(self, Lnu, redshift_hubble, redshift, resolution=None):
         '''
         Given tophat values from cosmoDC2 produce redshifted sed.
         Does not apply extinction.
@@ -111,6 +111,13 @@ class ObservedSedFactory:
 
         # Create the lookup table.
         lut = galsim.LookupTable(self.wl_deltas, flambda, interpolant='nearest')
+
+        if resolution:
+            wl_min = min(self.wl_deltas)
+            wl_max = max(self.wl_deltas)
+            wl_res = np.linspace(wl_min, wl_max, int((wl_max - wl_min)/resolution))
+            flambda_res = [lut(wl) for wl in wl_res]
+            lut = galsim.LookupTable(wl_res, flambda_res, interpolant='linear')
 
         # Create the SED object and apply redshift.
         sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')\

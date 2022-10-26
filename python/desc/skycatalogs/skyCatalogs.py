@@ -558,6 +558,7 @@ if __name__ == '__main__':
     print('Number of collections returned:  ', object_list.collection_count)
 
     colls = object_list.get_collections()
+    got_a_sed = False
     for c in colls:
         n_obj = len(c)
         print("For hpid ", c.get_partition_id(), "found ", n_obj, " objects")
@@ -587,6 +588,24 @@ if __name__ == '__main__':
                         sed, f_nu500 = o.get_sed(cmp)
                         if sed:
                             print('Length of sed table: ', len(sed.wave_list))
+                            if not got_a_sed:
+                                got_a_sed = True
+                                th = o.get_native_attribute(f'sed_val_{cmp}')
+                                print('Tophat values: ', th)
+                                sed, _ = o.get_sed(component=cmp)
+                                print('Simple sed wavelengths:')
+                                print(sed.wave_list)
+                                print('Simple sed values:')
+                                print([sed(w) for w in sed.wave_list])
+                                sed_fine, _ = o.get_sed(component=cmp,
+                                                        resolution=1.0)
+                                print('Bin width = 1 nm')
+                                print('Initial wl values', sed_fine.wave_list[:20])
+                                print('Start at bin 100', sed_fine.wave_list[100:120])
+                                print('Initial values')
+                                print([sed_fine(w) for w in sed_fine.wave_list[:20]])
+                                print('Start at bin 100')
+                                print([sed_fine(w) for w in sed_fine.wave_list[100:120]])
                         else:
                             print('All-zero sed')
 
