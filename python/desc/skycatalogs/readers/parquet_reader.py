@@ -66,8 +66,8 @@ class ParquetReader:
         for c in cols:
             c_data = np.array(tbl[c])
             if mask is not None:
-                d[c] = ma.array(c_data, mask=mask).compressed()
-            else:
-                d[c] = c_data
+                c_data = ma.array(c_data, mask=mask).compressed()
+
+            d[c] = np.array([_ for _ in c_data])
 
         return d
