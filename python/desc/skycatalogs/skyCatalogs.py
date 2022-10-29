@@ -431,20 +431,26 @@ class SkyCatalog(object):
             elif 'star' in rdr_ot[rdr]:
                 star_readers.append(rdr)
 
-        # Make galaxy collection
+        # Make galaxy collections
         for rdr in galaxy_readers:
             if 'ra' not in rdr.columns:
                 continue
-            arrow_t = rdr.read_columns(G_COLUMNS, None)
 
-            ra_c, dec_c, id_c, mask = _compress_via_mask(arrow_t, 'galaxy_id',
-                                                         region)
+            # Make a collection for each row group
 
-            if ra_c is not None:
-                new_collection = ObjectCollection(ra_c, dec_c, id_c,
-                                                  'galaxy', hp, self,
-                                                  region=region, mask=mask,
-                                                  readers=galaxy_readers)
+            for rg in range(rdr.n_row_groups):
+                arrow_t = rdr.read_columns(G_COLUMNS, None, rg)
+
+                ra_c, dec_c, id_c, mask = _compress_via_mask(arrow_t,
+                                                             'galaxy_id',
+                                                             region)
+
+                if ra_c is not None:
+                    new_collection = ObjectCollection(ra_c, dec_c, id_c,
+                                                      'galaxy', hp, self,
+                                                      region=region, mask=mask,
+                                                      readers=galaxy_readers,
+                                                      row_group=rg)
                 object_list.append_collection(new_collection)
 
         # Make point source collection
