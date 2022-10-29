@@ -45,7 +45,7 @@ class ParquetReader:
     def n_row_groups(self):
         return self._meta.num_row_groups
 
-    def read_columns(self, cols, mask, row_group=None):
+    def read_columns(self, cols, mask, row_group=-1):
         '''
         Parameters
         -----------
@@ -66,7 +66,7 @@ class ParquetReader:
         d = OrderedDict()
         if not self._pqfile:
             self._open()
-        if not row_group:
+        if row_group < 0:
             tbl = self._pqfile.read(columns=cols)
         else:
             tbl = self._pqfile.read_row_group(row_group, columns=cols)
