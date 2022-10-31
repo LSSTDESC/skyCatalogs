@@ -451,7 +451,7 @@ class SkyCatalog(object):
                                                       region=region, mask=mask,
                                                       readers=galaxy_readers,
                                                       row_group=rg)
-                object_list.append_collection(new_collection)
+                    object_list.append_collection(new_collection)
 
         # Make point source collection
         for rdr in star_readers:
