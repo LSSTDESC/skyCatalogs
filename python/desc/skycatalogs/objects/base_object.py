@@ -13,9 +13,7 @@ from galsim.errors import GalSimRangeError
 
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
-##from desc.skycatalogs.utils.sed_utils import convert_tophat_sed
 from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
-from desc.skycatalogs.utils.sed_tools import Extinguisher, AB_mag
 
 '''
 Main object types.   There are also may be subtypes. For example,
@@ -202,9 +200,7 @@ class BaseObject(object):
 
         Returns
         -------
-        A pair (sed, mag_norm) for a star or (sed, f_nu500) for a galaxy
-               component.  sed is a galsim sed.  f_nu500 is tophat value for
-               the component at 500 nm
+        A pair (sed, mag_norm)
         '''
 
         if self._object_type == 'star':
@@ -233,15 +229,14 @@ class BaseObject(object):
         if max(th_val) < np.finfo('float').resolution:
             return None, 0.0
 
-        f_nu500 = th_val[sky_cat.observed_sed_factory.ix_500nm]
+        z_h = self.get_native_attribute('redshift_hubble')
+        z = self.get_native_attribute('redshift')
 
-        r_h = self.get_native_attribute('redshift_hubble')
-        r = self.get_native_attribute('redshift')
-
-        sed = sky_cat.observed_sed_factory.create(th_val, r_h, r,
+        sed = sky_cat.observed_sed_factory.create(th_val, z_h, z,
                                                      resolution=resolution)
+        magnorm = sky_cat.observed_sed_factory.magnorm(th_val, z_h)
 
-        return sed, f_nu500
+        return sed, magnorm
 
     def write_sed(self, sed_file_path, component=None, resolution=None):
         sed, _ = self.get_sed(component=component, resolution=None)

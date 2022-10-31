@@ -2,6 +2,7 @@ import os
 import re
 from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
+import astropy.constants
 import h5py
 import pandas as pd
 
@@ -11,10 +12,14 @@ from numpy.random import default_rng
 from dust_extinction.parameter_averages import F19
 import galsim
 
-__all__ = ['ObservedSedFactory', 'Extinguisher', 'AB_mag', 'get_star_sed_path']
+__all__ = ['ObservedSedFactory', 'MilkyWayExtinction', 'AB_mag',
+           'get_star_sed_path']
 class ObservedSedFactory:
-    _clight = 3e8  # m/s
-    _to_W_per_Hz = 4.4659e13 # conversion of cosmoDC2 tophat Lnu values to W/Hz
+    _clight = astropy.constants.c.to('m/s').value
+    # Conversion factor below of cosmoDC2 tophat Lnu values to W/Hz comes from
+    # https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/SCHEMA.md
+    _to_W_per_Hz = 4.4659e13
+
     def __init__(self, th_definition, cosmology, delta_wl=0.001):
         # Get wavelength and frequency bin boundaries.
         bins = th_definition
@@ -143,7 +148,7 @@ class ObservedSedFactory:
         with np.errstate(divide='ignore', invalid='ignore'):
             return -2.5*np.log10(Fnu/one_Jy) + 8.90
 
-class Extinguisher:
+class MilkyWayExtinction:
     '''
     Applies extinction to a SED
     '''
@@ -181,7 +186,7 @@ class AB_mag:
     Convert flux to AB magnitude for a set of bandpasses.
     """
     def __init__(self, bps):
-        ab_sed = galsim.SED(lambda nu : 3631e-23, wave_type='nm',
+        ab_sed = galsim.SED(lambda nu : 10**(8.90/2.5 - 23), wave_type='nm',
                             flux_type='fnu')
         self.ab_fluxes = {band: ab_sed.calculateFlux(bp) for
                           band, bp in bps.items()}

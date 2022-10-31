@@ -14,7 +14,8 @@ from desc.skycatalogs.objects.base_object import  CatalogContext
 from desc.skycatalogs.objects import *
 from desc.skycatalogs.readers import *
 from desc.skycatalogs.readers import ParquetReader
-from desc.skycatalogs.utils.sed_tools import ObservedSedFactory, Extinguisher
+from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
+from desc.skycatalogs.utils.sed_tools import MilkyWayExtinction
 from desc.skycatalogs.utils.config_utils import Config
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
@@ -184,7 +185,7 @@ class SkyCatalog(object):
         self._observed_sed_factory =\
             ObservedSedFactory(self._config.get_tophat_parameters(),
                                config['Cosmology'])
-        self._extinguisher = Extinguisher(self.observed_sed_factory)
+        self._extinguisher = MilkyWayExtinction(self.observed_sed_factory)
 
         # Make our properties accessible to BaseObject, etc.
         self.catalog_context = CatalogContext(self)
@@ -203,14 +204,6 @@ class SkyCatalog(object):
         Return config, typically uploaded from yaml.
         '''
         return self._config
-
-    @property
-    def observed_sed_factory(self):
-        return self._observed_sed_factory
-
-    @property
-    def extinguisher(self):
-        return self._extinguisher
 
     # One might check that the config is complete and well-formed
     #  - for example require certain keys, such as catalog_name,
@@ -585,7 +578,7 @@ if __name__ == '__main__':
                     print(cmp)
                     if cmp in o.subcomponents:
                         print(o.get_instcat_entry(component=cmp))
-                        sed, f_nu500 = o.get_sed(cmp)
+                        sed, _ = o.get_sed(cmp)
                         if sed:
                             print('Length of sed table: ', len(sed.wave_list))
                             if not got_a_sed:

@@ -369,13 +369,12 @@ class CatalogCreator:
             knots_seds = (np.array([df[kdn] for kdn in sed_knot_names]).T).tolist()
 
         #  Compute mag_norm from TH sed and redshift
-        ###bulge_magnorm = [self._mag_norm_f(s[NORMWV_IX], r) for (s, r) in zip(bulge_seds, df['redshiftHubble']) ]
-        bulge_magnorm = [self._obs_sed_factory.magnorm(s, r) for (s, r)\
+        bulge_magnorm = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
                          in zip(bulge_seds, df['redshiftHubble']) ]
-        disk_magnorm = [self._obs_sed_factory.magnorm(s, r) for (s, r)\
+        disk_magnorm = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
                         in zip(disk_seds, df['redshiftHubble']) ]
         if self._knots:
-            knots_magnorm = [self._obs_sed_factory.magnorm(s, r) for (s, r)\
+            knots_magnorm = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
                              in zip(knots_seds, df['redshiftHubble']) ]
 
         MW_rv = np.full_like(df['sersic_bulge'], _MW_rv_constant)
