@@ -24,14 +24,66 @@ def open_config_file(config_file):
 Tophat = namedtuple('Tophat', ['start', 'width'])
 
 
-class Config(object):
+def _custom_dir(c, add):
+    '''
+    dir should return
+       * functions defined for c's class
+       * instance variables belonging to c
+       * public stuff from the contained object (some table-like thing)
+    '''
+    return dir(type(c)) + list(c.__dict__.keys()) + add
+
+
+class DelegatorBase:
+    '''
+    This class allows derived classes to delegate operations to a
+    member.   Here it is used to delegate dict operations to
+    the member self._cfg
+    '''
+
+    @property
+    def _delegate(self):
+        pub = [o for o in dir(self.default) if not o.startswith('_')]
+        return pub
+    def __getattr__(self, k):
+        if k in self._delegate:
+            return getattr(self.default, k)
+        raise AttributeError(k)
+    def __dir__(self):
+        return _custom_dir(self, self._delegate)
+
+    def __init__(self):
+        pass
+
+class Config(DelegatorBase):
     '''
     A wrapper around the dict which is the contents of a Sky Catalog
-    config file which understands some of the semantics
+    config file (a dict) which understands some of the semantics
+
     '''
     def __init__(self, cfg, logname=None):
+        '''
+        Parameters
+        ----------
+        cfg  is normally a dict, but it can also itself be a Config.
+        In this case, store its dict to delegate to.
+        '''
+        if isinstance(cfg, Config):
+            cfg = cfg._cfg
+
         self._cfg = cfg
         self._logname = logname
+
+        super().__init__()
+
+        self.default = cfg
+
+    def __getitem__(self, k):
+        '''
+        Specific override of __getitem__, delegating to dict member
+        so that [ ] syntax will be handled properly
+        '''
+        return self._cfg.__getitem__(k)
 
     def list_sed_models(self):
         return self._cfg['SED_models'].keys()

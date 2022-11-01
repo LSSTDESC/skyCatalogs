@@ -10,10 +10,13 @@ import numpy.ma as ma
 import pyarrow.parquet as pq
 from astropy import units
 from desc.skycatalogs.objects.base_object import load_lsst_bandpasses
+from desc.skycatalogs.objects.base_object import  CatalogContext
 from desc.skycatalogs.objects import *
 from desc.skycatalogs.readers import *
 from desc.skycatalogs.readers import ParquetReader
-from desc.skycatalogs.utils.sed_utils import MagNorm, create_cosmology
+from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
+from desc.skycatalogs.utils.sed_tools import MilkyWayExtinction
+from desc.skycatalogs.utils.config_utils import Config
 
 __all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
 
@@ -141,7 +144,7 @@ class SkyCatalog(object):
         skycatalog_root: If not None, overrides value in config or
                          in environment variable SKYCATALOG_ROOT
         '''
-        self._config = config
+        self._config = Config(config)
         self._logger = logging.getLogger('skyCatalogs.client')
         self._logger.setLevel(loglevel)
         ch = logging.StreamHandler()
@@ -179,15 +182,21 @@ class SkyCatalog(object):
         self._hp_info = dict()
         hps = self._find_all_hps()
 
-        cosmology = create_cosmology(config['Cosmology'])
-        self._magnorm_f = MagNorm(cosmology)
+        self._observed_sed_factory =\
+            ObservedSedFactory(self._config.get_tophat_parameters(),
+                               config['Cosmology'])
+        self._extinguisher = MilkyWayExtinction(self.observed_sed_factory)
+
+        # Make our properties accessible to BaseObject, etc.
+        self.catalog_context = CatalogContext(self)
 
     @property
-    def mag_norm_f(self):
-        '''
-        Return function object used to calculate mag_norm
-        '''
-        return self._magnorm_f
+    def observed_sed_factory(self):
+        return self._observed_sed_factory
+
+    @property
+    def extinguisher(self):
+        return self._extinguisher
 
     @property
     def raw_config(self):
@@ -229,7 +238,7 @@ class SkyCatalog(object):
                 # find all keys containing the string 'file_template'
                 template_keys = [k for k in o_types[ot] if 'file_template' in k]
                 for k in template_keys:
-                    m = re.match(o_types[ot][k], f)
+                    m = re.fullmatch(o_types[ot][k], f)
                     if m:
                         hp = int(m['healpix'])
                         hp_set.add(hp)
@@ -542,6 +551,7 @@ if __name__ == '__main__':
     print('Number of collections returned:  ', object_list.collection_count)
 
     colls = object_list.get_collections()
+    got_a_sed = False
     for c in colls:
         n_obj = len(c)
         print("For hpid ", c.get_partition_id(), "found ", n_obj, " objects")
@@ -558,26 +568,41 @@ if __name__ == '__main__':
             print(o.object_type)
             if o.object_type == 'star':
                 print(o.get_instcat_entry())
-                (lmbda, f_lambda, magnorm) = o.get_sed(resolution=1.0)
+                #(lmbda, f_lambda, magnorm) = o.get_sed(resolution=1.0)
+                sed, magnorm = o.get_sed(resolution=1.0)
                 print('For star magnorm: ', magnorm)
                 if magnorm < 1000:
-                    print('Length of sed: ', len(lmbda))
-                    for i in range(10):
-                        print(sed_fmt.format(lmbda[i], f_lambda[i]))
-                    mid = int(len(lmbda)/2)
-                    for i in range(mid-5, mid+5):
-                        print("ix=",i,"  ", sed_fmt.format(lmbda[i], f_lambda[i]))
-
+                    print('Length of sed: ', len(sed.wave_list))
             else:
                 for cmp in ['disk', 'bulge', 'knots']:
                     print(cmp)
                     if cmp in o.subcomponents:
                         print(o.get_instcat_entry(component=cmp))
-                        (lmbda, f_lambda, magnorm) = o.get_sed(cmp)
-                        print('magnorm: ', magnorm)
-                        if magnorm < 1000:
-                            for i in range(10):
-                                print(sed_fmt.format(lmbda[i], f_lambda[i]))
+                        sed, _ = o.get_sed(cmp)
+                        if sed:
+                            print('Length of sed table: ', len(sed.wave_list))
+                            if not got_a_sed:
+                                got_a_sed = True
+                                th = o.get_native_attribute(f'sed_val_{cmp}')
+                                print('Tophat values: ', th)
+                                sed, _ = o.get_sed(component=cmp)
+                                print('Simple sed wavelengths:')
+                                print(sed.wave_list)
+                                print('Simple sed values:')
+                                print([sed(w) for w in sed.wave_list])
+                                o.write_sed('simple_sed.txt', component=cmp)
+                                sed_fine, _ = o.get_sed(component=cmp,
+                                                        resolution=1.0)
+                                print('Bin width = 1 nm')
+                                print('Initial wl values', sed_fine.wave_list[:20])
+                                print('Start at bin 100', sed_fine.wave_list[100:120])
+                                print('Initial values')
+                                print([sed_fine(w) for w in sed_fine.wave_list[:20]])
+                                print('Start at bin 100')
+                                print([sed_fine(w) for w in sed_fine.wave_list[100:120]])
+                        else:
+                            print('All-zero sed')
+
                 # Try out old wrapper functions
                 print("\nget_dust:")
                 i_av, i_rv, g_av, g_rv = o.get_dust()
