@@ -449,7 +449,7 @@ class ObjectCollection(Sequence):
     rather than a single number.  There are some additional methods
     '''
     def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
-                 region=None, mask=None, readers=None):
+                 region=None, mask=None, readers=None, row_group=0):
         '''
         Minimum information needed for static objects.
         specified, has already been used by the caller to generate mask.
@@ -477,6 +477,7 @@ class ObjectCollection(Sequence):
         self._sky_catalog = sky_catalog   # might not need this
         self._config = Config(sky_catalog.raw_config)
         self._mask = mask
+        self._row_group = row_group
 
         # Maybe the following is silly and object_type should always be stored
         # as arrays
@@ -540,7 +541,8 @@ class ObjectCollection(Sequence):
 
         for r in self._rdrs:
             if attribute_name in r.columns:
-                d = r.read_columns([attribute_name], self._mask)
+                d = r.read_columns([attribute_name], self._mask,
+                                   row_group=self._row_group)
                 if not d:
                     return None
                 val = d[attribute_name]

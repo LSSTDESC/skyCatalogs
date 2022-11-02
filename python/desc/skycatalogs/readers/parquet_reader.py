@@ -41,7 +41,11 @@ class ParquetReader:
     def columns(self):
         return self._columns
 
-    def read_columns(self, cols, mask):
+    @property
+    def n_row_groups(self):
+        return self._meta.num_row_groups
+
+    def read_columns(self, cols, mask, row_group=-1):
         '''
         Parameters
         -----------
@@ -62,7 +66,10 @@ class ParquetReader:
         d = OrderedDict()
         if not self._pqfile:
             self._open()
-        tbl = self._pqfile.read(columns = cols)
+        if row_group < 0:
+            tbl = self._pqfile.read(columns=cols)
+        else:
+            tbl = self._pqfile.read_row_group(row_group, columns=cols)
         for c in cols:
             c_data = np.array(tbl[c])
             if mask is not None:
