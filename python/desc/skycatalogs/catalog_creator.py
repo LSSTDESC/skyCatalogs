@@ -15,7 +15,7 @@ from desc.skycatalogs.utils.common_utils import print_date
 ###from desc.skycatalogs.utils.sed_utils import get_star_sed_path
 from desc.skycatalogs.utils.sed_tools import ObservedSedFactory, get_star_sed_path
 from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
-from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance
+from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance, write_yaml
 from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_schema, make_star_flux_schema
 from desc.skycatalogs.objects.base_object import LSST_BANDS, BaseObject
 
@@ -110,7 +110,7 @@ class CatalogCreator:
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator',
                  pkg_root=None, skip_done=False, flux_only=False,
-                 main_only=False, flux_parallel=16):
+                 main_only=False, flux_parallel=16, provenance=None):
         """
         Store context for catalog creation
 
@@ -201,6 +201,7 @@ class CatalogCreator:
         self._flux_only = flux_only
         self._main_only = main_only
         self._flux_parallel = flux_parallel
+        self._provenance = provenance
 
         self._obs_sed_factory = None
 
@@ -423,6 +424,8 @@ class CatalogCreator:
 
         writer.close()
         self._logger.debug(f'# row groups written: {rg_written}')
+        if self._provenance == 'yaml':
+            self.write_provenance_file(output_path)
 
     def create_galaxy_flux_catalog(self, config_file=None):
         '''
@@ -574,6 +577,8 @@ class CatalogCreator:
 
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
+        if self._provenance == 'yaml':
+            self.write_provenance_file(output_path)
 
     def create_pointsource_catalog(self, star_truth=None, sn_truth=None):
 
@@ -646,6 +651,8 @@ class CatalogCreator:
             writer.write_table(out_table)
 
             writer.close()
+            if self._provenance == 'yaml':
+                self.write_provenance_file(output_path)
 
         if sn_cat:
             raise NotImplementedError('SNe not yet supported. Have a nice day.')
@@ -745,6 +752,8 @@ class CatalogCreator:
 
         writer.close()
         ##self._logger.debug(f'# row groups written to flux file: {rg_written}')
+        if self._provenance == 'yaml':
+            self.write_provenance_file(output_path)
 
     def write_config(self, overwrite=False, path_only=False):
         '''
@@ -795,3 +804,18 @@ class CatalogCreator:
 
         self._written_config = config.write_config(self._config_path,
                                                    overwrite=overwrite)
+
+    def write_provenance_file(self, datafile_path):
+        '''
+        Write git provenance to a yaml file with name derived from a
+        just-written datafile name
+        '''
+        dir_name, base_name = os.path.split(datafile_path)
+        base_parts = base_name.split('.')
+        base_parts[-1] = 'yaml'
+        base_parts[-2] = base_parts[-2] + '_provenance'
+        new_base = '.'.join(base_parts)
+        outpath = os.path.join(dir_name, new_base)
+
+        prov = assemble_provenance(self._pkg_root, inputs=None)
+        write_yaml(prov, dir_name, new_base)
