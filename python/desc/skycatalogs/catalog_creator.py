@@ -12,7 +12,6 @@ from multiprocessing import Process, Pipe
 from astropy.coordinates import SkyCoord
 import sqlite3
 from desc.skycatalogs.utils.common_utils import print_date
-###from desc.skycatalogs.utils.sed_utils import get_star_sed_path
 from desc.skycatalogs.utils.sed_tools import ObservedSedFactory, get_star_sed_path
 from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
 from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance, write_yaml
