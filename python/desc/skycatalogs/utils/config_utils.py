@@ -217,7 +217,7 @@ class Config(DelegatorBase):
                           overwrite=overwrite, logname=self._logname)
 
 
-def write_yaml(outpath, filename, overwrite=False, logname=None):
+def write_yaml(input_dict, outpath, overwrite=False, logname=None):
         if not overwrite:
             try:
                 with open(outpath, mode='x') as f:
