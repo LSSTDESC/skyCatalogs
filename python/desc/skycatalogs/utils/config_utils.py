@@ -10,7 +10,8 @@ from collections import namedtuple
 
 __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
            'assemble_SED_models', 'assemble_MW_extinction',
-           'assemble_cosmology', 'assemble_object_types', 'assemble_provenance']
+           'assemble_cosmology', 'assemble_object_types', 'assemble_provenance',
+           'write_yaml']
 
 _CURRENT_SCHEMA_VERSION='1.1.0'
 
@@ -212,22 +213,26 @@ class Config(DelegatorBase):
         if not filename:
             filename = self._cfg['catalog_name'] + '.yaml'
 
-        outpath = os.path.join(dirpath, filename)
+        return write_yaml(self._cfg, os.path.join(dirpath, filename),
+                          overwrite=overwrite, logname=self._logname)
+
+
+def write_yaml(input_dict, outpath, overwrite=False, logname=None):
         if not overwrite:
             try:
                 with open(outpath, mode='x') as f:
-                    yaml.dump(self._cfg, f)
+                    yaml.dump(input_dict, f)
             except FileExistsError:
-                if self._logname:
-                    logger = logging.getLogger(self._logname)
-                    logger.warning('Config.write_config: Will not overwrite pre-existing config file ' + outpath)
+                if logname:
+                    logger = logging.getLogger(logname)
+                    logger.warning('Config.write_yaml: Will not overwrite pre-existing config file ' + outpath)
                 else:
-                    print('Config.write_config: Will not overwrite pre-existing config file ' + outpath)
+                    print('Config.write_yaml: Will not overwrite pre-existing config file ' + outpath)
                 return
 
         else:
             with open(outpath, mode='w') as f:
-                yaml.dump(self._cfg, f)
+                yaml.dump(input_dict, f)
 
         return outpath
 
@@ -291,4 +296,7 @@ def assemble_provenance(pkg_root, inputs={}):
         status.append('CLEAN')
     git_d['git_status'] = status
 
-    return {'skyCatalogs_repo' : git_d, 'inputs' : inputs}
+    if inputs:
+        return {'skyCatalogs_repo' : git_d, 'inputs' : inputs}
+    else:
+        return{'skyCatalogs_repo' : git_d}

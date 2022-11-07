@@ -20,20 +20,20 @@ area_partition = {'type' : 'healpix', 'ordering' : 'ring', 'nside' : 32}
 parser = argparse.ArgumentParser(description='''
 Create Sky Catalogs. By default create a galaxy catalog for a
 single healpix pixel''', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--no-pointsources', action='store_true',
+parser.add_argument('--no-pointsources', '--no-point', action='store_true',
                     help='if used, point source catalogs will NOT be created')
-parser.add_argument('--no-galaxies', action='store_true',
+parser.add_argument('--no-galaxies', '--no-gal', action='store_true',
                     help='if used galaxy catalogs will NOT be created')
 parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
                     help='healpix pixels for which catalogs will be created')
 parser.add_argument('--skycatalog-root',
                     help='Root directory for sky catalogs, typically site-dependent. If not specified, use value of environment variable SKYCATALOG_ROOT')
-parser.add_argument('--catalog-dir', help='directory for output files relative to skycatalog_root',
+parser.add_argument('--catalog-dir', '--cat-dir', help='directory for output files relative to skycatalog_root',
                     default='.')
 parser.add_argument('--sed-subdir', help='subdirectory to prepend to paths of galaxy SEDs as written to the sky catalog', default='galaxyTopHatSED')
 parser.add_argument('--log-level', help='controls logging output',
                     default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'])
-parser.add_argument('--galaxy-magnitude-cut', default=29.0, type=float,
+parser.add_argument('--galaxy-magnitude-cut', '--gal-mag-cut', default=29.0, type=float,
                     help='Exclude galaxies with r-magnitude above this value')
 parser.add_argument('--knots-magnitude-cut', default=27.0, type=float,
                     help='Galaxies with i-magnitude above this cut get no knots')
@@ -44,7 +44,7 @@ parser.add_argument('--config-path', default=None, help='''
                     config will be written to same location as data,
                     with filenmame taken from catalog-name.
                     A config file is written iff galaxies are requested''')
-parser.add_argument('--catalog-name', default='skyCatalog',
+parser.add_argument('--catalog-name', '--cat-name', default='skyCatalog',
                     help='''If write-config option is used, this value
                     will appear in the config and will be part of
                     the filename''')
@@ -57,7 +57,10 @@ parser.add_argument('--main-only', action='store_true',
                     help='If supplied only do main files, not flux files')
 parser.add_argument('--flux-parallel', default=16, type=int,
                     help='Number of processes to run in parallel when computing fluxes')
-
+parser.add_argument('--provenance', '--prov', choices=['yaml'], help='''
+                     Persist git provenance information for each file
+                     written. Only supported format currently is as a
+                     small yaml file, written to the data directory.''')
 
 args = parser.parse_args()
 logname = 'skyCatalogs.creator'
@@ -78,6 +81,10 @@ if not skycatalog_root:
     skycatalog_root = os.getenv('SKYCATALOG_ROOT')
 
 parts = args.pixels
+if args.provenance:
+    provenance = args.provenance
+else:
+    provenance=None
 
 creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          catalog_dir=args.catalog_dir,
@@ -89,8 +96,8 @@ creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          knots=(not args.no_knots), logname=logname,
                          skip_done=args.skip_done,
                          flux_only=args.flux_only, main_only=args.main_only,
-                         flux_parallel=args.flux_parallel)
-
+                         flux_parallel=args.flux_parallel,
+                         provenance=provenance)
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
     logger.info("Creating galaxy catalogs")
