@@ -812,4 +812,4 @@ class CatalogCreator:
         outpath = datafile_path.rsplit('.', 1)[0] + '_provenance.yaml'
 
         prov = assemble_provenance(self._pkg_root, inputs=None)
-        write_yaml(prov, dir_name, new_base)
+        write_yaml(outpath, new_base)

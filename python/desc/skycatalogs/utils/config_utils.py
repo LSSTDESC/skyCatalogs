@@ -213,12 +213,11 @@ class Config(DelegatorBase):
         if not filename:
             filename = self._cfg['catalog_name'] + '.yaml'
 
-        return write_yaml(self._cfg, dirpath, filename, overwrite=overwrite,
-                          logname=self._logname)
+        return write_yaml(self._cfg, os.path.join(dirpath, filename),
+                          overwrite=overwrite, logname=self._logname)
 
 
-def write_yaml(input_dict, dirpath, filename, overwrite=False, logname=None):
-        outpath = os.path.join(dirpath, filename)
+def write_yaml(outpath, filename, overwrite=False, logname=None):
         if not overwrite:
             try:
                 with open(outpath, mode='x') as f:
