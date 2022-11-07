@@ -809,12 +809,7 @@ class CatalogCreator:
         Write git provenance to a yaml file with name derived from a
         just-written datafile name
         '''
-        dir_name, base_name = os.path.split(datafile_path)
-        base_parts = base_name.split('.')
-        base_parts[-1] = 'yaml'
-        base_parts[-2] = base_parts[-2] + '_provenance'
-        new_base = '.'.join(base_parts)
-        outpath = os.path.join(dir_name, new_base)
+        outpath = datafile_path.rsplit('.', 1)[0] + '_provenance.yaml'
 
         prov = assemble_provenance(self._pkg_root, inputs=None)
         write_yaml(prov, dir_name, new_base)
