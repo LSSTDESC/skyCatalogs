@@ -82,8 +82,6 @@ class PolygonalRegion:
         else:
             return np.logical_not(mask)
 
-###_aDisk = Disk(1.0, 1.0, 1.0)
-
 # This function should maybe be moved to utils
 def _get_intersecting_hps(hp_ordering, nside, region):
     '''
@@ -104,7 +102,6 @@ def _get_intersecting_hps(hp_ordering, nside, region):
                                        lonlat=True)
 
         return healpy.query_polygon(nside, vec, inclusive=True, nest=False)
-    ###if type(region) == type(_aDisk):
     if isinstance(region, Disk):
         # Convert inputs to the types query_disk expects
         center = healpy.pixelfunc.ang2vec(region.ra, region.dec,
@@ -147,38 +144,31 @@ def _compress_via_mask(tbl, id_column, region):
             bnd_box = Box(ra_min, ra_max, dec_min, dec_max)
             # Compute mask for that box
             mask = _compute_mask(bnd_box, tbl['ra'], tbl['dec'])
+            if all(mask): # even bounding box doesn't intersect table rows
+                return None, None, None, None
             # Save index array (indices for 0's in mask array)
             ixes = [i for i in range(mask.size) if mask[i] == False]
+
             # Get compressed ra, dec
-            masked_ra = ma.array(tbl['ra'], mask=mask)
-            ra_compress = masked_ra.compressed()
-            if ra_compress.size == 0:
-                return None, None, None, None
+            ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
             dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
-            # Compute polygon mask for the compressed array
-            #t0 = time.time()
             poly_mask = _compute_mask(region, ra_compress, dec_compress)
-            #t_interval = time.time() - t0
-            #print('Time for trimmed poly mask: ', t_interval)
-            # For any non-zero elts in polygon mask, set corresponding
-            #        elt in full mask array to True.
-            #t0 = time.time()
-            for i, e in enumerate(poly_mask):
-                if e == True:
-                    mask[ixes[i]] = True
-            #t_interval = time.time() - t0
-            #print('Time for merge: ', t_interval)
+
+            # Get indices of unmasked
+            ixes = np.where(~mask)
+
+            # Update bounding box mask with polygonal mask
+            mask[ixes] |= poly_mask
         else:
             mask = _compute_mask(region, tbl['ra'], tbl['dec'])
 
-        masked_ra = ma.array(tbl['ra'], mask=mask)
-        ra_compress = masked_ra.compressed()
-        if ra_compress.size > 0:
+        if all(mask):
+            return None, None, None, None
+        else:
+            ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
             dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
             id_compress = ma.array(tbl[id_column], mask=mask).compressed()
             return ra_compress, dec_compress, id_compress, mask
-        else:
-            return None,None,None,None
     else:
         return tbl['ra'], tbl['dec'], tbl[id_column],None
 
@@ -187,11 +177,11 @@ def _compute_mask(region, ra, dec):
     Compute mask according to region for provided data
     Parameters
     ----------
-    region         Supported shape or None
+    region         Supported shape (box, disk)  or None
     ra,dec         Coordinates for data to be masked, in degrees
     Returns
     -------
-    mask of elements to be omitted
+    mask of elements in ra, dec arrays to be omitted
 
     '''
     mask = None
@@ -200,7 +190,6 @@ def _compute_mask(region, ra, dec):
                              (ra > region.ra_max))
         mask = np.logical_or(mask, (dec < region.dec_min))
         mask = np.logical_or(mask, (dec > region.dec_max))
-    #if type(region) == type(_aDisk):
     if isinstance(region, Disk):
         # Change positions to 3d vectors to measure distance
         p_vec = healpy.pixelfunc.ang2vec(ra, dec, lonlat=True)
@@ -608,7 +597,6 @@ if __name__ == '__main__':
     import time
     ###cfg_file_name = 'latest.yaml'
     cfg_file_name = 'future_latest.yaml'
-    # cfs_filename = 'test_write_config_draft6.yaml'
     skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
 
     if len(sys.argv) > 1:
@@ -682,8 +670,30 @@ if __name__ == '__main__':
     assert(len(object_list_poly) > len(object_list) - fudge)
     assert(len(object_list_poly) < len(object_list) + fudge)
 
+    print('Now try inscribed polygon which is not a box')
+    ra_avg = (ra_min_small + ra_max_small) * 0.5
+    dec_avg = (dec_min_small + dec_max_small) * 0.5
+    diamond_vertices = [(ra_min_small, dec_avg), (ra_avg, dec_max_small),
+                        (ra_max_small, dec_avg), (ra_avg, dec_min_small)]
+    rgn_diamond = PolygonalRegion(vertices_radec=diamond_vertices)
+
+    intersect_diamond_hps = _get_intersecting_hps('ring', 32, rgn_diamond)
+    print("for diamond region ", rgn_diamond)
+    print("intersecting pixels are ", intersect_diamond_hps)
+
+    print('Invoke get_objects_by_region with diamond region')
+    t0 = time.time()
+    object_list_diamond = cat.get_objects_by_region(rgn_diamond)
+    t_done = time.time()
+    print('Took ', t_done - t0)
+
+    print('Number of collections returned for diamond:  ',
+          object_list_diamond.collection_count)
+    print('Object count for diamond: ', len(object_list_diamond))
+
+
     #### TEMP FOR DEBUGGING
-    exit(0)
+    ### exit(0)
 
 
     colls = object_list.get_collections()
