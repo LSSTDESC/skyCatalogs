@@ -5,10 +5,11 @@ Unit tests for SkyCatalogs API
 import unittest
 import os
 from pathlib import Path
+import numpy as np
 
 # Not currently used
 #import pandas as pd
-#import numpy as np
+
 
 from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog, Box, Disk
 from desc.skycatalogs.skyCatalogs import _get_intersecting_hps
@@ -22,6 +23,7 @@ class APITester(unittest.TestCase):
         '''
         skycatalog_root = os.path.join(Path(__file__).resolve().parents[1],
                                        'data')
+        self._skycatalog_root = skycatalog_root
         cfg_path = os.path.join(skycatalog_root, 'ci_sample', 'skyCatalog.yaml')
         self._cat = open_catalog(cfg_path, skycatalog_root=skycatalog_root)
 
@@ -183,6 +185,42 @@ class APITester(unittest.TestCase):
 
         none_specified = cat.get_objects_by_hp(hp)
         print_from_objects(f'From hp {hp}, no specified object types', none_specified)
+    def testAPI_rowgroup(self):
+        '''
+        Compare results of get_objects_by_region when skyCatalog files
+        each have a single row group or have several
+        '''
+        def compare_objects(no_rg, has_rg):
+            no_rg_coll = no_rg.get_collections()
+            has_rg_coll = has_rg.get_collections()
+
+            no_rg_pieces = tuple([c.get_native_attribute('galaxy_id') for c in no_rg_coll])
+            no_rg_concat = np.concatenate(no_rg_pieces)
+            has_rg_pieces = tuple([c.get_native_attribute('galaxy_id') for c in has_rg_coll])
+            has_rg_concat = np.concatenate(has_rg_pieces)
+
+            assert(np.all(no_rg_concat == has_rg_concat))
+
+        box = Box(56.0, 56.8, -36.8, -36.0)
+        disk = Disk(56.4, -36.5, 3000)
+
+        cat_one = self._cat
+        rg_cfg_path = os.path.join(self._skycatalog_root, 'row_groups',
+                                   'skyCatalog.yaml')
+        cat_rg = open_catalog(rg_cfg_path, skycatalog_root=self._skycatalog_root)
+
+        box_one = cat_one.get_objects_by_region(box,
+                                                obj_type_set=set(['galaxy']))
+        box_rg = cat_rg.get_objects_by_region(box,
+                                              obj_type_set=set(['galaxy']))
+        compare_objects(box_one, box_rg)
+
+        disk_one = cat_one.get_objects_by_region(disk,
+                                                 obj_type_set=set(['galaxy']))
+        disk_rg = cat_rg.get_objects_by_region(disk,
+                                               obj_type_set=set(['galaxy']))
+        compare_objects(disk_one, disk_rg)
+
 
 if __name__ == '__main__':
     unittest.main()
