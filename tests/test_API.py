@@ -267,6 +267,22 @@ class APITester(unittest.TestCase):
         box = Box(56.0, 56.8, -36.8, -36.0)
         disk = Disk(56.4, -36.5, 3000)
 
+
+        # Now try a convex polygon which is more of a diamond than a box
+        ra_min_small = 55.8
+        ra_max_small = 56.4
+        dec_min_small = -36.5
+        dec_max_small = -35.9
+
+        top = ((ra_min_small + ra_max_small)/2, dec_max_small)
+        bottom = ((ra_min_small + ra_max_small)/2, dec_min_small)
+        left = (ra_min_small, (dec_min_small + dec_max_small)/2)
+        right = (ra_max_small, (dec_min_small + dec_max_small)/2)
+        vertices2 = [top, right, bottom, left]
+
+        rhomb = PolygonalRegion(vertices_radec=vertices2)
+
+
         cat_one = self._cat
         rg_cfg_path = os.path.join(self._skycatalog_root, 'row_groups',
                                    'skyCatalog.yaml')
@@ -283,6 +299,12 @@ class APITester(unittest.TestCase):
         disk_rg = cat_rg.get_objects_by_region(disk,
                                                obj_type_set=set(['galaxy']))
         compare_objects(disk_one, disk_rg)
+
+        rhomb_one = cat_one.get_objects_by_region(rhomb,
+                                                  obj_type_set=set(['galaxy']))
+        rhomb_rg = cat_rg.get_objects_by_region(rhomb,
+                                                obj_type_set=set(['galaxy']))
+        compare_objects(rhomb_one, rhomb_rg)
 
 
 if __name__ == '__main__':
