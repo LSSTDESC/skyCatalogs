@@ -538,6 +538,7 @@ class CatalogCreator:
                 # Expect to be able to do about 1500/minute/process
                 tm = int((n_per*60)/500)  # Give ourselves a cushion
                 self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+                p_list = []
                 for i in range(n_parallel):
                     conn_rd, conn_wrt = Pipe(duplex=False)
                     readers.append(conn_rd)
@@ -547,8 +548,12 @@ class CatalogCreator:
                                    name=f'proc_{i}',
                                    args=(conn_wrt, _galaxy_collection,l, u))
                     proc.start()
+                    p_list.append(proc)
                     l = u
                     u = min(l + n_per, u_bnd)
+
+                for p in p_list:
+                    p.join()
 
                 self._logger.debug('Processes started')
                 for i in range(n_parallel):
