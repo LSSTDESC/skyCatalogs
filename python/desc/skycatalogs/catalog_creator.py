@@ -552,10 +552,8 @@ class CatalogCreator:
                     l = u
                     u = min(l + n_per, u_bnd)
 
-                for p in p_list:
-                    p.join()
-
                 self._logger.debug('Processes started')
+
                 for i in range(n_parallel):
                     ready = readers[i].poll(tm)
                     if not ready:
@@ -566,6 +564,8 @@ class CatalogCreator:
                               'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
                               'lsst_flux_y']:
                         out_dict[k] += dat[k]
+                for p in p_list:
+                    p.join()
 
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df,
