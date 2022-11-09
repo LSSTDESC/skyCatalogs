@@ -132,7 +132,6 @@ def _compress_via_mask(tbl, id_column, region):
     If there are no objects in the region, all return values are None
 
     '''
-    import time
     if region is not None:
         if isinstance(region, PolygonalRegion):        # special case
             # Find bounding box
@@ -146,8 +145,6 @@ def _compress_via_mask(tbl, id_column, region):
             mask = _compute_mask(bnd_box, tbl['ra'], tbl['dec'])
             if all(mask): # even bounding box doesn't intersect table rows
                 return None, None, None, None
-            # Save index array (indices for 0's in mask array)
-            ixes = [i for i in range(mask.size) if mask[i] == False]
 
             # Get compressed ra, dec
             ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
