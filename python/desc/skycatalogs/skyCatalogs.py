@@ -8,7 +8,7 @@ import healpy
 import numpy as np
 import numpy.ma as ma
 import pyarrow.parquet as pq
-from astropy import units
+from astropy import units as u
 from desc.skycatalogs.objects.base_object import load_lsst_bandpasses
 from desc.skycatalogs.objects.base_object import  CatalogContext
 from desc.skycatalogs.objects import *
@@ -18,7 +18,7 @@ from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
 from desc.skycatalogs.utils.sed_tools import MilkyWayExtinction
 from desc.skycatalogs.utils.config_utils import Config
 
-__all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk']
+__all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk', 'PolygonalRegion']
 
 
 Box = namedtuple('Box', ['ra_min', 'ra_max', 'dec_min', 'dec_max'])
@@ -26,8 +26,61 @@ Box = namedtuple('Box', ['ra_min', 'ra_max', 'dec_min', 'dec_max'])
 # radius is measured in arcseconds
 Disk = namedtuple('Disk', ['ra', 'dec', 'radius_as'])
 
-_aDisk = Disk(1.0, 1.0, 1.0)
-_aBox = Box(-1.0, 1.0, -2.0, 2.0)
+from lsst.sphgeom import ConvexPolygon, UnitVector3d, LonLat
+class PolygonalRegion:
+
+    def __init__(self, vertices_radec=None, convex_polygon=None):
+        '''
+        Supply either an object of type lsst.sphgeom.ConvexPolygon
+        or a list of vertices, each a tuple (ra, dec) in degrees,
+        which describe a convex polygon
+        '''
+        if convex_polygon:
+            if isinstance(convex_polygon, ConvexPolygon):
+                self._convex_polygon = convex_polygon
+                return
+        if vertices_radec:
+            if not isinstance(vertices_radec, list):
+                raise TypeError(f'PolygonalRegion: Argument {vertices_radec} is not a list')
+            vertices = [UnitVector3d(LonLat.fromDegrees(v_rd[0], v_rd[1])) for v_rd in vertices_radec]
+            self._convex_polygon = ConvexPolygon(vertices)
+            return
+        raise ValueError('PolygonalRegion: Either vertices_radec or convex_polygon must have an acceptable value')
+
+    def get_vertices(self):
+        '''
+        Return vertices as list of 3d vectors
+        '''
+        return self._convex_polygon.getVertices()
+
+    def get_vertices_radec(self):
+        v3d = self.get_vertices()
+        vertices_radec = []
+        for v in v3d:
+            vertices_radec.append((LonLat.longitudeOf(v).asDegrees(),
+                                   LonLat.latitudeOf(v).asDegrees()))
+        return vertices_radec
+
+    def get_containment_mask(self, ra, dec, included=True):
+        '''
+        Parameters
+        ----------
+        ra, dec      parallel float arrays, units are degrees. Together
+                     they define the list of points to be checked for
+                     containment
+        included     boolean   If true, mask bit will be set to True for
+                               contained points, else False.    Reverse
+                               the settings if included is False
+        '''
+        # convert to radians
+        ra = [(r * u.degree).to_value(u.radian) for r in ra]
+        dec = [(d * u.degree).to_value(u.radian) for d in dec]
+
+        mask = self._convex_polygon.contains(ra, dec)
+        if included:
+            return mask
+        else:
+            return np.logical_not(mask)
 
 # This function should maybe be moved to utils
 def _get_intersecting_hps(hp_ordering, nside, region):
@@ -41,7 +94,7 @@ def _get_intersecting_hps(hp_ordering, nside, region):
     '''
     # First convert region description to an array (4,3) with (x,y,z) coords
     # for each vertex
-    if type(region) == type(_aBox):
+    if isinstance(region, Box):
         vec = healpy.pixelfunc.ang2vec([region.ra_min, region.ra_max,
                                         region.ra_max, region.ra_min],
                                        [region.dec_min, region.dec_min,
@@ -49,15 +102,19 @@ def _get_intersecting_hps(hp_ordering, nside, region):
                                        lonlat=True)
 
         return healpy.query_polygon(nside, vec, inclusive=True, nest=False)
-    if type(region) == type(_aDisk):
+    if isinstance(region, Disk):
         # Convert inputs to the types query_disk expects
         center = healpy.pixelfunc.ang2vec(region.ra, region.dec,
                                           lonlat=True)
-        radius_rad = (region.radius_as * units.arcsec).to_value('radian')
+        radius_rad = (region.radius_as * u.arcsec).to_value('radian')
 
         pixels = healpy.query_disc(nside, center, radius_rad, inclusive=True,
                                    nest=False)
         return pixels
+
+    if isinstance(region, PolygonalRegion):
+        return healpy.query_polygon(nside, region.get_vertices(),
+                                    inclusive=True, nest=False)
 
 def _compress_via_mask(tbl, id_column, region):
     '''
@@ -76,15 +133,39 @@ def _compress_via_mask(tbl, id_column, region):
 
     '''
     if region is not None:
-        mask = _compute_mask(region, tbl['ra'], tbl['dec'])
-        masked_ra = ma.array(tbl['ra'], mask=mask)
-        ra_compress = masked_ra.compressed()
-        if ra_compress.size > 0:
+        if isinstance(region, PolygonalRegion):        # special case
+            # Find bounding box
+            vertices = region.get_vertices_radec()  # list of (ra, dec)
+            ra_max = max([v[0] for v in vertices])
+            ra_min = min([v[0] for v in vertices])
+            dec_max = max([v[1] for v in vertices])
+            dec_min = min([v[1] for v in vertices])
+            bnd_box = Box(ra_min, ra_max, dec_min, dec_max)
+            # Compute mask for that box
+            mask = _compute_mask(bnd_box, tbl['ra'], tbl['dec'])
+            if all(mask): # even bounding box doesn't intersect table rows
+                return None, None, None, None
+
+            # Get compressed ra, dec
+            ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
+            dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
+            poly_mask = _compute_mask(region, ra_compress, dec_compress)
+
+            # Get indices of unmasked
+            ixes = np.where(~mask)
+
+            # Update bounding box mask with polygonal mask
+            mask[ixes] |= poly_mask
+        else:
+            mask = _compute_mask(region, tbl['ra'], tbl['dec'])
+
+        if all(mask):
+            return None, None, None, None
+        else:
+            ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
             dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
             id_compress = ma.array(tbl[id_column], mask=mask).compressed()
             return ra_compress, dec_compress, id_compress, mask
-        else:
-            return None,None,None,None
     else:
         return tbl['ra'], tbl['dec'], tbl[id_column],None
 
@@ -93,27 +174,27 @@ def _compute_mask(region, ra, dec):
     Compute mask according to region for provided data
     Parameters
     ----------
-    region         Supported shape or None
-    ra,dec         Coordinates for data to be masked
+    region         Supported shape (box, disk)  or None
+    ra,dec         Coordinates for data to be masked, in degrees
     Returns
     -------
-    mask of elements to be omitted
+    mask of elements in ra, dec arrays to be omitted
 
     '''
     mask = None
-    if type(region) == type(_aBox):
+    if isinstance(region, Box):
         mask = np.logical_or((ra < region.ra_min),
                              (ra > region.ra_max))
         mask = np.logical_or(mask, (dec < region.dec_min))
         mask = np.logical_or(mask, (dec > region.dec_max))
-    if type(region) == type(_aDisk):
+    if isinstance(region, Disk):
         # Change positions to 3d vectors to measure distance
         p_vec = healpy.pixelfunc.ang2vec(ra, dec, lonlat=True)
 
         c_vec = healpy.pixelfunc.ang2vec(region.ra,
                                          region.dec,
                                          lonlat=True)
-        radius_rad = (region.radius_as * units.arcsec).to_value('radian')
+        radius_rad = (region.radius_as * u.arcsec).to_value('radian')
 
 
         # Rather than comparing arcs, it is equivalent to compare chords
@@ -125,7 +206,8 @@ def _compute_mask(region, ra, dec):
         # to disk radius.  That's 4(sin(a/2)^2)
         rad_chord_sq = 4 * np.square(np.sin(0.5 * radius_rad) )
         mask = obj_chord_sq > rad_chord_sq
-
+    if isinstance(region, PolygonalRegion):
+        mask = region.get_containment_mask(ra, dec, included=False)
     return mask
 
 class SkyCatalog(object):
@@ -261,8 +343,9 @@ class SkyCatalog(object):
         '''
         Parameters
         ----------
-        Region can be a box (named 4-tuple (min-ra, max-ra, min-dec, max-dec))
-        or a circle (named 3-tuple (ra, dec, radius))
+        Region can be a box (named 4-tuple (min-ra, max-ra, min-dec, max-dec)),
+        a circle (named 3-tuple (ra, dec, radius)) or of type
+        PolygonalRegion.
         Catalog area partition must be by healpix
 
         Returns
@@ -291,7 +374,8 @@ class SkyCatalog(object):
         '''
         Parameters
         ----------
-        region         region is a named tuple.  May be box or circle
+        region         region is a named tuple(may be box or circle)
+                       or object of type PolygonalRegion
         obj_type_set   Return only these objects. Defaults to all available
         datetime       Python datetime object. Ignored except for SSO
 
@@ -333,7 +417,7 @@ class SkyCatalog(object):
         Parameters
         ----------
         region         Either a box or a circle (each represented as
-                       named tuple)
+                       named tuple) or object of type PolygonalRegion
         obj_type_set   Return only these objects. Defaults to all available
         max_chunk      If specified, iterator will return no more than this
                        number of objections per iteration
@@ -354,8 +438,8 @@ class SkyCatalog(object):
         Parameters
         ----------
         hp     The healpix pixel.
-        region If supplied defines a disk or box. Return only object contained
-               in it
+        region If supplied defines a disk, box or convex polygon.
+               Return only objects contained in it
         obj_type_set   Type of objects to fetch.  Defaults to all
         datetime       Ignored for now; no support for moving objects
 
@@ -507,9 +591,9 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
                           mp=mp, verbose=verbose)
 
 if __name__ == '__main__':
+    import time
     ###cfg_file_name = 'latest.yaml'
     cfg_file_name = 'future_latest.yaml'
-    # cfs_filename = 'test_write_config_draft6.yaml'
     skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
 
     if len(sys.argv) > 1:
@@ -541,20 +625,73 @@ if __name__ == '__main__':
     sed_fmt = 'lambda: {:.1f}  f_lambda: {:g}'
 
     rgn = Box(ra_min_small, ra_max_small, dec_min_small, dec_max_small)
+    vertices = [(ra_min_small, dec_min_small), (ra_min_small, dec_max_small),
+                (ra_max_small, dec_max_small), (ra_max_small, dec_min_small)]
+    rgn_poly = PolygonalRegion(vertices_radec=vertices)
 
     intersect_hps = _get_intersecting_hps('ring', 32, rgn)
 
     print("For region ", rgn)
     print("intersecting pixels are ", intersect_hps)
 
+    intersect_poly_hps = _get_intersecting_hps('ring', 32, rgn_poly)
+    print("For region ", rgn_poly)
+    print("intersecting pixels are ", intersect_poly_hps)
+
+
     print('Invoke get_objects_by_region with box region')
+    t0 = time.time()
     object_list = cat.get_objects_by_region(rgn)
+    t_done = time.time()
+    print('Took ', t_done - t0)
                                             ##### temporary obj_type_set={'galaxy', 'star'} )
     #                                        obj_type_set=set(['galaxy']) )
     # Try out get_objects_by_hp with no region
     #colls = cat.get_objects_by_hp(9812, None, set(['galaxy']) )
 
-    print('Number of collections returned:  ', object_list.collection_count)
+    print('Number of collections returned for box:  ', object_list.collection_count)
+    print('Object count for box: ', len(object_list))
+
+    print('Invoke get_objects_by_region with polygonal region')
+    t0 = time.time()
+    object_list_poly = cat.get_objects_by_region(rgn_poly)
+    t_done = time.time()
+    print('Took ', t_done - t0)
+
+    print('Number of collections returned for polygon:  ',
+          object_list_poly.collection_count)
+    assert(object_list.collection_count == object_list_poly.collection_count)
+    print('Object count for polygon: ', len(object_list_poly))
+
+    fudge = 5
+    assert(len(object_list_poly) > len(object_list) - fudge)
+    assert(len(object_list_poly) < len(object_list) + fudge)
+
+    print('Now try inscribed polygon which is not a box')
+    ra_avg = (ra_min_small + ra_max_small) * 0.5
+    dec_avg = (dec_min_small + dec_max_small) * 0.5
+    diamond_vertices = [(ra_min_small, dec_avg), (ra_avg, dec_max_small),
+                        (ra_max_small, dec_avg), (ra_avg, dec_min_small)]
+    rgn_diamond = PolygonalRegion(vertices_radec=diamond_vertices)
+
+    intersect_diamond_hps = _get_intersecting_hps('ring', 32, rgn_diamond)
+    print("for diamond region ", rgn_diamond)
+    print("intersecting pixels are ", intersect_diamond_hps)
+
+    print('Invoke get_objects_by_region with diamond region')
+    t0 = time.time()
+    object_list_diamond = cat.get_objects_by_region(rgn_diamond)
+    t_done = time.time()
+    print('Took ', t_done - t0)
+
+    print('Number of collections returned for diamond:  ',
+          object_list_diamond.collection_count)
+    print('Object count for diamond: ', len(object_list_diamond))
+
+
+    #### TEMP FOR DEBUGGING
+    ### exit(0)
+
 
     colls = object_list.get_collections()
     got_a_sed = False
@@ -642,11 +779,6 @@ if __name__ == '__main__':
                       o._belongs_index)
 
     print('Total object count: ', len(object_list))
-
-    # Temporarily exit here to make it easier to see results from
-    # new routines
-    ###print('Stopping here')
-    ####exit(0)
 
     obj = object_list[0]
     print("Type of element in object_list:", type(obj))

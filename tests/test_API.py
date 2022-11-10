@@ -11,7 +11,8 @@ import numpy as np
 #import pandas as pd
 
 
-from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog, Box, Disk
+from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog
+from desc.skycatalogs.skyCatalogs import Box, Disk, PolygonalRegion
 from desc.skycatalogs.skyCatalogs import _get_intersecting_hps
 from desc.skycatalogs.objects.base_object import BaseObject
 
@@ -36,6 +37,7 @@ class APITester(unittest.TestCase):
         Exercise get_objects_by_region for box and disk and parts of the
         interfaces for BaseObject, ObjectCollection and ObjectList
         '''
+        import time
         cat = self._cat
 
 
@@ -96,7 +98,8 @@ class APITester(unittest.TestCase):
                 print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
                       o._belongs_index)
 
-        print('Total object count: ', len(object_list))
+        box_count = len(object_list)
+        print('Total object count: ', box_count)
 
         obj = object_list[0]
         assert(type(obj) == BaseObject)
@@ -106,13 +109,73 @@ class APITester(unittest.TestCase):
 
         sed_bulges = colls[0].get_native_attribute('sed_val_bulge')
 
-        #print("first bulge sed:")
-        #for v in sed_bulges[0]:
-        #    print(v)
+        # Now make a polygon which describes same region as the box
+        vertices = [(ra_min_small, dec_min_small),
+                    (ra_min_small, dec_max_small),
+                    (ra_max_small, dec_max_small),
+                    (ra_max_small, dec_min_small)]
+        rgn_poly = PolygonalRegion(vertices_radec=vertices)
+        print("For polygonal region ", rgn_poly)
+        print("intersecting pixels are ", intersect_hps)
+        assert(set(intersect_hps) == {9683, 9684, 9812})
+
+        t0 = time.time()
+        object_list = cat.get_objects_by_region(rgn_poly,
+                                                obj_type_set=set(['galaxy']) )
+        t_end = time.time()
+        print("Time to get box-like polygon objects: ", t_end - t0)
+
+
+        print('Number of collections returned for polygon:  ',
+              object_list.collection_count)
+        assert(object_list.collection_count == 2)
+        colls = object_list.get_collections()
+        for c in colls:
+            len_coll = len(c)
+            print(f"For hpid {c.get_partition_id()} found {len_coll} objects")
+
+        poly_count = len(object_list)
+        print('Total object count in polygon: ', poly_count)
+
+        assert(abs(poly_count - box_count) < 5)
+
+        # Now try a convex polygon which is more of a diamond than a box
+        top = ((ra_min_small + ra_max_small)/2, dec_max_small)
+        bottom = ((ra_min_small + ra_max_small)/2, dec_min_small)
+        left = (ra_min_small, (dec_min_small + dec_max_small)/2)
+        right = (ra_max_small, (dec_min_small + dec_max_small)/2)
+        vertices2 = [top, right, bottom, left]
+
+        rgn_poly2 = PolygonalRegion(vertices_radec=vertices2)
+
+        print("For polygonal region ", rgn_poly2)
+        print("intersecting pixels are ", intersect_hps)
+
+        t0 = time.time()
+        object_list = cat.get_objects_by_region(rgn_poly2,
+                                                obj_type_set=set(['galaxy']) )
+        t_end = time.time()
+        print("Time to get diamond polygon objects: ", t_end - t0)
+
+
+        print('Number of collections returned for diamond polygon:  ',
+              object_list.collection_count)
+        #assert(object_list.collection_count == 2)
+        colls = object_list.get_collections()
+        for c in colls:
+            len_coll = len(c)
+            print(f"For hpid {c.get_partition_id()} found {len_coll} objects")
+
+        poly2_count = len(object_list)
+        print('Total object count in polygon: ', poly2_count)
 
         # Now disk.  Get all known object types
         rgn = Disk(56.6, -36.4, 1800)
+        t0 = time.time()
         object_list = cat.get_objects_by_region(rgn)
+        t_end = time.time()
+        print("Time to get disk objects: ", t_end - t0)
+
         print('Number of collections returned for disk: ',
               object_list.collection_count)
         colls = object_list.get_collections()
@@ -204,6 +267,22 @@ class APITester(unittest.TestCase):
         box = Box(56.0, 56.8, -36.8, -36.0)
         disk = Disk(56.4, -36.5, 3000)
 
+
+        # Now try a convex polygon which is more of a diamond than a box
+        ra_min_small = 55.8
+        ra_max_small = 56.4
+        dec_min_small = -36.5
+        dec_max_small = -35.9
+
+        top = ((ra_min_small + ra_max_small)/2, dec_max_small)
+        bottom = ((ra_min_small + ra_max_small)/2, dec_min_small)
+        left = (ra_min_small, (dec_min_small + dec_max_small)/2)
+        right = (ra_max_small, (dec_min_small + dec_max_small)/2)
+        vertices2 = [top, right, bottom, left]
+
+        rhomb = PolygonalRegion(vertices_radec=vertices2)
+
+
         cat_one = self._cat
         rg_cfg_path = os.path.join(self._skycatalog_root, 'row_groups',
                                    'skyCatalog.yaml')
@@ -220,6 +299,12 @@ class APITester(unittest.TestCase):
         disk_rg = cat_rg.get_objects_by_region(disk,
                                                obj_type_set=set(['galaxy']))
         compare_objects(disk_one, disk_rg)
+
+        rhomb_one = cat_one.get_objects_by_region(rhomb,
+                                                  obj_type_set=set(['galaxy']))
+        rhomb_rg = cat_rg.get_objects_by_region(rhomb,
+                                                obj_type_set=set(['galaxy']))
+        compare_objects(rhomb_one, rhomb_rg)
 
 
 if __name__ == '__main__':
