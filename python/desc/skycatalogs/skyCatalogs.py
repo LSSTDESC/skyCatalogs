@@ -228,13 +228,14 @@ class SkyCatalog(object):
         '''
         self._config = Config(config)
         self._logger = logging.getLogger('skyCatalogs.client')
-        self._logger.setLevel(loglevel)
-        ch = logging.StreamHandler()
-        ch.setLevel(loglevel)
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        ch.setFormatter(formatter)
 
-        self._logger.addHandler(ch)
+        if not self._logger.hasHandlers():
+            self._logger.setLevel(loglevel)
+            ch = logging.StreamHandler()
+            ch.setLevel(loglevel)
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            ch.setFormatter(formatter)
+            self._logger.addHandler(ch)
 
         self._mp = mp
         if 'schema_version' not in config:
@@ -601,6 +602,10 @@ if __name__ == '__main__':
     cfg_file = os.path.join('/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg',
                             cfg_file_name)
 
+    write_sed = False
+    if len(sys.argv) > 2:
+        write_sed = True
+
     # For tract 3828
     #   55.73604 < ra < 57.563452
     #  -37.19001 < dec < -35.702481
@@ -733,7 +738,8 @@ if __name__ == '__main__':
                                 print(sed.wave_list)
                                 print('Simple sed values:')
                                 print([sed(w) for w in sed.wave_list])
-                                o.write_sed('simple_sed.txt', component=cmp)
+                                if write_sed:
+                                    o.write_sed('simple_sed.txt', component=cmp)
                                 sed_fine, _ = o.get_sed(component=cmp,
                                                         resolution=1.0)
                                 print('Bin width = 1 nm')
