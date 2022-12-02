@@ -280,6 +280,8 @@ class BaseObject(object):
             raise RuntimeError("Do not know how to handle object type "
                                f"{self.object_type}")
         obj_dict = {}
+        e1 = self.get_native_attribute('ellipticity_1_true')
+        e2 = self.get_native_attribute('ellipticity_2_true')
         for component in self.subcomponents:
             # knots use the same major/minor axes as the disk component.
             my_component = 'disk' if component != 'bulge' else 'bulge'
@@ -288,8 +290,8 @@ class BaseObject(object):
             b = self.get_native_attribute(
                 f'size_minor_{my_component}_true')
             assert a >= b
-            pa = self.get_native_attribute('position_angle_unlensed')
-            beta = float(90 + pa)*galsim.degrees
+            #pa = self.get_native_attribute('position_angle_unlensed')
+            #beta = float(90 + pa)*galsim.degrees
             hlr = (a*b)**0.5   # approximation for half-light radius
             if component == 'knots':
                 npoints = self.get_native_attribute('n_knots')
@@ -305,7 +307,9 @@ class BaseObject(object):
                 n = round(n*20.)/20.
                 obj = galsim.Sersic(n=n, half_light_radius=hlr,
                                     gsparams=gsparams)
-            shear = galsim.Shear(q=b/a, beta=beta)
+            #shear = galsim.Shear(q=b/a, beta=beta)
+            ### -->  Next line may need some adjustment.  TBD <-- ###
+            shear = galsim.Shear(e1=e1, e2=e2)
             obj = obj._shear(shear)
             g1, g2, mu = self.get_wl_params()
             obj_dict[component] = obj._lens(g1, g2, mu)
