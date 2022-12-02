@@ -109,7 +109,8 @@ class CatalogCreator:
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator',
                  pkg_root=None, skip_done=False, flux_only=False,
-                 main_only=False, flux_parallel=16, provenance=None):
+                 main_only=False, flux_parallel=16, provenance=None,
+                 dc2=False):
         """
         Store context for catalog creation
 
@@ -144,6 +145,9 @@ class CatalogCreator:
         flux_only       Only create flux files, not main files
         main_only       Only create main files, not flux files
         flux_parallel   Number of processes to divide work of computing fluxes
+        provenance      Whether to write per-output-file git repo provenance
+        dc2             Whether to adjust values to provide input comparable
+                        to that for the DC2 run
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -201,6 +205,7 @@ class CatalogCreator:
         self._main_only = main_only
         self._flux_parallel = flux_parallel
         self._provenance = provenance
+        self._dc2 = dc2
 
         self._obs_sed_factory = None
 
@@ -301,9 +306,15 @@ class CatalogCreator:
         # to_fetch = all columns of interest in gal_cat
         non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'redshiftHubble',
                    'peculiarVelocity', 'shear_1', 'shear_2',
-                   'convergence', 'position_angle_true',
+                   #'convergence', 'position_angle_true',
+                   'convergence',
                    'size_bulge_true', 'size_minor_bulge_true', 'sersic_bulge',
                    'size_disk_true', 'size_minor_disk_true', 'sersic_disk']
+        if self._dc2:
+            non_sed += [ 'ellipticity_1_true_dc2', 'ellipticity_2_true_dc2']
+        else:
+            non_sed += ['ellipticity_1_true', 'ellipticity_2_true']
+
         if self._knots:
                    non_sed += ['knots_flux_ratio', 'n_knots', 'mag_i_lsst']
         # Find all the tophat sed numbers
@@ -337,6 +348,7 @@ class CatalogCreator:
         #Fetch the data
         to_fetch = non_sed + sed_bulge_names + sed_disk_names
 
+        # df is not a dataframe!  It's just a dict
         if not self._mag_cut:
             df = gal_cat.get_quantities(to_fetch, native_filters=hp_filter)
         else:
@@ -389,12 +401,20 @@ class CatalogCreator:
         writer = None
 
         # Some columns need to be renamed
-        to_modify = ['position_angle_true', 'redshiftHubble', 'peculiarVelocity']
+        to_modify = ['redshiftHubble', 'peculiarVelocity']
+        if self._dc2:
+            to_modify += ['ellipticity_1_true_dc2', 'ellipticity_2_true_dc2']
+
         while u_bnd > l_bnd:
             out_dict = {k : df[k][l_bnd : u_bnd] for k in non_sed if k not in to_modify}
             out_dict['redshift_hubble'] = df['redshiftHubble'][l_bnd : u_bnd]
             out_dict['peculiar_velocity'] = df['peculiarVelocity'][l_bnd : u_bnd]
-            out_dict['position_angle_unlensed'] = df['position_angle_true'][l_bnd : u_bnd]
+            ### -->  remove next line. Add lines for ellipticities <-- ###
+            ###out_dict['position_angle_unlensed'] = df['position_angle_true'][l_bnd : u_bnd]
+            if self._dc2:
+                out_dict['ellipticity_1_true'] = df['ellipticity_1_true_dc2'][l_bnd : u_bnd]
+                out_dict['ellipticity_2_true'] = - df['ellipticity_2_true_dc2'][l_bnd : u_bnd]
+
             out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
             out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
             out_dict['bulge_magnorm'] = bulge_magnorm[l_bnd : u_bnd]
