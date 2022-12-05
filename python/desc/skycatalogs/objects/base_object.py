@@ -288,9 +288,13 @@ class BaseObject(object):
             b = self.get_native_attribute(
                 f'size_minor_{my_component}_true')
             assert a >= b
-            pa = self.get_native_attribute('position_angle_unlensed')
-            beta = float(90 + pa)*galsim.degrees
             hlr = (a*b)**0.5   # approximation for half-light radius
+
+            e1 = self.get_native_attribute(
+                f'ellipticity_1_{my_component}_true')
+            e2 = self.get_native_attribute(
+                f'ellipticity_2_{my_component}_true')
+
             if component == 'knots':
                 npoints = self.get_native_attribute('n_knots')
                 assert npoints > 0
@@ -305,7 +309,13 @@ class BaseObject(object):
                 n = round(n*20.)/20.
                 obj = galsim.Sersic(n=n, half_light_radius=hlr,
                                     gsparams=gsparams)
-            shear = galsim.Shear(q=b/a, beta=beta)
+
+            # NOTE: Whether or not the minus signs in the next executable
+            # line are needed in general or just for generating DC2-like
+            # results is still TBD. They are included here in order to
+            # reproduce the effect of adding 90 degrees to position angle
+            # in the old code.
+            shear = galsim.Shear(g1=-e1, g2=-e2)
             obj = obj._shear(shear)
             g1, g2, mu = self.get_wl_params()
             obj_dict[component] = obj._lens(g1, g2, mu)

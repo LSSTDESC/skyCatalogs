@@ -62,6 +62,8 @@ parser.add_argument('--provenance', '--prov', choices=['yaml'], help='''
                      written. Only supported format currently is as a
                      small yaml file, written to the data directory.''')
 
+parser.add_argument('--dc2', action='store_true', help='If supplied provide values comparable to those used for DC2 run. Default is False')
+
 args = parser.parse_args()
 logname = 'skyCatalogs.creator'
 logger = logging.getLogger(logname)
@@ -97,7 +99,8 @@ creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
                          skip_done=args.skip_done,
                          flux_only=args.flux_only, main_only=args.main_only,
                          flux_parallel=args.flux_parallel,
-                         provenance=provenance)
+                         provenance=provenance,
+                         dc2=args.dc2)
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
     logger.info("Creating galaxy catalogs")

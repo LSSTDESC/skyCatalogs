@@ -23,7 +23,13 @@ def make_galaxy_schema(logname, sed_subdir=False, knots=True):
               pa.field('size_disk_true', pa.float32(), True),
               pa.field('size_minor_disk_true', pa.float32(), True),
               pa.field('sersic_disk', pa.float32(), True),
-              pa.field('position_angle_unlensed', pa.float64(), True),
+##              pa.field('position_angle_unlensed', pa.float64(), True),
+              # Depending on value of --dc2-like option, value for
+              # ellipticity_2_true column will differ
+              pa.field('ellipticity_1_disk_true', pa.float64(), True),
+              pa.field('ellipticity_2_disk_true', pa.float64(), True),
+              pa.field('ellipticity_1_bulge_true', pa.float64(), True),
+              pa.field('ellipticity_2_bulge_true', pa.float64(), True),
               pa.field('sed_val_bulge',
                        pa.list_(pa.float64()), True),
               pa.field('sed_val_disk',
