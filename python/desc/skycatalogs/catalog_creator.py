@@ -311,9 +311,15 @@ class CatalogCreator:
                    'size_bulge_true', 'size_minor_bulge_true', 'sersic_bulge',
                    'size_disk_true', 'size_minor_disk_true', 'sersic_disk']
         if self._dc2:
-            non_sed += [ 'ellipticity_1_true_dc2', 'ellipticity_2_true_dc2']
+            non_sed += ['ellipticity_1_disk_true_dc2',
+                        'ellipticity_2_disk_true_dc2',
+                        'ellipticity_1_bulge_true_dc2',
+                        'ellipticity_2_bulge_true_dc2']
         else:
-            non_sed += ['ellipticity_1_true', 'ellipticity_2_true']
+            non_sed += ['ellipticity_1_disk_true',
+                        'ellipticity_2_disk_true',
+                        'ellipticity_1_bulge_true',
+                        'ellipticity_2_bulge_true']
 
         if self._knots:
                    non_sed += ['knots_flux_ratio', 'n_knots', 'mag_i_lsst']
@@ -403,17 +409,24 @@ class CatalogCreator:
         # Some columns need to be renamed
         to_modify = ['redshiftHubble', 'peculiarVelocity']
         if self._dc2:
-            to_modify += ['ellipticity_1_true_dc2', 'ellipticity_2_true_dc2']
+            to_modify += ['ellipticity_1_disk_true_dc2',
+                          'ellipticity_2_disk_true_dc2',
+                          'ellipticity_1_bulge_true_dc2',
+                          'ellipticity_2_bulge_true_dc2']
 
         while u_bnd > l_bnd:
             out_dict = {k : df[k][l_bnd : u_bnd] for k in non_sed if k not in to_modify}
             out_dict['redshift_hubble'] = df['redshiftHubble'][l_bnd : u_bnd]
             out_dict['peculiar_velocity'] = df['peculiarVelocity'][l_bnd : u_bnd]
-            ### -->  remove next line. Add lines for ellipticities <-- ###
-            ###out_dict['position_angle_unlensed'] = df['position_angle_true'][l_bnd : u_bnd]
             if self._dc2:
-                out_dict['ellipticity_1_true'] = df['ellipticity_1_true_dc2'][l_bnd : u_bnd]
-                out_dict['ellipticity_2_true'] = - df['ellipticity_2_true_dc2'][l_bnd : u_bnd]
+                out_dict['ellipticity_1_disk_true'] =\
+                        df['ellipticity_1_disk_true_dc2'][l_bnd : u_bnd]
+                out_dict['ellipticity_2_disk_true'] =\
+                        - df['ellipticity_2_disk_true_dc2'][l_bnd : u_bnd]
+                out_dict['ellipticity_1_bulge_true'] =\
+                        df['ellipticity_1_bulge_true_dc2'][l_bnd : u_bnd]
+                out_dict['ellipticity_2_bulge_true'] =\
+                        - df['ellipticity_2_bulge_true_dc2'][l_bnd : u_bnd]
 
             out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
             out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
