@@ -310,7 +310,11 @@ class BaseObject(object):
                 obj = galsim.Sersic(n=n, half_light_radius=hlr,
                                     gsparams=gsparams)
 
-
+            # NOTE: Whether or not the minus signs in the next executable
+            # line are needed in general or just for generating DC2-like
+            # results is still TBD. They are included here in order to
+            # reproduce the effect of adding 90 degrees to position angle
+            # in the old code.
             shear = galsim.Shear(g1=-e1, g2=-e2)
             obj = obj._shear(shear)
             g1, g2, mu = self.get_wl_params()
