@@ -56,6 +56,6 @@ dist = setup(name="skyCatalogs",
                  "Programming Language :: Python",
                  "Development Status :: 3 - Alpha",
                  ],
-             install_requires=['numpy', 'healpy', 'astropy',
-                               'pyarrow', 'pandas']
+             install_requires=['numpy', 'healpy', 'astropy', 'pyarrow',
+                               'pandas', 'galsim', 'dust_extinction']
              )
