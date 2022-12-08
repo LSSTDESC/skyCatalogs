@@ -3,7 +3,6 @@ import re
 from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
 import astropy.constants
-import h5py
 import pandas as pd
 
 import numpy as np
