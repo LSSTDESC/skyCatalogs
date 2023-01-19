@@ -54,6 +54,7 @@ def load_lsst_bandpasses():
     global lsst_bandpasses
     lsst_bandpasses = dict()
     rubin_sim_dir = os.getenv('RUBIN_SIM_DATA_DIR', None)
+    bp_dir = None
     if rubin_sim_dir:
         bp_dir = os.path.join(rubin_sim_dir, 'throughputs', 'baseline')
 
@@ -70,12 +71,12 @@ def load_lsst_bandpasses():
                 #logger.info('Using galsim built-in bandpasses')
                 bp_dir = None
                 fname_fmt = 'LSST_{band}.dat'
-        for band in LSST_BANDS:
-            if bp_dir:
-                bp_full_path = os.path.join(bp_dir, f'total_{band}.dat')
-            else:
-                bp_full_path = f'LSST_{band}.dat'
-            lsst_bandpasses[band] = galsim.Bandpass(bp_full_path, 'nm').thin()
+    for band in LSST_BANDS:
+        if bp_dir:
+            bp_full_path = os.path.join(bp_dir, f'total_{band}.dat')
+        else:
+            bp_full_path = f'LSST_{band}.dat'
+        lsst_bandpasses[band] = galsim.Bandpass(bp_full_path, 'nm').thin()
 
     return lsst_bandpasses
 
