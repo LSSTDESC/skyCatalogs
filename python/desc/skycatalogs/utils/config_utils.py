@@ -119,13 +119,15 @@ class Config(DelegatorBase):
 
         return [ Tophat(b[0], b[1]) for b in raw_bins]
 
-    def get_config_value(self, key_path):
+    def get_config_value(self, key_path, must_exist=True):
         '''
         Find value belonging to key in a config.
         Parameters
         ----------
         key_path    string   of form 'a/b/c/../q' where all but last
                              component must be a dict
+        must_exist  Boolean  If True (default) raise ValueError if path
+                             can't be resolved.  Else return None
 
         Returns
         -------
@@ -135,10 +137,17 @@ class Config(DelegatorBase):
         d = self._cfg
         for i in path_items[:-1]:
             if not i in d:
-                raise ValueError(f'Item {i} not found')
+                if must_exist:
+                    raise ValueError(f'Item {i} not found')
+                else:
+                    return None
             d = d[i]
-            if not isinstance(d, dict):
-                raise ValueError(f'intermediate {d} is not a dict')
+            if must_exist:
+                if not isinstance(d, dict):
+                    raise ValueError(f'intermediate {d} is not a dict')
+            else:
+                return None
+
         return d[path_items[-1]]
 
     def validate(self, schema=None):

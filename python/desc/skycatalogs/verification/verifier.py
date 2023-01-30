@@ -36,20 +36,29 @@ class Verifier:
             ch.setFormatter(formatter)
             self._logger.addHandler(ch)
 
-    def verify_overall(self, hps):
+    def verify_files_exist(self, hps):
         '''
         Check that for each hp in list all files (galaxy main, galaxy flux,
         pointsource main, pointsource flux) exist
         '''
 
         # get the templates from self._cfg
-        g_m = self._cfg.get_config_value('object_types/galaxy/file_template')
-        g_f = self._cfg.get_config_value('object_types/galaxy/flux_file_template')
-        s_m = self._cfg.get_config_value('object_types/star/file_template')
-        s_f = self._cfg.get_config_value('object_types/star/flux_file_template')
+        g_m = self._cfg.get_config_value('object_types/galaxy/file_template',
+                                         must_exist=False)
+        g_f = self._cfg.get_config_value('object_types/galaxy/flux_file_template',
+                                         must_exist=False)
+        s_m = self._cfg.get_config_value('object_types/star/file_template',
+                                         must_exist=False)
+        s_f = self._cfg.get_config_value('object_types/star/flux_file_template',
+                                         must_exist=False)
         pat = '(?P<healpix>\d+)'
-        templates = [g_m.replace(pat, '{}'), g_f.replace(pat, '{}'),
-                     s_m.replace(pat, '{}'), s_f.replace(pat, '{}')]
+        templates = []
+        for t in (g_m, g_f, s_m, s_f):
+            if t:
+                templates.append(t.replace(pat, '{}'))
+
+        #templates = [g_m.replace(pat, '{}'), g_f.replace(pat, '{}'),
+        #             s_m.replace(pat, '{}'), s_f.replace(pat, '{}')]
 
         for hp in hps:
             for t in templates:
@@ -64,6 +73,8 @@ class Verifier:
                     f.close()
         self._logger.info(f"verify_overall: All requested catalog files found")
 
+    #def verify_id_match(self, hp, object_type):
+
 if __name__ == "__main__":
     #catalog_dir = 'dc2_hp'           # populated on perlmutter only
     catalog_dir = 'for_imsim_run'
@@ -72,4 +83,4 @@ if __name__ == "__main__":
 
     ver = Verifier(cfg_path)
 
-    ver.verify_overall([10066, 10067])
+    ver.verify_files_exist([10066, 10067])
