@@ -1,7 +1,8 @@
 import pyarrow as pa
 import logging
 
-__all__ = ['make_galaxy_schema', 'make_galaxy_flux_schema', 'make_star_schema']
+__all__ = ['make_galaxy_schema', 'make_galaxy_flux_schema', 'make_star_schema',
+           'make_star_flux_schema']
 
 # This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
