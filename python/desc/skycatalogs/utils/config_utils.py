@@ -142,11 +142,11 @@ class Config(DelegatorBase):
                 else:
                     return None
             d = d[i]
-            if must_exist:
-                if not isinstance(d, dict):
+            if not isinstance(d, dict):
+                if must_exist:
                     raise ValueError(f'intermediate {d} is not a dict')
-            else:
-                return None
+                else:
+                    return None
 
         return d[path_items[-1]]
 
