@@ -1,5 +1,6 @@
 import pyarrow as pa
 import pyarrow.parquet as pq
+import numpy as np
 import yaml
 import os
 import logging
@@ -9,6 +10,7 @@ from desc.skycatalogs.skyCatalogs import open_catalog
 
 from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema
 from desc.skycatalogs.utils.parquet_schema_utils import make_star_schema, make_star_flux_schema
+from desc.skycatalogs.verification.coverage import locate_hp, accumulate, merge_dicts
 
 __all__ = ['Verifier']
 
@@ -58,6 +60,14 @@ class Verifier:
         patterns['star_flux'] = s_f.replace(self._healpix_pat, '{}')
 
         self.fname_pat = patterns
+
+    @property
+    def catalog(self):
+        if self._cat == None:
+            self._cat = open_catalog(self._config_file)
+            if self._cat == None:
+                raise ValueError(f'Unusable config file {self._config_file}')
+        return self._cat
 
     def _make_abs_path(self, hp, pattern):
         return os.path.join(self._cat_dir, pattern.format(hp))
@@ -121,6 +131,47 @@ class Verifier:
 
         return True
 
+    def verify_coverage(self, hp_ids, object_type, debug=False):
+        '''
+        Check that sources returned by the API are distributed throughout
+        the healpixel by binning with smaller healpixels (nside 1024)
+        '''
+        # Fetch the data by row group
+        cat = self.catalog
+
+        full_dict = {}
+        if not isinstance(hp_ids, list):
+            hp_ids = [hp_ids]
+        self._logger.info(f'verify_coverage called for {len(hp_ids)} healpixels')
+        for hp_id in hp_ids:
+            objs =  cat.get_objects_by_hp(hp_id, obj_type_set={object_type})
+            colls = objs.get_collections()
+            one_hp_dict = {}
+            self._logger.info(f'\n\n\nChecking coverage for hp {hp_id} object type {object_type}')
+            for c in colls:
+                ra = c.get_native_attribute('ra')
+                dec = c.get_native_attribute('dec')
+                local_hp_ids = locate_hp(ra, dec)
+                new_dict = accumulate(one_hp_dict, local_hp_ids)
+                if debug:
+                    self.print_stats('   Next row group', new_dict)
+
+            self.print_stats('\n            **Complete hp**', one_hp_dict)
+
+            merge_dicts(full_dict, one_hp_dict)
+
+        self.print_stats('\n     ALL requested hp', full_dict)
+
+    def print_stats(self, title, bin_dict):
+
+        vals = bin_dict.values()
+        self._logger.info(title)
+        self._logger.info(f'Number of non-zero bins: {len(vals)}')
+        self._logger.info(f'Max bin value: {max(vals)}')
+        self._logger.info(f'Min bin value: {min(vals)}')
+        vals = np.array(list(vals), dtype=np.float64)
+        self._logger.info(f'Mean and std: {np.mean(vals)} {np.std(vals)}')
+
 if __name__ == "__main__":
     #catalog_dir = 'dc2_hp'           # populated on perlmutter only
     catalog_dir = 'for_imsim_run'
@@ -137,3 +188,12 @@ if __name__ == "__main__":
             print(f'{object_type} ids match')
         else:
             print(f'{object_type} ids do not match!')
+
+    ver.verify_coverage(10066, 'star')
+
+
+    ver.verify_coverage([10066, 10067], 'star')
+
+    ver.verify_coverage(10066, 'galaxy')
+
+    ver.verify_coverage([10066, 10067], 'galaxy')
