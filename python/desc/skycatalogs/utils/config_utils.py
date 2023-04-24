@@ -11,7 +11,7 @@ from collections import namedtuple
 __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
            'assemble_SED_models', 'assemble_MW_extinction',
            'assemble_cosmology', 'assemble_object_types', 'assemble_provenance',
-           'write_yaml']
+           'assemble_variability_models', 'write_yaml']
 
 _CURRENT_SCHEMA_VERSION='1.1.0'
 
@@ -300,3 +300,34 @@ def assemble_provenance(pkg_root, inputs={}):
         return {'skyCatalogs_repo' : git_d, 'inputs' : inputs}
     else:
         return{'skyCatalogs_repo' : git_d}
+
+# I don't think the parquet variability model structs belong in the
+# config after all. At most keep track of models per object type.
+# Or maybe just need the object types and everything else is internal
+# to the parquet_utils code
+
+_AGN_MODELS = ['agn_random_walk']
+_SN_MODELS = ['sn_salt2_extended']
+
+def assemble_variability_models(object_types):
+    '''
+    Add information about all known variability models for supplied object
+    types.
+    Parameters
+    ----------
+    object_types: iterable of (pointsource) object type names
+
+    Returns
+    -------
+    A dict with object type names for keys.  Values are also dicts with
+    keys = model name and values defining struct of parameters for that
+    model, e.g. ordered dict with parameter names for keys and parameter
+    data types for values
+    '''
+    models = dict()
+    if 'agn' in object_types:
+        models['agn'] = _AGN_MODELS
+    if 'sn' in object_types:
+        models['sn'] = _SN_MODELS
+
+    return models

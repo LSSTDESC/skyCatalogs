@@ -15,7 +15,7 @@ from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_tools import ObservedSedFactory, get_star_sed_path
 from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
 from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance, write_yaml
-from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_schema, make_star_flux_schema
+from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_flux_schema, make_pointsource_schema
 from desc.skycatalogs.objects.base_object import LSST_BANDS, BaseObject
 
 from desc.skycatalogs.objects.base_object import ObjectCollection
@@ -631,7 +631,8 @@ class CatalogCreator:
         self._star_truth = _star_db
         self._sn_truth = _sn_db
 
-        arrow_schema = make_star_schema()
+        ##arrow_schema = make_star_schema()
+        arrow_schema = make_pointsource_schema()
         #  Need a way to indicate which object types to include; deal with that
         #  later.  For now, default is stars only.  Use default star parameter file.
         for p in self._parts:
@@ -658,7 +659,9 @@ class CatalogCreator:
         if star_cat:
             # Get data for this pixel
             cols = ','.join(['simobjid as id', 'ra', 'decl as dec',
-                             'magNorm as magnorm', 'sedFilename as sed_filepath'])
+                             'magNorm as magnorm', 'mura', 'mudecl as mudec',
+                             'radialVelocity as radial_velocity', 'parallax',
+                             'sedFilename as sed_filepath'])
             q = f'select {cols} from stars where hpid={pixel} '
             with sqlite3.connect(star_cat) as conn:
                 star_df = pd.read_sql_query(q, conn)
@@ -674,18 +677,26 @@ class CatalogCreator:
 
             star_df['MW_av'] = _make_MW_extinction(np.array(star_df['ra']),
                                                    np.array(star_df['dec']))
+            star_df['variability_model'] = np.full((nobj,), '')
+            star_df['salt2_params'] = np.full((nobj,), None)
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
             self._logger.debug('Created arrow table from dataframe')
 
             writer = pq.ParquetWriter(output_path, arrow_schema)
             writer.write_table(out_table)
 
-            writer.close()
-            if self._provenance == 'yaml':
-                self.write_provenance_file(output_path)
+            # writer.close()
+            # if self._provenance == 'yaml':
+            #     self.write_provenance_file(output_path)
 
         if sn_cat:
-            raise NotImplementedError('SNe not yet supported. Have a nice day.')
+            #raise NotImplementedError('SNe not yet supported. Have a nice day.')
+            pass
+
+        writer.close()
+        if self._provenance == 'yaml':
+            self.write_provenance_file(output_path)
+
 
         return
 
