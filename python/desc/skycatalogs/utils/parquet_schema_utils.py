@@ -120,12 +120,13 @@ def make_pointsource_schema():
     '''
 
     salt2_fields = [
+        pa.field('z', pa.float64(), True),
         pa.field('t0', pa.float64(), True),
         pa.field('x0', pa.float64(), True),
         pa.field('x1', pa.float64(), True),
         pa.field('c', pa.float64(), True)]
     fields = [pa.field('object_type', pa.string(), False),
-              pa.field('id', pa.int64(), False),
+              pa.field('id', pa.string(), False),
               pa.field('ra', pa.float64(), False),
               pa.field('dec', pa.float64(), False),
               pa.field('host_galaxy_id', pa.int64(), True),

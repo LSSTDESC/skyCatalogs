@@ -637,7 +637,8 @@ class CatalogCreator:
         #  later.  For now, default is stars only.  Use default star parameter file.
         for p in self._parts:
             self._logger.debug(f'Point sources. Starting on pixel {p}')
-            self.create_pointsource_pixel(p, arrow_schema, star_cat=_star_db)
+            self.create_pointsource_pixel(p, arrow_schema, star_cat=_star_db,
+                                          sn_cat=_sn_db)
             self._logger.debug(f'Completed pixel {p}')
 
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None,
@@ -656,9 +657,11 @@ class CatalogCreator:
                 self._logger.info(f'Skipping regeneration of {output_path}')
                 return
 
+        writer = pq.ParquetWriter(output_path, arrow_schema)
+
         if star_cat:
             # Get data for this pixel
-            cols = ','.join(['simobjid as id', 'ra', 'decl as dec',
+            cols = ','.join(['format("%s",simobjid) as id', 'ra', 'decl as dec',
                              'magNorm as magnorm', 'mura', 'mudecl as mudec',
                              'radialVelocity as radial_velocity', 'parallax',
                              'sedFilename as sed_filepath'])
@@ -680,23 +683,51 @@ class CatalogCreator:
             star_df['variability_model'] = np.full((nobj,), '')
             star_df['salt2_params'] = np.full((nobj,), None)
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
-            self._logger.debug('Created arrow table from dataframe')
+            self._logger.debug('Created arrow table from star dataframe')
 
-            writer = pq.ParquetWriter(output_path, arrow_schema)
+            #writer = pq.ParquetWriter(output_path, arrow_schema)
             writer.write_table(out_table)
 
-            # writer.close()
-            # if self._provenance == 'yaml':
-            #     self.write_provenance_file(output_path)
-
         if sn_cat:
-            #raise NotImplementedError('SNe not yet supported. Have a nice day.')
-            pass
+            # Get data for this pixel
+            cols = ','.join(['snid_in as id', 'snra_in as ra',
+                             'sndec_in as dec', 'galaxy_id as host_galaxy_id'])
+
+            params = ','.join(['z_in as z', 't0_in as t0, x0_in as x0',
+                             'x1_in as x1', 'c_in as c'])
+
+            q1 = f'select {cols} from sne_params where hpid={pixel} '
+            q2 = f'select {params} from sne_params where hpid={pixel} '
+            with sqlite3.connect(sn_cat) as conn:
+                sn_df = pd.read_sql_query(q1, conn)
+                params_df = pd.read_sql_query(q2, conn)
+
+            nobj = len(sn_df['ra'])
+            sn_df['object_type'] = np.full((nobj,), 'sn')
+
+            sn_df['MW_rv'] = np.full((nobj,), _MW_rv_constant, np.float32())
+            sn_df['MW_av'] = _make_MW_extinction(np.array(sn_df['ra']),
+                                                   np.array(sn_df['dec']))
+
+            # Add fillers for columns not relevant for sn
+            sn_df['sed_filepath'] = np.full((nobj),'')
+            sn_df['magnorm'] = np.full((nobj,), None)
+            sn_df['mura'] = np.full((nobj,), None)
+            sn_df['mudec'] = np.full((nobj,), None)
+            sn_df['radial_velocity'] = np.full((nobj,), None)
+            sn_df['parallax'] = np.full((nobj,), None)
+            sn_df['variability_model'] = np.full((nobj,), 'salt2_extended')
+
+            # Form array of struct from params_df
+            sn_df['salt2_params'] = params_df.to_records(index=False)
+            out_table = pa.Table.from_pandas(sn_df, schema=arrow_schema)
+            self._logger.debug('Created arrow table from sn dataframe')
+
+            writer.write_table(out_table)
 
         writer.close()
         if self._provenance == 'yaml':
             self.write_provenance_file(output_path)
-
 
         return
 
