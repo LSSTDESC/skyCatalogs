@@ -246,11 +246,10 @@ def _find_schema_path(schema_spec):
     here = os.path.dirname(__file__)
     return os.path.join(here, '../../../../cfg', fname)
 
-def create_config(catalog_name, logname=None, schema_version=None):
-    if not schema_version:
-        schema_version = CURRENT_SCHEMA_VERSION
-    return Config({'catalog_name' : catalog_name,
-                   'schema_version' : schema_version}, logname)
+def create_config(catalog_name, logname=None):
+    return Config({'catalog_name' : catalog_name}, logname)
+#                  'schema_version' : schema_version,
+#                  'code_version' : desc.skycatalogs.__version__}, logname)
 
 def assemble_cosmology(cosmology):
     d = {k : cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
@@ -279,10 +278,18 @@ def assemble_SED_models(bins):
     file_nm_d = {'units' : 'nm'}
     return {'tophat' : tophat_d, 'file_nm' : file_nm_d}
 
-def assemble_provenance(pkg_root, inputs={}):
+def assemble_provenance(pkg_root, inputs={}, schema_version=None):
+
+    if not schema_version:
+        schema_version = CURRENT_SCHEMA_VERSION
+    import desc.skycatalogs
+    version_d = {'schema_version' : schema_version,
+                 'code_version' : desc.skycatalogs.__version__}
+
     repo = git.Repo(pkg_root)
     has_uncommited = repo.is_dirty()
     has_untracked = (len(repo.untracked_files) > 0)
+
 
     git_d = {}
     git_d['git_hash'] = repo.commit().hexsha
@@ -297,9 +304,10 @@ def assemble_provenance(pkg_root, inputs={}):
     git_d['git_status'] = status
 
     if inputs:
-        return {'skyCatalogs_repo' : git_d, 'inputs' : inputs}
+        return {'versioning' : version_d,'skyCatalogs_repo' : git_d,
+                'inputs' : inputs}
     else:
-        return{'skyCatalogs_repo' : git_d}
+        return{'versioning' : version_d, 'skyCatalogs_repo' : git_d}
 
 # I don't think the parquet variability model structs belong in the
 # config after all. At most keep track of models per object type.
