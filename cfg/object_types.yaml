@@ -40,3 +40,11 @@ object_types :
       sed_file_root_env_var : SIMS_SED_LIBRARY_DIR
       MW_extinction : F19
       internal_extinction : None
+  sn :
+      file_template : 'pointsource_(?P<healpix>\d+).parquet'
+      flux_file_template : 'pointsource_flux_(?P<healpix>\d+).parquet'
+      data_file_type : parquet
+      sed_model : file_nm
+      sed_file_root_env_var : SIMS_SED_LIBRARY_DIR
+      MW_extinction : F19
+      internal_extinction : None
