@@ -246,7 +246,7 @@ class SkyCatalog(object):
             self._logger.addHandler(ch)
 
         self._mp = mp
-        if 'schema_version' not in config:
+        if 'schema_version' not in config and 'schema_version' not in config['provenance']['versioning']:
             self._cat_dir = config['root_directory']
         else:
             sky_root = config['skycatalog_root']        # default
