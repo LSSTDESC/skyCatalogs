@@ -103,7 +103,7 @@ def make_star_flux_schema(logname):
     '''
     logger = logging.getLogger(logname)
     logger.debug('Creating star flux schema')
-    fields = [pa.field('id', pa.int64()),
+    fields = [pa.field('id', pa.string()),
               pa.field('lsst_flux_u', pa.float32() , True),
               pa.field('lsst_flux_g', pa.float32() , True),
               pa.field('lsst_flux_r', pa.float32() , True),
@@ -152,7 +152,7 @@ def make_pointsource_flux_schema(logname):
     '''
     logger = logging.getLogger(logname)
     logger.debug('Creating pointsource flux schema')
-    fields = [pa.field('id', pa.int64()),
+    fields = [pa.field('id', pa.string()),
               pa.field('lsst_flux_u', pa.float32() , True),
               pa.field('lsst_flux_g', pa.float32() , True),
               pa.field('lsst_flux_r', pa.float32() , True),
