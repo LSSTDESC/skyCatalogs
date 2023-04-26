@@ -105,6 +105,7 @@ def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
 class CatalogCreator:
     def __init__(self, parts, area_partition, skycatalog_root=None,
                  catalog_dir='.', galaxy_truth=None,
+                 star_truth=None, sn_truth=None,
                  config_path=None, catalog_name='skyCatalog',
                  output_type='parquet', mag_cut=None,
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
@@ -155,6 +156,9 @@ class CatalogCreator:
         """
 
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
+        _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
+        _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
+
         self._galaxy_stride = 1000000
         if pkg_root:
             self._pkg_root = pkg_root
@@ -172,8 +176,13 @@ class CatalogCreator:
         if galaxy_truth is None:
             self._galaxy_truth = _cosmo_cat
 
-        self._sn_truth = None
-        self._star_truth = None
+        self._sn_truth = sn_truth
+        if self._sn_truth is None:
+            self._sn_truth = _sn_db
+
+        self._star_truth = star_truth
+        if self._star_truth is None:
+            self._star_truth = _star_db
         self._cat = None
 
         self._parts = parts
@@ -610,7 +619,7 @@ class CatalogCreator:
         if self._provenance == 'yaml':
             self.write_provenance_file(output_path)
 
-    def create_pointsource_catalog(self, star_truth=None, sn_truth=None):
+    def create_pointsource_catalog(self):
 
         """
         Parameters
@@ -624,21 +633,14 @@ class CatalogCreator:
         -------
         None
         """
-
-        # For now fixed location for star, SNe parameter files.
-        _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
-        _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
-        self._star_truth = _star_db
-        self._sn_truth = _sn_db
-
-        ##arrow_schema = make_star_schema()
         arrow_schema = make_pointsource_schema()
         #  Need a way to indicate which object types to include; deal with that
-        #  later.  For now, default is stars only.  Use default star parameter file.
+        #  later.  For now, default is stars + sn
         for p in self._parts:
             self._logger.debug(f'Point sources. Starting on pixel {p}')
-            self.create_pointsource_pixel(p, arrow_schema, star_cat=_star_db,
-                                          sn_cat=_sn_db)
+            self.create_pointsource_pixel(p, arrow_schema,
+                                          star_cat=self._star_truth,
+                                          sn_cat=self._sn_truth)
             self._logger.debug(f'Completed pixel {p}')
 
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None,
