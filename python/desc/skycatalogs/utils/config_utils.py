@@ -11,9 +11,9 @@ from collections import namedtuple
 __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
            'assemble_SED_models', 'assemble_MW_extinction',
            'assemble_cosmology', 'assemble_object_types', 'assemble_provenance',
-           'assemble_variability_models', 'write_yaml']
+           'assemble_variability_models', 'write_yaml', CURRENT_SCHEMA_VERSION]
 
-_CURRENT_SCHEMA_VERSION='1.1.0'
+CURRENT_SCHEMA_VERSION='1.2.0'
 
 def open_config_file(config_file):
     '''
@@ -248,7 +248,7 @@ def _find_schema_path(schema_spec):
 
 def create_config(catalog_name, logname=None, schema_version=None):
     if not schema_version:
-        schema_version = _CURRENT_SCHEMA_VERSION
+        schema_version = CURRENT_SCHEMA_VERSION
     return Config({'catalog_name' : catalog_name,
                    'schema_version' : schema_version}, logname)
 
