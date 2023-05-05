@@ -222,6 +222,7 @@ class BaseObject(object):
             # Make an SNObject and get SED
             params = self.get_native_attribute('salt2_params')
             sn = SNObject(params=params)
+            # Already normalized so magnorm is zero
             return sn.get_sed(mjd), 0.0
         if self._object_type != 'galaxy':
             raise ValueError('get_sed function only available for stars, sne and galaxy components')
@@ -341,7 +342,8 @@ class BaseObject(object):
         The SEDs are computed assuming exposure times of 1 second.
         """
         # Create a galsim.SED for this subcomponent.
-        if self._object_type in ['star', 'sn']:   # or other pointsource
+
+        if self._object_type == 'star':
             sed, magnorm = self.get_sed(component=component, mjd=mjd)
             # The SED is in units of photons/nm/cm^2/s
             # -0.9210340371976184 = -np.log(10)/2.5. Use to convert mag to flux
@@ -349,12 +351,16 @@ class BaseObject(object):
             sed = sed.withMagnitude(0, self._bp500)
             sed = sed*flux_500
         elif self._object_type == 'galaxy':
-            # For galaxy components sed already has correct normalization
+            # For sn & galaxy components sed already has correct normalization
             sed, _ = self.get_sed(component=component)
             if sed is None:
                 # This subcomponent has zero emission so return None.
                 return None
-
+        elif self._object_type == 'sn':
+            sed, _ = self.get_sed(component=component, mjd=mjd)
+        else:
+            # Raise NYI exception?
+            pass
 
         iAv, iRv, mwAv, mwRv = self.get_dust()
         if iAv > 0:
