@@ -309,11 +309,8 @@ def assemble_provenance(pkg_root, inputs={}, schema_version=None):
     else:
         return{'versioning' : version_d, 'skyCatalogs_repo' : git_d}
 
-# I don't think the parquet variability model structs belong in the
-# config after all. At most keep track of models per object type.
-# Or maybe just need the object types and everything else is internal
-# to the parquet_utils code
-
+# In config just keep track of models by object type. Information
+# about the parameters they require is internal to the code.
 _AGN_MODELS = ['agn_random_walk']
 _SN_MODELS = ['sn_salt2_extended']
 

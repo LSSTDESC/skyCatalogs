@@ -514,7 +514,6 @@ class SkyCatalog(object):
         for rdr in rdr_ot:
             if 'galaxy' in rdr_ot[rdr]:
                 galaxy_readers.append(rdr)
-            #elif 'star' in rdr_ot[rdr]:
             elif ot in rdr_ot[rdr]:
                 pointsource_readers.append(rdr)
 
