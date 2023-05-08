@@ -42,7 +42,6 @@ object_types :
       internal_extinction : None
   sn :
       file_template : 'pointsource_(?P<healpix>\d+).parquet'
-      flux_file_template : 'pointsource_flux_(?P<healpix>\d+).parquet'
       data_file_type : parquet
       sed_model : sncosmo
       sed_file_root_env_var :
