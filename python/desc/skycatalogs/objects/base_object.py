@@ -30,10 +30,11 @@ GALAXY_KNOTS=4
 STAR=5
 AGN=6
 SN=7
+GAIA_STAR=8
 
 OBJECT_TYPES = {'galaxy' : GALAXY, 'bulge_basic' : GALAXY_BULGE,
                 'disk_basic' : GALAXY_DISK, 'knots_basic' : GALAXY_KNOTS,
-                'star' : STAR, 'agn' : AGN, 'sn' : SN}
+                'star' : STAR, 'agn' : AGN, 'sn' : SN, 'gaia_star': GAIA_STAR}
 
 LSST_BANDS = ('ugrizy')
 
