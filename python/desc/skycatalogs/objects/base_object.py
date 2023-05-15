@@ -283,7 +283,7 @@ class BaseObject(object):
         """
         if gsparams is not None:
             gsparams = galsim.GSParams(**gsparams)
-        if self.object_type == 'star':
+        if self.object_type == 'star' or self.object_type == 'sn':
             return {None: galsim.DeltaFunction(gsparams=gsparams)}
         if self.object_type != 'galaxy':
             raise RuntimeError("Do not know how to handle object type "
@@ -425,7 +425,7 @@ class BaseObject(object):
     def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
         if not band in LSST_BANDS:
             return None
-        if not mjd:
+        if mjd is None:
             att = f'lsst_flux_{band}'
             # Check if it's already an attribute
             val = getattr(self, att, None)
@@ -439,7 +439,7 @@ class BaseObject(object):
 
         val = self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
 
-        if cache:     # and mjd is None
+        if cache and mjd is None:
             setattr(self, att, val)
         return val
 
