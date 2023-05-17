@@ -283,8 +283,12 @@ def assemble_provenance(pkg_root, inputs={}, schema_version=None):
     if not schema_version:
         schema_version = CURRENT_SCHEMA_VERSION
     import desc.skycatalogs
-    version_d = {'schema_version' : schema_version,
-                 'code_version' : desc.skycatalogs.__version__}
+    version_d = {'schema_version' : schema_version}
+    if '__version__' in dir(desc.skycatalogs):
+        code_version = desc.skycatalogs.__version__
+    else:
+        code_version = 'unknown'
+    version_d['code_version'] = code_version
 
     repo = git.Repo(pkg_root)
     has_uncommited = repo.is_dirty()
