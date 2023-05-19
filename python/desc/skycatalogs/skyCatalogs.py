@@ -145,7 +145,10 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             # Compute mask for that box
             mask = _compute_mask(bnd_box, tbl['ra'], tbl['dec'])
             if all(mask): # even bounding box doesn't intersect table rows
-                return None, None, None, None
+                if galaxy:
+                    return None, None, None, None
+                else:
+                    return None, None, None, None, None
 
             # Get compressed ra, dec
             ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
@@ -161,7 +164,10 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             mask = _compute_mask(region, tbl['ra'], tbl['dec'])
 
         if all(mask):
-            return None, None, None, None
+            if galaxy:
+                return None, None, None, None
+            else:
+                return None, None, None, None, None
         else:
             ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
             dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
@@ -171,6 +177,7 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             else:
                 object_type_compress = ma.array(tbl['object_type'],
                                                 mask=mask).compressed()
+                return ra_compress, dec_compress, id_compress, object_type_compress, mask
     else:
         if galaxy:
             return tbl['ra'], tbl['dec'], tbl[id_column],None
