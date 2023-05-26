@@ -222,6 +222,8 @@ class BaseObject(object):
             # Make an SNObject and get SED
             params = self.get_native_attribute('salt2_params')
             sn = SNObject(params=params)
+            if mjd < sn.mintime() or mjd > sn.maxtime():
+                return None, 0.0
             # Already normalized so magnorm is zero
             return sn.get_sed(mjd), 0.0
         if self._object_type != 'galaxy':
@@ -358,6 +360,8 @@ class BaseObject(object):
                 return None
         elif self._object_type == 'sn':
             sed, _ = self.get_sed(component=component, mjd=mjd)
+            if sed is None:
+                return None
         else:
             # Raise NYI exception?
             pass
@@ -398,6 +402,9 @@ class BaseObject(object):
                 sed = sed_component
             else:
                 sed += sed_component
+
+        if sed is None:
+            return sed
         if 'shear_1' in self.native_columns:
             _, _, mu = self.get_wl_params()
             sed *= mu
@@ -413,6 +420,9 @@ class BaseObject(object):
         if not sed:
             sed = self.get_total_observer_sed(mjd=mjd)
 
+        if sed is None:
+            return 0.0
+
         flux = sed.calculateFlux(bandpass)
 
         return flux
@@ -420,6 +430,9 @@ class BaseObject(object):
     def get_fluxes(self, bandpasses, mjd=None):
         # To avoid recomputing sed
         sed = self.get_total_observer_sed(mjd=mjd)
+        if sed is None:
+            return [0.0 for b in bandpasses]
+
         return [sed.calculateFlux(b) for b in bandpasses]
 
     def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
@@ -450,9 +463,12 @@ class BaseObject(object):
         '''
         fluxes = dict()
         sed = self.get_total_observer_sed(mjd=mjd)
-        for band in LSST_BANDS:
-
-            fluxes[band] = self.get_LSST_flux(band, sed=sed,
+        if sed is None:
+            for band in LSST_BANDS:
+                fluxes[band] = 0.0
+        else:
+            for band in LSST_BANDS:
+                fluxes[band] = self.get_LSST_flux(band, sed=sed,
                                                   cache=cache, mjd=mjd)
         if as_dict:
             return fluxes
