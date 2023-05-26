@@ -7,13 +7,14 @@ __all__ = ['column_finder', 'check_file', 'write_to_instance', 'SourceType',
            'form_star_instance_columns', 'form_cmp_instance_columns']
 
 
-STAR_FMT = '{:s} {:d} {:.14f} {:.14f} {:.8f} {:s} {:d} {:d} {:d} {:d} {:d} {:d} {:s} {:s} {:s} {:.8f} {:f}'
+STAR_FMT = '{:s} {:s} {:.14f} {:.14f} {:.8f} {:s} {:d} {:d} {:d} {:d} {:d} {:d} {:s} {:s} {:s} {:.8f} {:f}'
 
 CMP_FMT = '{:s} {:s} {:.14f} {:.14f} {:.8f} {:s} {:.9g} {:.9g} {:.9g} {:.9g} {:d} {:d} {:s} {:.9g} {:.9g} {:f} {:.0f} {:s} {:s} {:.8f} {:f}'
 
 def form_star_instance_columns(band):
     star_instance = [column_finder('prefix', SourceType.FIXED, ('object', np.dtype('U6'))),
-                     column_finder('uniqueId', SourceType.DATA, 'id'),
+                     #column_finder('uniqueId', SourceType.DATA, 'id'),
+                     column_finder('uniquePsId', SourceType.COMPUTE, ['id']),
                      column_finder('raPhoSim', SourceType.DATA, 'ra'),
                      column_finder('decPhoSim', SourceType.DATA, 'dec'),
                      column_finder('maskedMagNorm', SourceType.DATA, 'magnorm'),
@@ -136,7 +137,7 @@ def form_object_string(obj, band, component):
     '''
     row = []
 
-    if obj.object_type == 'star':
+    if obj.object_type in ['star', 'sn']:
         fmt = STAR_FMT
         columns = form_star_instance_columns(band)
     elif obj.object_type in ['galaxy', 'disk', 'bulge']:
@@ -170,12 +171,17 @@ def form_object_string(obj, band, component):
             row.append(q)
         elif c.source_type == SourceType.COMPUTE:
             # only one is sedFilepath, and only for galaxy components
-            if c.instance_name not in ['sedFilepath', 'uniqueId'] or cmp not in ['disk', 'bulge', 'knots']:
-                raise ValueError(f'translate_utils.form_object_string: Bad COMPUTE entry {c.instance_name} for component {cmp}')
+            if c.instance_name not in ['sedFilepath', 'uniqueId',
+                                       'uniquePsId']:
+                raise ValueError(f'translate_utils.form_object_string: Bad COMPUTE entry {c.instance_name}')
             if c.instance_name == 'sedFilepath':
                 row.append(f'{obj.get_native_attribute("galaxy_id")}_{cmp}_sed.txt')
-            else:     # uniqueId
+            elif c.instance_name == 'uniqueId':
+                if cmp not in ['disk', 'bulge', 'knots']:
+                    raise ValueError(f'translate_utils.form_object_string: Bad COMPUTE entry {c.instance_name} for component {cmp}')
                 row.append(f'{str(obj.get_native_attribute("galaxy_id"))}_{cmp}')
+            else:    #  uniquePsId.  Output must be string but input may be int
+                row.append(f'{str(obj.get_native_attribute("id"))}')
         else:
             raise ValueError(f'translate_utils.form_object_string: Unknown source type {c.source_type}')
 

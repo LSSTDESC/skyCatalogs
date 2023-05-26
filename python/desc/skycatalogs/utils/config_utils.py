@@ -100,13 +100,13 @@ class Config(DelegatorBase):
 
     def get_object_parent(self, objectname):
         if 'parent' in self._cfg['object_types'][objectname]:
-            return self._cfg['object_type'][objectname]['parent']
+            return self._cfg['object_types'][objectname]['parent']
         else:
             return None
 
     def get_object_sedmodel(self, objectname):
         if 'sed_model' in self._cfg['object_types'][objectname]:
-            return self._cfg['object_type'][objectname]['sed_model']
+            return self._cfg['object_types'][objectname]['sed_model']
         else:
             return None
 
