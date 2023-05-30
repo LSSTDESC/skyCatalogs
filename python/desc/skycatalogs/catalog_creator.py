@@ -15,7 +15,7 @@ from desc.skycatalogs.utils.common_utils import print_date
 from desc.skycatalogs.utils.sed_tools import ObservedSedFactory, get_star_sed_path
 from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
 from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance, write_yaml
-from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_schema, make_star_flux_schema
+from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_flux_schema, make_pointsource_schema
 from desc.skycatalogs.objects.base_object import LSST_BANDS, BaseObject
 
 from desc.skycatalogs.objects.base_object import ObjectCollection
@@ -105,6 +105,7 @@ def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
 class CatalogCreator:
     def __init__(self, parts, area_partition, skycatalog_root=None,
                  catalog_dir='.', galaxy_truth=None,
+                 star_truth=None, sn_truth=None,
                  config_path=None, catalog_name='skyCatalog',
                  output_type='parquet', mag_cut=None,
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
@@ -155,6 +156,9 @@ class CatalogCreator:
         """
 
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
+        _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
+        _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
+
         self._galaxy_stride = 1000000
         if pkg_root:
             self._pkg_root = pkg_root
@@ -172,8 +176,13 @@ class CatalogCreator:
         if galaxy_truth is None:
             self._galaxy_truth = _cosmo_cat
 
-        self._sn_truth = None
-        self._star_truth = None
+        self._sn_truth = sn_truth
+        if self._sn_truth is None:
+            self._sn_truth = _sn_db
+
+        self._star_truth = star_truth
+        if self._star_truth is None:
+            self._star_truth = _star_db
         self._cat = None
 
         self._parts = parts
@@ -610,7 +619,7 @@ class CatalogCreator:
         if self._provenance == 'yaml':
             self.write_provenance_file(output_path)
 
-    def create_pointsource_catalog(self, star_truth=None, sn_truth=None):
+    def create_pointsource_catalog(self):
 
         """
         Parameters
@@ -624,19 +633,14 @@ class CatalogCreator:
         -------
         None
         """
-
-        # For now fixed location for star, SNe parameter files.
-        _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
-        _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
-        self._star_truth = _star_db
-        self._sn_truth = _sn_db
-
-        arrow_schema = make_star_schema()
+        arrow_schema = make_pointsource_schema()
         #  Need a way to indicate which object types to include; deal with that
-        #  later.  For now, default is stars only.  Use default star parameter file.
+        #  later.  For now, default is stars + sn
         for p in self._parts:
             self._logger.debug(f'Point sources. Starting on pixel {p}')
-            self.create_pointsource_pixel(p, arrow_schema, star_cat=_star_db)
+            self.create_pointsource_pixel(p, arrow_schema,
+                                          star_cat=self._star_truth,
+                                          sn_cat=self._sn_truth)
             self._logger.debug(f'Completed pixel {p}')
 
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None,
@@ -655,10 +659,14 @@ class CatalogCreator:
                 self._logger.info(f'Skipping regeneration of {output_path}')
                 return
 
+        writer = pq.ParquetWriter(output_path, arrow_schema)
+
         if star_cat:
             # Get data for this pixel
-            cols = ','.join(['simobjid as id', 'ra', 'decl as dec',
-                             'magNorm as magnorm', 'sedFilename as sed_filepath'])
+            cols = ','.join(['format("%s",simobjid) as id', 'ra', 'decl as dec',
+                             'magNorm as magnorm', 'mura', 'mudecl as mudec',
+                             'radialVelocity as radial_velocity', 'parallax',
+                             'sedFilename as sed_filepath'])
             q = f'select {cols} from stars where hpid={pixel} '
             with sqlite3.connect(star_cat) as conn:
                 star_df = pd.read_sql_query(q, conn)
@@ -674,18 +682,54 @@ class CatalogCreator:
 
             star_df['MW_av'] = _make_MW_extinction(np.array(star_df['ra']),
                                                    np.array(star_df['dec']))
+            star_df['variability_model'] = np.full((nobj,), '')
+            star_df['salt2_params'] = np.full((nobj,), None)
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
-            self._logger.debug('Created arrow table from dataframe')
+            self._logger.debug('Created arrow table from star dataframe')
 
-            writer = pq.ParquetWriter(output_path, arrow_schema)
+            #writer = pq.ParquetWriter(output_path, arrow_schema)
             writer.write_table(out_table)
 
-            writer.close()
-            if self._provenance == 'yaml':
-                self.write_provenance_file(output_path)
-
         if sn_cat:
-            raise NotImplementedError('SNe not yet supported. Have a nice day.')
+            # Get data for this pixel
+            cols = ','.join(['snid_in as id', 'snra_in as ra',
+                             'sndec_in as dec', 'galaxy_id as host_galaxy_id'])
+
+            params = ','.join(['z_in as z', 't0_in as t0, x0_in as x0',
+                             'x1_in as x1', 'c_in as c'])
+
+            q1 = f'select {cols} from sne_params where hpid={pixel} '
+            q2 = f'select {params} from sne_params where hpid={pixel} '
+            with sqlite3.connect(sn_cat) as conn:
+                sn_df = pd.read_sql_query(q1, conn)
+                params_df = pd.read_sql_query(q2, conn)
+
+            nobj = len(sn_df['ra'])
+            sn_df['object_type'] = np.full((nobj,), 'sn')
+
+            sn_df['MW_rv'] = np.full((nobj,), _MW_rv_constant, np.float32())
+            sn_df['MW_av'] = _make_MW_extinction(np.array(sn_df['ra']),
+                                                   np.array(sn_df['dec']))
+
+            # Add fillers for columns not relevant for sn
+            sn_df['sed_filepath'] = np.full((nobj),'')
+            sn_df['magnorm'] = np.full((nobj,), None)
+            sn_df['mura'] = np.full((nobj,), None)
+            sn_df['mudec'] = np.full((nobj,), None)
+            sn_df['radial_velocity'] = np.full((nobj,), None)
+            sn_df['parallax'] = np.full((nobj,), None)
+            sn_df['variability_model'] = np.full((nobj,), 'salt2_extended')
+
+            # Form array of struct from params_df
+            sn_df['salt2_params'] = params_df.to_records(index=False)
+            out_table = pa.Table.from_pandas(sn_df, schema=arrow_schema)
+            self._logger.debug('Created arrow table from sn dataframe')
+
+            writer.write_table(out_table)
+
+        writer.close()
+        if self._provenance == 'yaml':
+            self.write_provenance_file(output_path)
 
         return
 

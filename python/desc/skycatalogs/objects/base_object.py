@@ -14,6 +14,7 @@ from galsim.errors import GalSimRangeError
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
 from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
+from desc.skycatalogs.utils.sn_tools import SNObject
 
 '''
 Main object types.   There are also may be subtypes. For example,
@@ -189,7 +190,7 @@ class BaseObject(object):
                 return ''
         return form_object_string(self, band, component)
 
-    def get_sed(self, component=None, resolution=None):
+    def get_sed(self, component=None, resolution=None, mjd=None):
         '''
         Return sed and mag_norm for a galaxy component or for a star
         Parameters
@@ -217,8 +218,16 @@ class BaseObject(object):
                                  self.get_native_attribute('sed_filepath'))
 
             return sky_cat.observed_sed_factory.create_pointsource(rel_path), mag_norm
+        elif self._object_type == 'sn':
+            # Make an SNObject and get SED
+            params = self.get_native_attribute('salt2_params')
+            sn = SNObject(params=params)
+            if mjd < sn.mintime() or mjd > sn.maxtime():
+                return None, 0.0
+            # Already normalized so magnorm is zero
+            return sn.get_sed(mjd), 0.0
         if self._object_type != 'galaxy':
-            raise ValueError('get_sed function only available for stars and galaxy components')
+            raise ValueError('get_sed function only available for stars, sne and galaxy components')
         if component not in ['disk', 'bulge', 'knots']:
             raise ValueError(f'Cannot fetch SED for component type {component}')
 
@@ -234,13 +243,14 @@ class BaseObject(object):
         z = self.get_native_attribute('redshift')
 
         sed = sky_cat.observed_sed_factory.create(th_val, z_h, z,
-                                                     resolution=resolution)
+                                                  resolution=resolution)
         magnorm = sky_cat.observed_sed_factory.magnorm(th_val, z_h)
 
         return sed, magnorm
 
-    def write_sed(self, sed_file_path, component=None, resolution=None):
-        sed, _ = self.get_sed(component=component, resolution=None)
+    def write_sed(self, sed_file_path, component=None, resolution=None,
+                  mjd=None):
+        sed, _ = self.get_sed(component=component, resolution=None, mjd=None)
 
         wl = sed.wave_list
         flambda = [sed(w) for w in wl]
@@ -275,7 +285,7 @@ class BaseObject(object):
         """
         if gsparams is not None:
             gsparams = galsim.GSParams(**gsparams)
-        if self.object_type == 'star':
+        if self.object_type == 'star' or self.object_type == 'sn':
             return {None: galsim.DeltaFunction(gsparams=gsparams)}
         if self.object_type != 'galaxy':
             raise RuntimeError("Do not know how to handle object type "
@@ -322,7 +332,7 @@ class BaseObject(object):
             obj_dict[component] = obj._lens(g1, g2, mu)
         return obj_dict
 
-    def get_observer_sed_component(self, component):
+    def get_observer_sed_component(self, component, mjd=None):
         """
         Return the SED for the specified subcomponent of the SkyCatalog
         object, applying internal extinction, redshift, and Milky Way
@@ -334,20 +344,27 @@ class BaseObject(object):
         The SEDs are computed assuming exposure times of 1 second.
         """
         # Create a galsim.SED for this subcomponent.
-        if self._object_type == 'star':   # or other pointsource
-            sed, magnorm = self.get_sed(component=component)
+
+        if self._object_type == 'star':
+            sed, magnorm = self.get_sed(component=component, mjd=mjd)
             # The SED is in units of photons/nm/cm^2/s
             # -0.9210340371976184 = -np.log(10)/2.5. Use to convert mag to flux
             flux_500 = np.exp(-0.9210340371976184 * magnorm)
             sed = sed.withMagnitude(0, self._bp500)
             sed = sed*flux_500
-        else:
-            # For galaxy components sed already has correct normalization
+        elif self._object_type == 'galaxy':
+            # For sn & galaxy components sed already has correct normalization
             sed, _ = self.get_sed(component=component)
             if sed is None:
                 # This subcomponent has zero emission so return None.
                 return None
-
+        elif self._object_type == 'sn':
+            sed, _ = self.get_sed(component=component, mjd=mjd)
+            if sed is None:
+                return None
+        else:
+            # Raise NYI exception?
+            pass
 
         iAv, iRv, mwAv, mwRv = self.get_dust()
         if iAv > 0:
@@ -361,7 +378,7 @@ class BaseObject(object):
         sed = sky_cat.extinguisher.extinguish(sed, mwAv)
         return sed
 
-    def get_observer_sed_components(self):
+    def get_observer_sed_components(self, mjd=None):
         """
         Return a dictionary of the SEDs, keyed by component name.
         """
@@ -369,28 +386,31 @@ class BaseObject(object):
         subcomponents = [None] if not self.subcomponents \
             else self.subcomponents
         for component in subcomponents:
-            sed = self.get_observer_sed_component(component)
+            sed = self.get_observer_sed_component(component, mjd=mjd)
             if sed is not None:
                 sed_components[component] = sed
         return sed_components
 
-    def get_total_observer_sed(self):
+    def get_total_observer_sed(self, mjd=None):
         """
         Return the SED summed over SEDs for the individual SkyCatalog
         components.
         """
         sed = None
-        for sed_component in self.get_observer_sed_components().values():
+        for sed_component in self.get_observer_sed_components(mjd=mjd).values():
             if sed is None:
                 sed = sed_component
             else:
                 sed += sed_component
+
+        if sed is None:
+            return sed
         if 'shear_1' in self.native_columns:
             _, _, mu = self.get_wl_params()
             sed *= mu
         return sed
 
-    def get_flux(self, bandpass, sed=None):
+    def get_flux(self, bandpass, sed=None, mjd=None):
         """
         Return the total object flux integrated over the bandpass
         in photons/sec/cm^2
@@ -398,55 +418,58 @@ class BaseObject(object):
         """
 
         if not sed:
-            sed = self.get_total_observer_sed()
+            sed = self.get_total_observer_sed(mjd=mjd)
+
+        if sed is None:
+            return 0.0
 
         flux = sed.calculateFlux(bandpass)
 
         return flux
 
-    def get_fluxes(self, bandpasses):
+    def get_fluxes(self, bandpasses, mjd=None):
         # To avoid recomputing sed
-        sed = self.get_total_observer_sed()
+        sed = self.get_total_observer_sed(mjd=mjd)
+        if sed is None:
+            return [0.0 for b in bandpasses]
+
         return [sed.calculateFlux(b) for b in bandpasses]
 
-    def get_LSST_flux(self, band, sed=None, cache=True):
+    def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
         if not band in LSST_BANDS:
             return None
-        att = f'lsst_flux_{band}'
-        # Check if it's already an attribute
-        val = getattr(self, att, None)
-        if val is not None:
-            return val
+        if mjd is None:
+            att = f'lsst_flux_{band}'
+            # Check if it's already an attribute
+            val = getattr(self, att, None)
+            if val is not None:
+                return val
 
-        if att in self.native_columns:
-            return self.get_native_attribute(att)
+        # For now exclude sn
+        if self.object_type != 'sn':
+            if att in self.native_columns:
+                return self.get_native_attribute(att)
 
-        val = self.get_flux(lsst_bandpasses[band], sed=sed)
+        val = self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
 
-        if cache:
+        if cache and mjd is None:
             setattr(self, att, val)
         return val
 
-    def get_LSST_fluxes(self, cache=True, as_dict=True):
+    def get_LSST_fluxes(self, cache=True, as_dict=True, mjd=None):
         '''
         Return a dict of fluxes for LSST bandpasses or, if as_dict is False,
         just a list in the same order as LSST_BANDS
         '''
         fluxes = dict()
-        sed = self.get_total_observer_sed()
-        for band in LSST_BANDS:
-            ##### temporary to debug error, now apparently fixed
-            try:
-                fluxes[band] = self.get_LSST_flux(band, sed=sed, cache=cache)
-            except GalSimRangeError as e:
-                logger = logging.getLogger('skyCatalogs.creator')
-                galaxy_id = self.get_native_attribute('galaxy_id')
-                logger.debug(f'galaxy_id: {galaxy_id}  band: {band}')
-                redshift = self.get_native_attribute('redshift')
-                logger.debug(f'redshift: {redshift}')
-                logger.debug(f'GalSimRangeError: {e}')
+        sed = self.get_total_observer_sed(mjd=mjd)
+        if sed is None:
+            for band in LSST_BANDS:
                 fluxes[band] = 0.0
-
+        else:
+            for band in LSST_BANDS:
+                fluxes[band] = self.get_LSST_flux(band, sed=sed,
+                                                  cache=cache, mjd=mjd)
         if as_dict:
             return fluxes
         else:
@@ -475,10 +498,7 @@ class ObjectCollection(Sequence):
 
         mask  indices to be masked off, e.g. because region does not
               include the entire healpix pixel
-        readers one per file associated with the type(s). (Galaxy info
-              is stored in two files)
-
-
+        readers one per file associated with the type(s).
         '''
         self._ra = np.array(ra)
         self._dec = np.array(dec)

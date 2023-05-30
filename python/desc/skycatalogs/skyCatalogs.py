@@ -116,7 +116,7 @@ def _get_intersecting_hps(hp_ordering, nside, region):
         return healpy.query_polygon(nside, region.get_vertices(),
                                     inclusive=True, nest=False)
 
-def _compress_via_mask(tbl, id_column, region):
+def _compress_via_mask(tbl, id_column, region, galaxy=True):
     '''
     Parameters
     ----------
@@ -126,7 +126,8 @@ def _compress_via_mask(tbl, id_column, region):
 
     Returns
     -------
-    4 values ra, dec, id, mask
+    4 values for galaxies: ra, dec, id, mask
+    5 values for pointsources: ra, dec, id, object_type, mask
     If objects are in the region, ra, dec, id correspond to those objects.
     mask will mask off unused objects
     If there are no objects in the region, all return values are None
@@ -144,7 +145,10 @@ def _compress_via_mask(tbl, id_column, region):
             # Compute mask for that box
             mask = _compute_mask(bnd_box, tbl['ra'], tbl['dec'])
             if all(mask): # even bounding box doesn't intersect table rows
-                return None, None, None, None
+                if galaxy:
+                    return None, None, None, None
+                else:
+                    return None, None, None, None, None
 
             # Get compressed ra, dec
             ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
@@ -160,14 +164,25 @@ def _compress_via_mask(tbl, id_column, region):
             mask = _compute_mask(region, tbl['ra'], tbl['dec'])
 
         if all(mask):
-            return None, None, None, None
+            if galaxy:
+                return None, None, None, None
+            else:
+                return None, None, None, None, None
         else:
             ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
             dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
             id_compress = ma.array(tbl[id_column], mask=mask).compressed()
-            return ra_compress, dec_compress, id_compress, mask
+            if galaxy:
+                return ra_compress, dec_compress, id_compress, mask
+            else:
+                object_type_compress = ma.array(tbl['object_type'],
+                                                mask=mask).compressed()
+                return ra_compress, dec_compress, id_compress, object_type_compress, mask
     else:
-        return tbl['ra'], tbl['dec'], tbl[id_column],None
+        if galaxy:
+            return tbl['ra'], tbl['dec'], tbl[id_column],None
+        else:
+            return tbl['ra'], tbl['dec'], tbl[id_column],tbl['object_type'],None
 
 def _compute_mask(region, ra, dec):
     '''
@@ -238,7 +253,7 @@ class SkyCatalog(object):
             self._logger.addHandler(ch)
 
         self._mp = mp
-        if 'schema_version' not in config:
+        if 'schema_version' not in config and 'schema_version' not in config['provenance']['versioning']:
             self._cat_dir = config['root_directory']
         else:
             sky_root = config['skycatalog_root']        # default
@@ -500,14 +515,14 @@ class SkyCatalog(object):
 
         # Now get minimal columns for objects using the readers
         galaxy_readers = []
-        star_readers = []
+        pointsource_readers = []
 
         # First make a pass to separate out the readers
         for rdr in rdr_ot:
             if 'galaxy' in rdr_ot[rdr]:
                 galaxy_readers.append(rdr)
-            elif 'star' in rdr_ot[rdr]:
-                star_readers.append(rdr)
+            elif ot in rdr_ot[rdr]:
+                pointsource_readers.append(rdr)
 
         # Make galaxy collections
         for rdr in galaxy_readers:
@@ -532,19 +547,22 @@ class SkyCatalog(object):
                     object_list.append_collection(new_collection)
 
         # Make point source collection
-        for rdr in star_readers:
+        for rdr in pointsource_readers:
             if 'ra' not in rdr.columns:
                 continue
-            arrow_t = rdr.read_columns(PS_COLUMNS, None)
 
-            ra_c, dec_c, id_c, mask = _compress_via_mask(arrow_t, 'id', region)
+            # Make a collection for each row group
+            for rg in range(rdr.n_row_groups):
+                arrow_t = rdr.read_columns(PS_COLUMNS, None, rg)
 
-            if ra_c is not None:
-                new_collection = ObjectCollection(ra_c, dec_c, id_c,
-                                                  'star', hp, self,
-                                                  region=region, mask=mask,
-                                                  readers=star_readers)
-                object_list.append_collection(new_collection)
+                ra_c, dec_c, id_c, object_type,mask = _compress_via_mask(arrow_t, 'id', region, galaxy=False)
+
+                if ra_c is not None and object_type[0] in obj_type_set:
+                    new_collection = ObjectCollection(ra_c, dec_c, id_c,
+                                                      object_type[0], hp, self,
+                                                      region=region, mask=mask,
+                                                      readers=pointsource_readers, row_group=rg)
+                    object_list.append_collection(new_collection)
 
         return object_list
 

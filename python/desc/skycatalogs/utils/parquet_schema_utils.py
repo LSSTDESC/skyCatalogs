@@ -1,7 +1,8 @@
 import pyarrow as pa
 import logging
 
-__all__ = ['make_galaxy_schema', 'make_galaxy_flux_schema', 'make_star_schema']
+__all__ = ['make_galaxy_schema', 'make_galaxy_flux_schema',
+           'make_star_schema', 'make_pointsource_schema']
 
 # This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
@@ -102,11 +103,63 @@ def make_star_flux_schema(logname):
     '''
     logger = logging.getLogger(logname)
     logger.debug('Creating star flux schema')
-    fields = [pa.field('id', pa.int64()),
+    fields = [pa.field('id', pa.string()),
               pa.field('lsst_flux_u', pa.float32() , True),
               pa.field('lsst_flux_g', pa.float32() , True),
               pa.field('lsst_flux_r', pa.float32() , True),
               pa.field('lsst_flux_i', pa.float32() , True),
               pa.field('lsst_flux_z', pa.float32() , True),
               pa.field('lsst_flux_y', pa.float32() , True)]
+    return pa.schema(fields)
+
+def make_pointsource_schema():
+    '''
+    Ultimately should handle stars both static and variable, SN, and AGN
+    For now add everything needed for SN and put in some additional
+    star fields, but not structs for star variability models
+    '''
+
+    salt2_fields = [
+        pa.field('z', pa.float64(), True),
+        pa.field('t0', pa.float64(), True),
+        pa.field('x0', pa.float64(), True),
+        pa.field('x1', pa.float64(), True),
+        pa.field('c', pa.float64(), True)]
+    fields = [pa.field('object_type', pa.string(), False),
+              pa.field('id', pa.string(), False),
+              pa.field('ra', pa.float64(), False),
+              pa.field('dec', pa.float64(), False),
+              pa.field('host_galaxy_id', pa.int64(), True),
+              pa.field('magnorm', pa.float64(), True),
+              pa.field('sed_filepath', pa.string(), True),
+              pa.field('MW_rv', pa.float32(), True),
+              pa.field('MW_av', pa.float32(), True),
+              pa.field('mura', pa.float64(), True),
+              pa.field('mudec', pa.float64(), True),
+              pa.field('radial_velocity', pa.float64(), True),
+              pa.field('parallax', pa.float64(), True),
+              pa.field('variability_model', pa.string(), True),
+              pa.field('salt2_params', pa.struct(salt2_fields), True)
+    ]
+    return pa.schema(fields)
+
+def make_pointsource_flux_schema(logname):
+    '''
+    Will make a separate parquet file with lsst flux for each band
+    and id for joining with the main star file.
+    For static sources mjd field could be -1. Or the field could be
+    made nullable.
+    '''
+    logger = logging.getLogger(logname)
+    logger.debug('Creating pointsource flux schema')
+    fields = [pa.field('id', pa.string()),
+              pa.field('lsst_flux_u', pa.float32() , True),
+              pa.field('lsst_flux_g', pa.float32() , True),
+              pa.field('lsst_flux_r', pa.float32() , True),
+              pa.field('lsst_flux_i', pa.float32() , True),
+              pa.field('lsst_flux_z', pa.float32() , True),
+              pa.field('lsst_flux_y', pa.float32() , True),
+              pa.field('mjd', pa.float64() , True)]
+    return pa.schema(fields)
+
     return pa.schema(fields)
