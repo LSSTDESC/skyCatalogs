@@ -14,7 +14,7 @@ from galsim.errors import GalSimRangeError
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
 from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
-from desc.skycatalogs.utils.sn_tools import SNObject
+from desc.skycatalogs.utils.sn_tools import SNModel
 
 '''
 Main object types.   There are also may be subtypes. For example,
@@ -219,9 +219,9 @@ class BaseObject(object):
 
             return sky_cat.observed_sed_factory.create_pointsource(rel_path), mag_norm
         elif self._object_type == 'sn':
-            # Make an SNObject and get SED
+            # Make an SNModel and get SED
             params = self.get_native_attribute('salt2_params')
-            sn = SNObject(params=params)
+            sn = SNModel(params=params)
             if mjd < sn.mintime() or mjd > sn.maxtime():
                 return None, 0.0
             # Already normalized so magnorm is zero
