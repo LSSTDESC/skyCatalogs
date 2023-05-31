@@ -103,7 +103,7 @@ def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
         return out_dict
 
 class CatalogCreator:
-    def __init__(self, parts, area_partition, skycatalog_root=None,
+    def __init__(self, parts, area_partition=None, skycatalog_root=None,
                  catalog_dir='.', galaxy_truth=None,
                  star_truth=None, sn_truth=None,
                  config_path=None, catalog_name='skyCatalog',
@@ -121,8 +121,9 @@ class CatalogCreator:
         parts           Segments for which catalog is to be generated. If
                         partition type is HEALpix, parts will be a collection
                         of HEALpix pixels
-        area_partition  Dict characterizing partition; e.g. HEALpix,
-                        nside=<something>
+        area_partition  Dict characterizing partition globally (e.g. HEALpix,
+                        nside=<something>) or None.  Defaults to None,
+                        meaning partition is on per-source-type basis
         skycatalog_root Typically absolute directory containing one or
                         more subdirectories for sky catalogs. Defaults
                         to current directory
@@ -166,8 +167,10 @@ class CatalogCreator:
             self._pkg_root = os.path.join(os.path.dirname(__file__),
                                           '../../..')
 
-        if area_partition['type'] != 'healpix':
-            raise NotImplementedError(f'CatalogCreator: Unknown partition type {area_partition["type"]} ')
+        self._global_partition = area_partition
+        if area_partition is not None:
+            if area_partition['type'] != 'healpix':
+                raise NotImplementedError(f'CatalogCreator: Unknown partition type {area_partition["type"]} ')
 
         if output_type != 'parquet':
             raise NotImplementedError(f'CatalogCreator: Output type {output_type} not supported')
@@ -186,7 +189,6 @@ class CatalogCreator:
         self._cat = None
 
         self._parts = parts
-        self._area_partition = area_partition
         if skycatalog_root:
             self._skycatalog_root = skycatalog_root
         else:
@@ -533,8 +535,7 @@ class CatalogCreator:
 
         # If there are multiple row groups, each is stored in a separate
         # object collection. Need to loop over them
-        object_list = self._cat.get_objects_by_hp(pixel,
-                                                  obj_type_set={'galaxy'})
+        object_list = self._cat.get_object_type_by_hp(pixel, 'galaxy')
         writer = None
         global _galaxy_collection
 
@@ -795,8 +796,7 @@ class CatalogCreator:
                 self._logger.info(f'Skipping regeneration of {output_path}')
                 return
 
-        object_list = self._cat.get_objects_by_hp(pixel,
-                                                  obj_type_set={'star'})
+        object_list = self._cat.get_object_type_by_hp(pixel, 'star')
         last_row_ix = len(object_list) - 1
         writer = None
 
@@ -855,7 +855,8 @@ class CatalogCreator:
 
 
         config = create_config(self._catalog_name, self._logname)
-        config.add_key('area_partition', self._area_partition)
+        if self._global_partition is not None:
+            config.add_key('area_partition', self._area_partition)
         config.add_key('skycatalog_root', self._skycatalog_root)
         config.add_key('catalog_dir' , self._catalog_dir)
 

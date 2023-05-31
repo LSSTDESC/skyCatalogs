@@ -6,16 +6,12 @@
 Create sky catalogs for one or more healpixels. Invoke with --help
 for details
 '''
-# For now partitioning is fixed
 
 import os
 import argparse
 import logging
 from desc.skycatalogs.catalog_creator import CatalogCreator
 from desc.skycatalogs.utils.common_utils import print_date, log_callinfo
-
-
-area_partition = {'type' : 'healpix', 'ordering' : 'ring', 'nside' : 32}
 
 parser = argparse.ArgumentParser(description='''
 Create Sky Catalogs. By default create a galaxy catalog for a
@@ -88,7 +84,8 @@ if args.provenance:
 else:
     provenance=None
 
-creator = CatalogCreator(parts, area_partition, skycatalog_root=skycatalog_root,
+creator = CatalogCreator(parts, area_partition=None,
+                         skycatalog_root=skycatalog_root,
                          catalog_dir=args.catalog_dir,
                          config_path=args.config_path,
                          catalog_name=args.catalog_name,
