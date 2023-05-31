@@ -2,7 +2,7 @@ import pyarrow as pa
 import logging
 
 __all__ = ['make_galaxy_schema', 'make_galaxy_flux_schema',
-           'make_star_schema', 'make_pointsource_schema']
+           'make_pointsource_schema', 'make_star_flux_schema']
 
 # This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
@@ -75,25 +75,6 @@ def make_galaxy_flux_schema(logname):
               pa.field('lsst_flux_i', pa.float32() , True),
               pa.field('lsst_flux_z', pa.float32() , True),
               pa.field('lsst_flux_y', pa.float32() , True)]
-    return pa.schema(fields)
-
-def make_star_schema():
-    '''
-    Minimal schema for non-variable stars.  For variables will need to add fields
-    to express variability.   Will also likely have to make changes to accomodate SNe.
-    If AGN also go in this file will need to include gamma1, gamma2, kappa.
-    Could add field for galactic extinction model, but currently it's always 'CCM'
-    so will put it in config.
-    '''
-    fields = [pa.field('object_type', pa.string(), False),
-              pa.field('id', pa.int64(), False),
-              pa.field('ra', pa.float64(), False),
-              pa.field('dec', pa.float64(), False),
-              pa.field('host_galaxy_id', pa.int64(), True),
-              pa.field('magnorm', pa.float64(), True),
-              pa.field('sed_filepath', pa.string(), True),
-              pa.field('MW_rv', pa.float32(), True),
-              pa.field('MW_av', pa.float32(), True)]
     return pa.schema(fields)
 
 def make_star_flux_schema(logname):
