@@ -244,6 +244,10 @@ class SkyCatalog(object):
                          in environment variable SKYCATALOG_ROOT
         '''
         self._config = Config(config)
+        self._global_partition = None
+        if 'area_partition' in self._config.keys():       # old-style config
+            self._global_partition = self._config['area_partition']
+
         self._logger = logging.getLogger('skyCatalogs.client')
 
         if not self._logger.hasHandlers():
@@ -370,11 +374,12 @@ class SkyCatalog(object):
         Set of healpixels intersecting the region
         '''
         # If area_partition doesn't use healpix, raise exception
-
-        return _get_intersecting_hps(
-            self._config['object_types'][object_type]['area_partition']['ordering'],
-            self._config['object_types'][object_type]['area_partition']['nside'],
-            region)
+        if self._global_partition is None:
+            partition = self._config['object_types'][object_type]['area_partition']
+        else:
+            partition = self._global_partition
+        return _get_intersecting_hps(partition['ordering'], partition['nside'],
+                                     region)
 
     def get_object_type_names(self):
         '''
@@ -439,7 +444,7 @@ class SkyCatalog(object):
 
         for ot in obj_types:
             new_list = self.get_object_type_by_region(region, ot,
-                                                         datetime=None)
+                                                      datetime=None)
             object_list.append_object_list(new_list)
 
         # This now occurs inside get_object_type_by_region for
@@ -466,9 +471,18 @@ class SkyCatalog(object):
         '''
 
         out_list = ObjectList()
-        area_partition = self._config['object_types'][object_type]['area_partition']
-        if area_partition != 'None':
-            if area_partition['type'] == 'healpix':
+        if self._global_partition is not None:
+            partition = self._global_partition
+        else:
+            partition = self._config['object_types'][object_type]['area_partition']
+        if object_type =='gaia_star':   # NYI
+            # Ignore for now
+            # out_list = load_gaia(region,
+            #                      self._config['object_types]['gaia_star'])
+            return out_list
+
+        if partition != 'None':
+            if partition['type'] == 'healpix':
                 hps = self.get_hps_by_region(region, object_type)
                 for hp in hps:
                     c = self.get_object_type_by_hp(hp, object_type, region,
@@ -476,12 +490,6 @@ class SkyCatalog(object):
                     if len(c) > 0:
                         out_list.append_object_list(c)
                 return out_list
-
-        elif object_type == 'gaia_star':
-            # Ignore for now
-            # out_list = load_gaia(region,
-            #                      self._config['object_types]['gaia_star'])
-            return out_list
         else:
             raise NotImplementedError(f'Unsupported object type {object_type}')
 
