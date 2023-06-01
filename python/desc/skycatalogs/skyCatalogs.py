@@ -753,7 +753,8 @@ if __name__ == '__main__':
             if o.object_type == 'star':
                 print(o.get_instcat_entry())
                 #(lmbda, f_lambda, magnorm) = o.get_sed(resolution=1.0)
-                sed, magnorm = o.get_sed(resolution=1.0)
+                #sed, magnorm = o.get_sed(resolution=1.0)
+                sed, magnorm = o.get_sed()
                 print('For star magnorm: ', magnorm)
                 if magnorm < 1000:
                     print('Length of sed: ', len(sed.wave_list))
