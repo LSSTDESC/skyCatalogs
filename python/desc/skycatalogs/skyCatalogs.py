@@ -626,13 +626,15 @@ if __name__ == '__main__':
     ###cfg_file_name = 'latest.yaml'
     #cfg_file_name = 'future_latest.yaml'
     cfg_file_name = 'skyCatalog.yaml'
-    skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
-
+    ###skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
+    skycatalog_root = os.getenv('SKYCATALOG_ROOT')
+    catalog_dir = 'reorg'
     if len(sys.argv) > 1:
         cfg_file_name = sys.argv[1]
     #cfg_file = os.path.join('/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg',
     #                           cfg_file_name)
-    cfg_file = os.path.join(skycatalog_root, 'point_test', cfg_file_name)
+    ##cfg_file = os.path.join(skycatalog_root, 'point_test', cfg_file_name)
+    cfg_file = os.path.join(skycatalog_root, catalog_dir, cfg_file_name)
 
     write_sed = False
     if len(sys.argv) > 2:
@@ -729,7 +731,10 @@ if __name__ == '__main__':
     #### TEMP FOR DEBUGGING
     ### exit(0)
 
-
+    # For now SIMS_SED_LIBRARY_DIR is undefined at SLAC, making it impossible
+    # to get SEDs for stars. So (crudely) determine whether or not
+    # we're running at SLAC
+    at_slac = os.getenv('HOME').startswith('/sdf/home/')
     colls = object_list.get_collections()
     got_a_sed = False
     for c in colls:
@@ -751,13 +756,13 @@ if __name__ == '__main__':
                   o._belongs_index,  ' object_type: ', o.object_type)
             print(o.object_type)
             if o.object_type == 'star':
-                print(o.get_instcat_entry())
-                #(lmbda, f_lambda, magnorm) = o.get_sed(resolution=1.0)
-                #sed, magnorm = o.get_sed(resolution=1.0)
-                sed, magnorm = o.get_sed()
-                print('For star magnorm: ', magnorm)
-                if magnorm < 1000:
-                    print('Length of sed: ', len(sed.wave_list))
+                if not at_slac:
+                    print(o.get_instcat_entry())
+                    #sed, magnorm = o.get_sed(resolution=1.0)
+                    sed, magnorm = o.get_sed()
+                    print('For star magnorm: ', magnorm)
+                    if magnorm < 1000:
+                        print('Length of sed: ', len(sed.wave_list))
             elif o.object_type == 'sn':
                 print(o.get_instcat_entry())
             elif o.object_type == 'galaxy':
