@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "skyCatalogs"
-version = "1.4.0-rc1"
+dynamic = ["version"]
 description = "Writes, reads catalogs input to LSST DESC simulations"
 readme = "README.md"
 authors = [{ name = "Joanne Bogart", email = "jrb@slac.stanford.edu" }]
@@ -19,9 +19,12 @@ dependencies = [
     'astropy',
     'pyarrow',
     'pandas',
-    'importlib-metadata;python_version<"3.8"'
+    'sncosmo'
 ]
 requires-python = ">=3.7" # For setuptools >= 61.0 support
 
+[tools.setuptools.dynamic]
+version = {attr =
+"desc.skyCatalogs._version.__version__"}
 [tool.setuptools.packages.find]
 where = ["python"]
