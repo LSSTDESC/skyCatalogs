@@ -24,7 +24,6 @@ dependencies = [
 requires-python = ">=3.7" # For setuptools >= 61.0 support
 
 [tools.setuptools.dynamic]
-version = {attr =
-"desc.skyCatalogs._version.__version__"}
+version = {attr = "desc.skyCatalogs._version.__version__"}
 [tool.setuptools.packages.find]
 where = ["python"]
