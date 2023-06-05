@@ -438,8 +438,8 @@ class BaseObject(object):
     def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
         if not band in LSST_BANDS:
             return None
+        att = f'lsst_flux_{band}'
         if mjd is None:
-            att = f'lsst_flux_{band}'
             # Check if it's already an attribute
             val = getattr(self, att, None)
             if val is not None:
