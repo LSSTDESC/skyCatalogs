@@ -14,14 +14,14 @@ from desc.skycatalogs.objects.base_object import BaseObject, ObjectCollection
 
 # Read in function for stellar temperature estimation given bp and rp
 # fluxes
-_TEMP_EST_DATA_FILE = os.path.join(os.environ['SKYCATALOGS_DIR'], 'data',
-                                   'gaia_dr2',
+_TEMP_EST_DATA_FILE = os.path.join(os.environ['SKYCATALOGS_DIR'],
+                                   'jchiang_data', 'gaia_dr2',
                                    'gaia_dr2_temp_from_bp-rp_ratio.txt')
 _TEMP_FUNC = galsim.LookupTable(*np.genfromtxt(_TEMP_EST_DATA_FILE))
 
 # Read in the Gaia DR2 passband for the bp flux to use for setting the
 # SED normalizations.
-_GAIA_PB_FILE = os.path.join(os.environ['SKYCATALOGS_DIR'], 'data', 'gaia_dr2',
+_GAIA_PB_FILE = os.path.join(os.environ['SKYCATALOGS_DIR'], 'jchiang_data', 'gaia_dr2',
                              'GaiaDR2_RevisedPassbands.dat')
 _GAIA_PBS = np.genfromtxt(_GAIA_PB_FILE, names=['wl', 'g', 'g_err', 'bp',
                                                 'bp_err', 'rp', 'rp_err'])
@@ -78,9 +78,9 @@ class GaiaCollection(ObjectCollection):
             config['gaia_star']['data_file_type'] = 'butler_refcat'
             config['gaia_star']['area_partition'] = 'None'
             butler_params = {'collections' : 'HSC/defaults',
-                             'dstype' : 'gaia_dr2-20200414',
+                             'dstype' : 'gaia_dr2_20200414',
                              'repo' : '/repo/main'}
-            config['gaia_star']['butler_parameters'] = butler_parameters
+            config['gaia_star']['butler_params'] = butler_params
         GaiaCollection._gaia_config = config
 
     def load_collection(region, skycatalog, config=None):
@@ -103,14 +103,15 @@ class GaiaCollection(ObjectCollection):
 
         coord = lsst.geom.SpherePoint(lsst.geom.Angle(region.ra,
                                                       lsst.geom.degrees),
-                                      lsst.geom.Angle(region.ra,
+                                      lsst.geom.Angle(region.dec,
                                                       lsst.geom.degrees))
-        rad = lsst.geom.Angle(region.radius_as, lsst.geom.arcseconds)
+        # convert radius back to degrees
+        rad = lsst.geom.Angle(region.radius_as / 360.0, lsst.geom.degrees)
         band = 'bp'
         cat = ref_obj_loader.loadSkyCircle(coord, rad, band).refCat
         df =  cat.asAstropy().to_pandas()
 
-        return GaiaCollection(df)
+        return GaiaCollection(df, skycatalog, region)
 
     def __init__(self, df, sky_catalog, region):
         self.df = df
