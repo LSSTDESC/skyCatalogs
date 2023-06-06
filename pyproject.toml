@@ -3,12 +3,12 @@ requires = ["setuptools >= 61.0"] # PEP 621 compliant
 build-backend = "setuptools.build_meta"
 
 [project]
+dynamic = ["version"]
 name = "skyCatalogs"
-version = "1.4.0-rc1"
 description = "Writes, reads catalogs input to LSST DESC simulations"
 readme = "README.md"
 authors = [{ name = "Joanne Bogart", email = "jrb@slac.stanford.edu" }]
-license = { file = "LICENCE" }
+license = { file = "LICENSE" }
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
@@ -19,9 +19,12 @@ dependencies = [
     'astropy',
     'pyarrow',
     'pandas',
-    'importlib-metadata;python_version<"3.8"'
+    'sncosmo'
 ]
 requires-python = ">=3.7" # For setuptools >= 61.0 support
+
+[tool.setuptools.dynamic]
+version = {attr = "desc.skycatalogs._version.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["python"]
