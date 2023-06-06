@@ -18,8 +18,7 @@ dependencies = [
     'healpy',
     'astropy',
     'pyarrow',
-    'pandas',
-    'sncosmo'
+    'pandas'
 ]
 requires-python = ">=3.7" # For setuptools >= 61.0 support
 
