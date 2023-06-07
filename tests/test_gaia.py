@@ -50,8 +50,8 @@ class GaiaObject(BaseObject):
         # Form the object id from the GAIA catalog id with the string
         # 'gaia_dr2_' prepended.
         obj_id = f"gaia_dr2_{obj_pars['id']}"
-        super().__init__(ra, dec, obj_id, OBJECT_TYPES['gaia_star'],
-                         belongs_to=parent_collecton, belongs_index=index)
+        super().__init__(ra, dec, obj_id, 'gaia_star',
+                         belongs_to=parent_collection, belongs_index=index)
         self.bp_flux = obj_pars['phot_bp_mean_flux']
         rp_flux = obj_pars['phot_rp_mean_flux']
         self.stellar_temp = self._stellar_temperature(self.bp_flux/rp_flux)
@@ -134,10 +134,14 @@ class GaiaCollection(ObjectCollection):
         return len(self.df)
 
 if __name__ == '__main__':
-    disk = Disk(60, -40, 0.17 * 360)
+    rad_degrees = 1.17
+    disk = Disk(60, -40, rad_degrees * 360)
     GaiaCollection.set_config()
     skycatalog_root = os.getenv('SKYCATALOG_ROOT')
     config_path = os.path.join(skycatalog_root, 'reorg', 'skyCatalog.yaml')
 
     skycat = open_catalog(config_path, skycatalog_root=skycatalog_root)
     collection = GaiaCollection.load_collection(disk, skycat)
+
+    obj = collection[0]
+    
