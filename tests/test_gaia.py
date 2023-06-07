@@ -91,7 +91,7 @@ class GaiaCollection(ObjectCollection):
         butler_params = config['gaia_star']['butler_params']
         butler = daf_butler.Butler(butler_params['repo'],
                                    collections=butler_params['collections'])
-        refs = butler.registry.queryDatasets(butler_params['dstype'])
+        refs = set(butler.registry.queryDatasets(butler_params['dstype']))
         refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
                    for _ in refs]
         dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
@@ -134,7 +134,7 @@ class GaiaCollection(ObjectCollection):
         return len(self.df)
 
 if __name__ == '__main__':
-    rad_degrees = 1.17
+    rad_degrees = 0.17
     disk = Disk(60, -40, rad_degrees * 360)
     GaiaCollection.set_config()
     skycatalog_root = os.getenv('SKYCATALOG_ROOT')
