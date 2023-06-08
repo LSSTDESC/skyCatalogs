@@ -63,7 +63,7 @@ class GaiaObject(BaseObject):
             temperature=self.stellar_temp*u.K)
         return Bnu(nu*u.Hz).value*nu**2/clight/1e7  # erg/nm/cm^2/s
 
-    def get_observer_sed_component(self, component):
+    def get_observer_sed_component(self, component, mjd=None):
         if component is not None:
             raise RuntimeError("Unknown SED component: %s", component)
         sed = galsim.SED(self.blambda, wave_type='nm', flux_type='flambda')
@@ -87,6 +87,8 @@ class GaiaCollection(ObjectCollection):
         if not isinstance(region, Disk):
             raise TypeError('GaiaCollection.load_collection: region must be a Disk')
         if config is None:
+            if GaiaCollection._gaia_config is None:
+                GaiaCollection.set_config()
             config = GaiaCollection._gaia_config
         butler_params = config['gaia_star']['butler_params']
         butler = daf_butler.Butler(butler_params['repo'],
@@ -143,5 +145,19 @@ if __name__ == '__main__':
     skycat = open_catalog(config_path, skycatalog_root=skycatalog_root)
     collection = GaiaCollection.load_collection(disk, skycat)
 
+    print('collection size: ', len(collection))
     obj = collection[0]
-    
+
+    print('For initial object:')
+    print(f'id is {obj.id}   ra,dec are  {obj.ra}, {obj.dec}')
+
+    #print('id for objects in slice [0:2]:')
+    #for o in collection[0:2]:
+    #    print(o.id)
+
+    count = 0
+    for o in collection:
+        count = count + 1
+        print(o._belongs_index)
+        
+    print(f'Counted {count} objects in the collection')
