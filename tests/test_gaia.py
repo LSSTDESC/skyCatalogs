@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import astropy.modeling
 from astropy import units as u
@@ -54,7 +55,14 @@ class GaiaObject(BaseObject):
                          belongs_to=parent_collection, belongs_index=index)
         self.bp_flux = obj_pars['phot_bp_mean_flux']
         rp_flux = obj_pars['phot_rp_mean_flux']
-        self.stellar_temp = self._stellar_temperature(self.bp_flux/rp_flux)
+        try:
+            self.stellar_temp = self._stellar_temperature(self.bp_flux/rp_flux)
+        except galsim.errors.GalSimRangeError as ex:
+            print(sys.exc_info()[0], sys.exc_info()[1], ' index ', index)
+            self.stellar_temp = None
+        except RuntimeError as rex:
+            print(sys.exc_info()[0], sys.exc_info()[1], ' index ', index)
+            self.stellar_temp = None
 
     def blambda(self, wl):
         clight = astropy.constants.c.value*1e2  # cm/s
@@ -71,6 +79,7 @@ class GaiaObject(BaseObject):
 
 class GaiaCollection(ObjectCollection):
     # Class methods
+    _gaia_config = None
     def set_config(config=None):
         if config is None:
             config = dict()
@@ -123,6 +132,7 @@ class GaiaCollection(ObjectCollection):
         self._mask = None
         self._object_type_unique = 'gaia_star'
         self._rdrs = []
+        
 
 
     @property
@@ -138,11 +148,13 @@ class GaiaCollection(ObjectCollection):
 if __name__ == '__main__':
     rad_degrees = 0.17
     disk = Disk(60, -40, rad_degrees * 360)
-    GaiaCollection.set_config()
-    skycatalog_root = os.getenv('SKYCATALOG_ROOT')
-    config_path = os.path.join(skycatalog_root, 'reorg', 'skyCatalog.yaml')
+    ##GaiaCollection.set_config()  no longer needed
+    #skycatalog_root = os.getenv('SKYCATALOG_ROOT')
+    #config_path = os.path.join(skycatalog_root, 'reorg', 'skyCatalog.yaml')
+    config_path = os.path.join(os.environ['SKYCATALOGS_DIR'], 'local', 'gaia',
+                               'gaia_config.yaml')
 
-    skycat = open_catalog(config_path, skycatalog_root=skycatalog_root)
+    skycat = open_catalog(config_path)
     collection = GaiaCollection.load_collection(disk, skycat)
 
     print('collection size: ', len(collection))
