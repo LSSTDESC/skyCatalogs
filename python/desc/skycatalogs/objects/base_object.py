@@ -247,21 +247,23 @@ class BaseObject(object):
         galactic_av = self.get_native_attribute('MW_av')
         galactic_rv = self.get_native_attribute('MW_rv')
         return internal_av, internal_rv, galactic_av, galactic_rv
-
+    
     def apply_component_extinction(self, sed):
-        '''
-        Apply extinction to sed (for galaxies, should be component sed)
-        Return resulting sed
-        '''
-        iAv, iRv, mwAv, mwRv = self.get_dust()
-        if iAv > 0:
-            # Apply internal extinction model, which is assumed
-            # to be the same for all subcomponents.
-            pass  #TODO add implementation for internal extinction.
-
         # Apply Milky Way extinction.
-        sed = sky_cat.extinguisher.extinguish(sed, mwAv)
-        return sed
+
+        iAv, iRv, mwAv, mwRv = self.get_dust()
+        extinction = F19(Rv=mwRv)
+        # Use SED wavelengths
+        wl = sed.wave_list
+        # Restrict to the range where F19 can be evaluated. F19.x_range is
+        # in units of 1/micron, so convert to nm.
+        wl_min = 1e3/F19.x_range[1]
+        wl_max = 1e3/F19.x_range[0]
+        wl = wl[np.where((wl_min < wl) & (wl < wl_max))]
+        ext = extinction.extinguish(wl*u.nm, Av=mwAv)
+        spec = galsim.LookupTable(wl, ext)
+        mw_ext = galsim.SED(spec, wave_type='nm', flux_type='1')
+        sed = sed*mw_ext
 
     def get_gsobject_components(self, gsparams=None, rng=None):
         """
@@ -523,10 +525,26 @@ class GalaxyObject(BaseObject):
             obj_dict[component] = obj._lens(g1, g2, mu)
         return obj_dict
 
+    def apply_tophat_component_extinction(self, sed):
+        '''
+        Apply extinction to sed for galaxy component
+        Return resulting sed
+        '''
+        iAv, iRv, mwAv, mwRv = self.get_dust()
+        if iAv > 0:
+            # Apply internal extinction model, which is assumed
+            # to be the same for all subcomponents.
+            pass  #TODO add implementation for internal extinction.
+
+        # Apply Milky Way extinction.
+        sed = sky_cat.extinguisher.extinguish(sed, mwAv)
+        return sed
+    
+
     def get_observer_sed_component(self, component, mjd=None):
         sed, _ = self.get_sed(component=component)
         if sed is not None:
-            sed = self.apply_component_extinction(sed)
+            sed = self.apply_tophat_component_extinction(sed)
 
         return sed
 
