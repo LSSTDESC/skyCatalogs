@@ -208,7 +208,7 @@ class BaseObject(object):
                 return ''
         return form_object_string(self, band, component)
 
-    def get_sed(self, component=None, resolution=None, mjd=None):
+    def _get_sed(self, component=None, resolution=None, mjd=None):
         '''
         Return sed and mag_norm for a galaxy component or for a star
         Parameters
@@ -226,12 +226,12 @@ class BaseObject(object):
         Must be implemented by subclass
         '''
 
-        raise NotImplementedError('Must be implemented by BaseObject subclass')
+        raise NotImplementedError('Must be implemented by BaseObject subclass if needed')
 
 
     def write_sed(self, sed_file_path, component=None, resolution=None,
                   mjd=None):
-        sed, _ = self.get_sed(component=component, resolution=None, mjd=None)
+        sed, _ = self._get_sed(component=component, resolution=None, mjd=None)
 
         wl = sed.wave_list
         flambda = [sed(w) for w in wl]
@@ -240,18 +240,19 @@ class BaseObject(object):
             for lam, flam in zip(wl, flambda):
                 sed_file.write(f'{lam} {flam}\n')
 
-    def get_dust(self):
+    def _get_dust(self):
         """Return the Av, Rv parameters for internal and Milky Way extinction."""
         internal_av = 0
         internal_rv = 1.
+        # Fails for object types without these native attributes
         galactic_av = self.get_native_attribute('MW_av')
         galactic_rv = self.get_native_attribute('MW_rv')
         return internal_av, internal_rv, galactic_av, galactic_rv
     
-    def apply_component_extinction(self, sed):
+    def _apply_component_extinction(self, sed):
         # Apply Milky Way extinction.
 
-        iAv, iRv, mwAv, mwRv = self.get_dust()
+        iAv, iRv, mwAv, mwRv = self._get_dust()
         extinction = F19(Rv=mwRv)
         # Use SED wavelengths
         wl = sed.wave_list
@@ -388,7 +389,7 @@ class BaseObject(object):
 
 class SNObject(BaseObject):
     _type_name = 'sn'
-    def get_sed(self, mjd=None):
+    def _get_sed(self, mjd=None):
         params = self.get_native_attribute('salt2_params')
         sn = SNModel(params=params)
         if mjd < sn.mintime() or mjd > sn.maxtime():
@@ -400,15 +401,15 @@ class SNObject(BaseObject):
         return {None: galsim.DeltaFunction(gsparams=gsparams)}
 
     def get_observer_sed_component(self, component, mjd=None):
-        sed, _ = self.get_sed(mjd=mjd)
+        sed, _ = self._get_sed(mjd=mjd)
         if sed is not None:
-            sed = self.apply_component_extinction(sed)
+            sed = self._apply_component_extinction(sed)
         return sed
 
 
 class StarObject(BaseObject):
     _type_name = 'star'
-    def get_sed(self, mjd=None):
+    def _get_sed(self, mjd=None):
         '''
         We'll need mjd when/if variable stars are supported. For now
         it's ignored.
@@ -426,14 +427,14 @@ class StarObject(BaseObject):
         return {None: galsim.DeltaFunction(gsparams=gsparams)}
 
     def get_observer_sed_component(self, component, mjd=None):
-        sed, _ = self.get_sed(mjd=mjd)
+        sed, _ = self._get_sed(mjd=mjd)
         if sed is not None:
-            sed = self.apply_component_extinction(sed)
+            sed = self._apply_component_extinction(sed)
         return sed
 
 class GalaxyObject(BaseObject):
     _type_name = 'galaxy'
-    def get_sed(self, component=None, resolution=None):
+    def _get_sed(self, component=None, resolution=None):
         '''
         Return sed and mag_norm for a galaxy component or for a star
         Parameters
@@ -525,12 +526,12 @@ class GalaxyObject(BaseObject):
             obj_dict[component] = obj._lens(g1, g2, mu)
         return obj_dict
 
-    def apply_tophat_component_extinction(self, sed):
+    def _apply_component_extinction(self, sed):
         '''
         Apply extinction to sed for galaxy component
         Return resulting sed
         '''
-        iAv, iRv, mwAv, mwRv = self.get_dust()
+        iAv, iRv, mwAv, mwRv = self._get_dust()
         if iAv > 0:
             # Apply internal extinction model, which is assumed
             # to be the same for all subcomponents.
@@ -542,9 +543,9 @@ class GalaxyObject(BaseObject):
     
 
     def get_observer_sed_component(self, component, mjd=None):
-        sed, _ = self.get_sed(component=component)
+        sed, _ = self._get_sed(component=component)
         if sed is not None:
-            sed = self.apply_tophat_component_extinction(sed)
+            sed = self._apply_component_extinction(sed)
 
         return sed
 

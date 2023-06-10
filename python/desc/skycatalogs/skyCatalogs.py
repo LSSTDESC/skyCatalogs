@@ -760,8 +760,7 @@ if __name__ == '__main__':
             if o.object_type == 'star':
                 if not at_slac:
                     print(o.get_instcat_entry())
-                    #sed, magnorm = o.get_sed(resolution=1.0)
-                    sed, magnorm = o.get_sed()
+                    sed, magnorm = o._get_sed()
                     print('For star magnorm: ', magnorm)
                     if magnorm < 1000:
                         print('Length of sed: ', len(sed.wave_list))
@@ -773,21 +772,21 @@ if __name__ == '__main__':
                     if cmp in o.subcomponents:
                         # broken for galaxies currently
                         ###print(o.get_instcat_entry(component=cmp))
-                        sed, _ = o.get_sed(cmp)
+                        sed, _ = o._get_sed(cmp)
                         if sed:
                             print('Length of sed table: ', len(sed.wave_list))
                             if not got_a_sed:
                                 got_a_sed = True
                                 th = o.get_native_attribute(f'sed_val_{cmp}')
                                 print('Tophat values: ', th)
-                                sed, _ = o.get_sed(component=cmp)
+                                sed, _ = o._get_sed(component=cmp)
                                 print('Simple sed wavelengths:')
                                 print(sed.wave_list)
                                 print('Simple sed values:')
                                 print([sed(w) for w in sed.wave_list])
                                 if write_sed:
                                     o.write_sed('simple_sed.txt', component=cmp)
-                                sed_fine, _ = o.get_sed(component=cmp,
+                                sed_fine, _ = o._get_sed(component=cmp,
                                                         resolution=1.0)
                                 print('Bin width = 1 nm')
                                 print('Initial wl values', sed_fine.wave_list[:20])
@@ -801,7 +800,7 @@ if __name__ == '__main__':
 
                 # Try out old wrapper functions
                 print("\nget_dust:")
-                i_av, i_rv, g_av, g_rv = o.get_dust()
+                i_av, i_rv, g_av, g_rv = o._get_dust()
                 print(f'i_av={i_av} i_rv={i_rv} g_av={g_av} g_rv={g_rv}')
                 print("\nget_wl_params")
                 g1, g2, mu = o.get_wl_params()
