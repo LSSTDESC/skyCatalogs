@@ -22,53 +22,52 @@ class ObservedSedFactory:
 
     def __init__(self, th_definition, cosmology, delta_wl=0.001):
         # Get wavelength and frequency bin boundaries.
-        bins = th_definition
-        wl0 = [_[0] for _ in bins]
+        if th_definition:
+            bins = th_definition
+            wl0 = [_[0] for _ in bins]
 
-        # Find index of original bin which includes 500 nm == 5000 ang
-        ix = -1
-        for w in wl0:
-            if w > 5000:
-                break
-            ix += 1
+            # Find index of original bin which includes 500 nm == 5000 ang
+            ix = -1
+            for w in wl0:
+                if w > 5000:
+                    break
+                ix += 1
 
-        self._ix_500nm = ix
+            self._ix_500nm = ix
 
-        wl0.append(bins[-1][0] + bins[-1][1])
+            wl0.append(bins[-1][0] + bins[-1][1])
 
-        wl0 = 0.1*np.array(wl0)
-        self.wl = np.array(wl0)
-        self.nu = self._clight/(self.wl*1e-9)  # frequency in Hz
+            wl0 = 0.1*np.array(wl0)
+            self.wl = np.array(wl0)
+            self.nu = self._clight/(self.wl*1e-9)  # frequency in Hz
 
-        # Also save version of wl where vertical rise is replaced by
-        # steep slope
-        wl_deltas = []
-        for i in range(len(bins)):
-            wl_deltas.extend((self.wl[i], self.wl[i+1] - delta_wl))
+            # Also save version of wl where vertical rise is replaced by
+            # steep slope
+            wl_deltas = []
+            for i in range(len(bins)):
+                wl_deltas.extend((self.wl[i], self.wl[i+1] - delta_wl))
 
-        # Prepend more bins which will have 0 value
-        n_bins = int(wl0[0]) - 1
-        pre_wl = [float(i) for i in range(n_bins)]
+            # Prepend more bins which will have 0 value
+            n_bins = int(wl0[0]) - 1
+            pre_wl = [float(i) for i in range(n_bins)]
 
-        wl_deltas = np.insert(wl_deltas, 0, pre_wl)
+            wl_deltas = np.insert(wl_deltas, 0, pre_wl)
 
-        # Also make a matching array of 0 values
-        self.pre_val = [0.0 for i in range(n_bins)]
+            # Also make a matching array of 0 values
+            self.pre_val = [0.0 for i in range(n_bins)]
 
-        self._wl_deltas = wl_deltas
-        self._wl_deltas_u_nm = wl_deltas*u.nm
+            self._wl_deltas = wl_deltas
+            self._wl_deltas_u_nm = wl_deltas*u.nm
 
         # Create a FlatLambdaCDM cosmology from a dictionary of input
         # parameters.  This code is based on/borrowed from
         # https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/cosmodc2.py#L128
         cosmo_astropy_allowed = FlatLambdaCDM.__init__.__code__.co_varnames[1:]
-        ##cosmo_astropy = {k: v for k, v in config['Cosmology'].items()
-        ##                 if k in cosmo_astropy_allowed}
         cosmo_astropy = {k: v for k, v in cosmology.items()
                          if k in cosmo_astropy_allowed}
         self.cosmology = FlatLambdaCDM(**cosmo_astropy)
 
-        self.sims_sed_library_dir = os.getenv('SIMS_SED_LIBRARY_DIR')
+        self.sims_sed_library_dir = os.getenv('SIMS_SED_LIBRARY_DIR', None)
 
     # Useful for getting magnorm from f_nu values
     @property

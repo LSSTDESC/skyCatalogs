@@ -286,10 +286,12 @@ class SkyCatalog(object):
         self._hp_info = dict()
         hps = self._find_all_hps()
 
+        th_parameters = self._config.get_tophat_parameters();
         self._observed_sed_factory =\
-            ObservedSedFactory(self._config.get_tophat_parameters(),
+            ObservedSedFactory(th_parameters,
                                config['Cosmology'])
-        self._extinguisher = MilkyWayExtinction(self.observed_sed_factory)
+        if th_parameters:
+            self._extinguisher = MilkyWayExtinction(self.observed_sed_factory)
 
         # Make our properties accessible to BaseObject, etc.
         self.catalog_context = CatalogContext(self)
