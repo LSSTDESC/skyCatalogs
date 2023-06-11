@@ -72,7 +72,7 @@ class GaiaCollection(Sequence):
     def __init__(self, ra, dec, radius, repo='/repo/main',
                  collections=('HSC/defaults',), dstype='gaia_dr2_20200414'):
         butler = daf_butler.Butler(repo, collections=collections)
-        refs = butler.registry.queryDatasets(dstype)
+        refs = set(butler.registry.queryDatasets(dstype))
         refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
                    for _ in refs]
         dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
