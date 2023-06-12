@@ -1,5 +1,6 @@
 import os
 import sys
+import itertools
 import numpy as np
 import astropy.modeling
 from astropy import units as u
@@ -132,18 +133,30 @@ class GaiaCollection(ObjectCollection):
         self._mask = None
         self._object_type_unique = 'gaia_star'
         self._rdrs = []
-        
-
+        self._object_class = GaiaObject
 
     @property
     def native_columns(self):
         return set()
 
     def __getitem__(self, key):
-        return GaiaObject(self.df.iloc[key], self, key)
+        if isinstance(key, int) or isinstance(key, np.int64):
+            return GaiaObject(self.df.iloc[key], self, key)
+
+        elif type(key) == slice:
+            ixdata = [i for i in range(min(key.stop,len(self._id)))]
+            ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
+            #return [BaseObject(self._ra[i], self._dec[i], self._id[i],
+            return [self._object_class(self.df.iloc[i], self, i) for i in ixes]
+
+        elif type(key) == tuple and isinstance(key[0], Iterable):
+            #  check it's a list of int-like?
+            #return [BaseObject(self._ra[i], self._dec[i], self._id[i],
+            return [self._object_class(self.df.iloc[i], self, i) for i in key[0]]
 
     def __len__(self):
         return len(self.df)
+
 
 if __name__ == '__main__':
     rad_degrees = 0.17
@@ -163,9 +176,9 @@ if __name__ == '__main__':
     print('For initial object:')
     print(f'id is {obj.id}   ra,dec are  {obj.ra}, {obj.dec}')
 
-    #print('id for objects in slice [0:2]:')
-    #for o in collection[0:2]:
-    #    print(o.id)
+    print('id for objects in slice [0:2]:')
+    for o in collection[0:2]:
+        print(o.id)
 
     count = 0
     for o in collection:
