@@ -81,26 +81,23 @@ class GaiaObject(BaseObject):
 class GaiaCollection(ObjectCollection):
     # Class methods
     _gaia_config = None
-    def set_config(config=None):
-        if config is None:
-            config = dict()
-            config['gaia_star'] = dict()
-            config['gaia_star']['data_file_type'] = 'butler_refcat'
-            config['gaia_star']['area_partition'] = 'None'
-            butler_params = {'collections' : 'HSC/defaults',
-                             'dstype' : 'gaia_dr2_20200414',
-                             'repo' : '/repo/main'}
-            config['gaia_star']['butler_params'] = butler_params
+    def set_config(config):
         GaiaCollection._gaia_config = config
 
-    def load_collection(region, skycatalog, config=None):
+    def get_config():
+        return GaiaCollection._gaia_config
+
+    def load_collection(region, skycatalog):
         if not isinstance(region, Disk):
             raise TypeError('GaiaCollection.load_collection: region must be a Disk')
-        if config is None:
-            if GaiaCollection._gaia_config is None:
-                GaiaCollection.set_config()
-            config = GaiaCollection._gaia_config
-        butler_params = config['gaia_star']['butler_params']
+
+        source_type = 'gaia_star'
+
+        if GaiaCollection.get_config() is None:
+            gaia_section = skycatalog.raw_config['object_types']['gaia_star']
+            GaiaCollection.set_config(gaia_section)
+
+        butler_params = GaiaCollection.get_config()['butler_parameters']
         butler = daf_butler.Butler(butler_params['repo'],
                                    collections=butler_params['collections'])
         refs = set(butler.registry.queryDatasets(butler_params['dstype']))
@@ -123,15 +120,15 @@ class GaiaCollection(ObjectCollection):
         cat = ref_obj_loader.loadSkyCircle(coord, rad, band).refCat
         df =  cat.asAstropy().to_pandas()
 
-        return GaiaCollection(df, skycatalog, region)
+        return GaiaCollection(df, skycatalog, source_type, region)
 
-    def __init__(self, df, sky_catalog, region):
+    def __init__(self, df, sky_catalog, source_type, region):
         self.df = df
         self._sky_catalog = sky_catalog
         self._partition_id = None
         self._id = np.array([f"gaia_dr2_{df.iloc[key]['id']}" for key in range(len(df))])
         self._mask = None
-        self._object_type_unique = 'gaia_star'
+        self._object_type_unique = source_type
         self._rdrs = []
         self._object_class = GaiaObject
 
