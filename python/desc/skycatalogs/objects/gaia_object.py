@@ -1,5 +1,6 @@
 import os
 import sys
+import warnings
 import itertools
 import numpy as np
 import astropy.modeling
@@ -56,14 +57,17 @@ class GaiaObject(BaseObject):
                          belongs_to=parent_collection, belongs_index=index)
         self.bp_flux = obj_pars['phot_bp_mean_flux']
         rp_flux = obj_pars['phot_rp_mean_flux']
-        try:
-            self.stellar_temp = self._stellar_temperature(self.bp_flux/rp_flux)
-        except galsim.errors.GalSimRangeError as ex:
-            print(sys.exc_info()[0], sys.exc_info()[1], ' index ', index)
+        if rp_flux == 0.0:
             self.stellar_temp = None
-        except RuntimeError as rex:
-            print(sys.exc_info()[0], sys.exc_info()[1], ' index ', index)
-            self.stellar_temp = None
+        else:
+            try:
+                self.stellar_temp = self._stellar_temperature(self.bp_flux/rp_flux)
+            except galsim.errors.GalSimRangeError as ex:
+                #print(sys.exc_info()[0], sys.exc_info()[1], ' index ', index)
+                self.stellar_temp = None
+            except RuntimeError as rex:
+                #print(sys.exc_info()[0], sys.exc_info()[1], ' index ', index)
+                self.stellar_temp = None
 
     def blambda(self, wl):
         clight = astropy.constants.c.value*1e2  # cm/s
@@ -115,7 +119,7 @@ class GaiaCollection(ObjectCollection):
                                       lsst.geom.Angle(region.dec,
                                                       lsst.geom.degrees))
         # convert radius back to degrees
-        rad = lsst.geom.Angle(region.radius_as / 360.0, lsst.geom.degrees)
+        rad = lsst.geom.Angle(region.radius_as / 3600.0, lsst.geom.degrees)
         band = 'bp'
         cat = ref_obj_loader.loadSkyCircle(coord, rad, band).refCat
         df =  cat.asAstropy().to_pandas()

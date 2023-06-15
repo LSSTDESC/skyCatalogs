@@ -9,8 +9,9 @@ import numpy.ma as ma
 import pyarrow.parquet as pq
 from astropy import units as u
 from desc.skycatalogs.objects.base_object import load_lsst_bandpasses
-from desc.skycatalogs.objects.base_object import  CatalogContext
-from desc.skycatalogs.objects.base_object import  ObjectList, ObjectCollection
+from desc.skycatalogs.objects.base_object import CatalogContext
+from desc.skycatalogs.objects.base_object import ObjectList, ObjectCollection
+from desc.skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from desc.skycatalogs.readers import ParquetReader
 from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
 from desc.skycatalogs.utils.sed_tools import MilkyWayExtinction
@@ -216,6 +217,7 @@ class SkyCatalog(object):
         self.verbose = verbose
         self._validate_config()
 
+
         # Outer dict: hpid for key. Value is another dict
         #    with keys 'files', 'object_types', each with value another dict
         #       for 'files', map filepath to handle (initially None)
@@ -232,6 +234,12 @@ class SkyCatalog(object):
 
         # Make our properties accessible to BaseObject, etc.
         self.catalog_context = CatalogContext(self)
+
+        # register gaia_star if in config
+        if 'gaia_star' in config['object_types']:
+            self.catalog_context.register_source_type('gaia_star',
+                                                      object_class=GaiaObject,
+                                                      collection_class=GaiaCollection)
 
     @property
     def observed_sed_factory(self):
@@ -405,10 +413,11 @@ class SkyCatalog(object):
             partition = self._global_partition
         else:
             partition = self._config['object_types'][object_type]['area_partition']
-        if object_type =='gaia_star':   # NYI
-            # Ignore for now
-            # out_list = load_gaia(region,
-            #                      self._config['object_types]['gaia_star'])
+
+        coll_type = self.catalog_context.lookup_collection_type(object_type)
+        if coll_type is not None:
+            out_list.append_collection(coll_type.load_collection(region,
+                                                                        self))
             return out_list
 
         if partition != 'None':

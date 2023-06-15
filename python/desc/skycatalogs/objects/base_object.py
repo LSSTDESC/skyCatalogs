@@ -48,25 +48,39 @@ class CatalogContext:
         source_type_dict = {}
 
         # Initialize with known source types and corresponding object classes
-        source_type_dict['star'] = StarObject
-        source_type_dict['sn'] = SNObject
-        source_type_dict['galaxy'] = GalaxyObject
+        # Only include collection class if it's not "standard"
+        # (that is, not ObjectCollection)
+        source_type_dict['star'] = {'object_class' : StarObject}
+        source_type_dict['sn'] = {'object_class' : SNObject}
+        source_type_dict['galaxy'] = {'object_class' : GalaxyObject}
+        # source_type_dict['gaia_star'] = {'object_class' : GaiaObject,
+        #                                  'collection_class' : GaiaCollection}
         self._source_type_dict = source_type_dict
 
-    def register_source_type(self, name, cls):
-        self._source_type_dict[name] = cls
+    def register_source_type(self, name, object_class, collection_class=None):
+        self._source_type_dict[name] = {'object_class' : object_class,
+                                        'collection_class' : collection_class}
 
     def lookup_source_type(self, name):
         if name in self._source_type_dict:
-            return self._source_type_dict[name]
+            return self._source_type_dict[name]['object_class']
         else:
             return None
+
+    def lookup_collection_type(self, name):
+        if name in self._source_type_dict:
+            if 'collection_class' in self._source_type_dict[name]:
+                return self._source_type_dict[name]['collection_class']
+            else:
+                return None
+        else:
+            return None
+                                         
 
 def load_lsst_bandpasses():
     '''
     Read in lsst bandpasses from standard place, trim, and store in global dict
     Returns: The dict
-
     '''
     global lsst_bandpasses
     lsst_bandpasses = dict()
@@ -398,6 +412,8 @@ class SNObject(BaseObject):
         return sn.get_sed(mjd), 0.0
 
     def get_gsobject_components(self, gsparams=None, rng=None):
+        if gsparams is not None:
+            gsparams = galsim.GSParams
         return {None: galsim.DeltaFunction(gsparams=gsparams)}
 
     def get_observer_sed_component(self, component, mjd=None):
@@ -627,13 +643,15 @@ class ObjectCollection(Sequence):
     def subcomponents(self):
         '''
         Return list of all subcomponents for objects in this collection.
-        Only galaxies have subcomponents
+        Only galaxies have true subcomponents
         '''
         subs = []
         if self._object_type_unique == 'galaxy':
             for s in ['bulge', 'disk', 'knots']:
                 if f'sed_val_{s}' in self.native_columns:
                     subs.append(s)
+        else:
+            return ['this_object']
         return subs
 
     def get_native_attribute(self, attribute_name):
