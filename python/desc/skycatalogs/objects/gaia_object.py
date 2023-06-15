@@ -10,7 +10,7 @@ import lsst.daf.butler as daf_butler
 import lsst.geom
 from lsst.meas.algorithms import LoadReferenceObjectsTask, \
     ReferenceObjectLoader
-from desc.skycatalogs.utils.shapes import Disk
+from desc.skycatalogs.utils.shapes import Disk, PolygonalRegion
 from desc.skycatalogs.objects.base_object import BaseObject, ObjectCollection
 
 __all__ = ['GaiaObject', 'GaiaCollection']
@@ -29,9 +29,10 @@ _GAIA_PB_FILE = os.path.join(os.environ['SKYCATALOGS_DIR'], 'data', 'gaia_dr2',
 _GAIA_PBS = np.genfromtxt(_GAIA_PB_FILE, names=['wl', 'g', 'g_err', 'bp',
                                                 'bp_err', 'rp', 'rp_err'])
 _index = np.where(_GAIA_PBS['bp'] < 99)  # Omit sentinel values.
+# Create the Bandpass object for the bp passband, using the 'AB' zero point.
 _GAIA_BP = galsim.Bandpass(
     galsim.LookupTable(_GAIA_PBS['wl'][_index], _GAIA_PBS['bp'][_index]),
-    wave_type='nm').thin()
+    wave_type='nm').withZeropoint('AB').thin()
 
 
 class GaiaObject(BaseObject):
@@ -55,13 +56,16 @@ class GaiaObject(BaseObject):
         obj_id = f"gaia_dr2_{obj_pars['id']}"
         super().__init__(ra, dec, obj_id, 'gaia_star',
                          belongs_to=parent_collection, belongs_index=index)
-        self.bp_flux = obj_pars['phot_bp_mean_flux']
+        bp_flux = obj_pars['phot_bp_mean_flux']
         rp_flux = obj_pars['phot_rp_mean_flux']
+        # Convert from flux units of nJy to AB mag for the bp passband,
+        # which we will use to normalize the SED.
+        self.bp_mag = -2.5*np.log10(bp_flux*1e-9) + 8.90
         if rp_flux == 0.0:
             self.stellar_temp = None
         else:
             try:
-                self.stellar_temp = self._stellar_temperature(self.bp_flux/rp_flux)
+                self.stellar_temp = self._stellar_temperature(bp_flux/rp_flux)
             except galsim.errors.GalSimRangeError as ex:
                 #print(sys.exc_info()[0], sys.exc_info()[1], ' index ', index)
                 self.stellar_temp = None
@@ -77,10 +81,18 @@ class GaiaObject(BaseObject):
         return Bnu(nu*u.Hz).value*nu**2/clight/1e7  # erg/nm/cm^2/s
 
     def get_observer_sed_component(self, component, mjd=None):
-        if component is not None:
+        if component != 'this_object':
             raise RuntimeError("Unknown SED component: %s", component)
+        if self.stellar_temp is None:
+            return None
         sed = galsim.SED(self.blambda, wave_type='nm', flux_type='flambda')
-        return sed.withFlux(self.bp_flux, self._gaia_bp_bandpass)
+        return sed.withMagnitude(self.bp_mag, self._gaia_bp_bandpass)
+
+    def get_gsobject_components(self, gsparams=None, rng=None):
+        if gsparams is not None:
+            gsparams = galsim.GSParams(**gsparams)
+        return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
+
 
 class GaiaCollection(ObjectCollection):
     # Class methods
@@ -92,8 +104,16 @@ class GaiaCollection(ObjectCollection):
         return GaiaCollection._gaia_config
 
     def load_collection(region, skycatalog):
-        if not isinstance(region, Disk):
-            raise TypeError('GaiaCollection.load_collection: region must be a Disk')
+        if isinstance(region, Disk):
+            ra = lsst.geom.Angle(region.ra, lsst.geom.degrees)
+            dec = lsst.geom.Angle(region.dec, lsst.geom.degrees)
+            center = lsst.geom.SpherePoint(ra, dec)
+            radius = lsst.geom.Angle(region.radius_as, lsst.geom.arcseconds)
+            refcat_region = lsst.sphgeom.Circle(center.getVector(), radius)
+        elif isinstance(region, PolygonalRegion):
+            refcat_region = region._convex_polygon
+        else:
+            raise TypeError(f'GaiaCollection.load_collection: {region} not supported')
 
         source_type = 'gaia_star'
 
@@ -114,14 +134,8 @@ class GaiaCollection(ObjectCollection):
                                                refCats=refCats,
                                                config=config)
 
-        coord = lsst.geom.SpherePoint(lsst.geom.Angle(region.ra,
-                                                      lsst.geom.degrees),
-                                      lsst.geom.Angle(region.dec,
-                                                      lsst.geom.degrees))
-        # convert radius back to degrees
-        rad = lsst.geom.Angle(region.radius_as / 3600.0, lsst.geom.degrees)
         band = 'bp'
-        cat = ref_obj_loader.loadSkyCircle(coord, rad, band).refCat
+        cat = ref_obj_loader.loadRegion(refcat_region, band).refCat
         df =  cat.asAstropy().to_pandas()
 
         return GaiaCollection(df, skycatalog, source_type, region)
