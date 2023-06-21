@@ -41,19 +41,27 @@ class GaiaObject(BaseObject):
     """
     _stellar_temperature = _TEMP_FUNC
     _gaia_bp_bandpass = _GAIA_BP
-    def __init__(self, obj_pars, parent_collection, index):
+    _wavelengths = np.arange(250, 1250, 5, dtype=float)
+    def __init__(self, obj_pars, parent_collection, index, use_lut=True):
         """
         Parameters
         ----------
         obj_pars: dict-like
             Dictionary of object parameters as read directly from the
             reference catalog.
+        parent_collection: ObjectCollection
+            Parent collection of this object.
+        index: int
+            Index of this object in the parent collection
+        use_lut: bool [True]
+            Flag to use a galsim LookupTable for representing the SED.
         """
         ra = np.degrees(obj_pars['coord_ra'])
         dec = np.degrees(obj_pars['coord_dec'])
         # Form the object id from the GAIA catalog id with the string
         # 'gaia_dr2_' prepended.
         obj_id = f"gaia_dr2_{obj_pars['id']}"
+        self.use_lut = use_lut
         super().__init__(ra, dec, obj_id, 'gaia_star',
                          belongs_to=parent_collection, belongs_index=index)
         bp_flux = obj_pars['phot_bp_mean_flux']
@@ -85,7 +93,12 @@ class GaiaObject(BaseObject):
             raise RuntimeError("Unknown SED component: %s", component)
         if self.stellar_temp is None:
             return None
-        sed = galsim.SED(self.blambda, wave_type='nm', flux_type='flambda')
+        if self.use_lut:
+            flambda = self.blambda(self._wavelengths)
+            lut = galsim.LookupTable(self._wavelengths, flambda)
+            sed = galsim.SED(lut,  wave_type='nm', flux_type='flambda')
+        else:
+            sed = galsim.SED(self.blambda, wave_type='nm', flux_type='flambda')
         return sed.withMagnitude(self.bp_mag, self._gaia_bp_bandpass)
 
     def get_gsobject_components(self, gsparams=None, rng=None):
@@ -103,7 +116,7 @@ class GaiaCollection(ObjectCollection):
     def get_config():
         return GaiaCollection._gaia_config
 
-    def load_collection(region, skycatalog):
+    def load_collection(region, skycatalog, use_lut=True):
         if isinstance(region, Disk):
             ra = lsst.geom.Angle(region.ra, lsst.geom.degrees)
             dec = lsst.geom.Angle(region.dec, lsst.geom.degrees)
@@ -138,15 +151,16 @@ class GaiaCollection(ObjectCollection):
         cat = ref_obj_loader.loadRegion(refcat_region, band).refCat
         df =  cat.asAstropy().to_pandas()
 
-        return GaiaCollection(df, skycatalog, source_type, region)
+        return GaiaCollection(df, skycatalog, source_type, use_lut)
 
-    def __init__(self, df, sky_catalog, source_type, region):
+    def __init__(self, df, sky_catalog, source_type, use_lut):
         self.df = df
         self._sky_catalog = sky_catalog
         self._partition_id = None
         self._id = np.array([f"gaia_dr2_{df.iloc[key]['id']}" for key in range(len(df))])
         self._mask = None
         self._object_type_unique = source_type
+        self._use_lut = use_lut
         self._rdrs = []
         self._object_class = GaiaObject
 
@@ -162,12 +176,12 @@ class GaiaCollection(ObjectCollection):
             ixdata = [i for i in range(min(key.stop,len(self._id)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
             #return [BaseObject(self._ra[i], self._dec[i], self._id[i],
-            return [self._object_class(self.df.iloc[i], self, i) for i in ixes]
+            return [self._object_class(self.df.iloc[i], self, i, self._use_lut) for i in ixes]
 
         elif type(key) == tuple and isinstance(key[0], Iterable):
             #  check it's a list of int-like?
             #return [BaseObject(self._ra[i], self._dec[i], self._id[i],
-            return [self._object_class(self.df.iloc[i], self, i) for i in key[0]]
+            return [self._object_class(self.df.iloc[i], self, i, self._use_lut) for i in key[0]]
 
     def __len__(self):
         return len(self.df)
