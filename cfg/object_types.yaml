@@ -60,3 +60,4 @@ object_types :
         collections : HSC/defaults
         dstype : gaia_dr2_20200414
       area_partition : None
+      sed_method : use_lut
