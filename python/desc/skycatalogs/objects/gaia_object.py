@@ -42,7 +42,6 @@ class GaiaObject(BaseObject):
     _stellar_temperature = _TEMP_FUNC
     _gaia_bp_bandpass = _GAIA_BP
     _wavelengths = np.arange(250, 1250, 5, dtype=float)
-    #def __init__(self, obj_pars, parent_collection, index, use_lut=True):
     def __init__(self, obj_pars, parent_collection, index):
         """
         Parameters
@@ -62,7 +61,6 @@ class GaiaObject(BaseObject):
         # Form the object id from the GAIA catalog id with the string
         # 'gaia_dr2_' prepended.
         obj_id = f"gaia_dr2_{obj_pars['id']}"
-        #self.use_lut = use_lut
         super().__init__(ra, dec, obj_id, 'gaia_star',
                          belongs_to=parent_collection, belongs_index=index)
         self.use_lut = self._belongs_to._use_lut
@@ -77,10 +75,8 @@ class GaiaObject(BaseObject):
             try:
                 self.stellar_temp = self._stellar_temperature(bp_flux/rp_flux)
             except galsim.errors.GalSimRangeError as ex:
-                #print(sys.exc_info()[0], sys.exc_info()[1], ' index ', index)
                 self.stellar_temp = None
             except RuntimeError as rex:
-                #print(sys.exc_info()[0], sys.exc_info()[1], ' index ', index)
                 self.stellar_temp = None
 
     def blambda(self, wl):
@@ -151,8 +147,7 @@ class GaiaCollection(ObjectCollection):
                                                refCats=refCats,
                                                config=config)
 
-        sed_method = GaiaCollection.get_config().get('sed_method',
-                                                     default='use_lut')
+        sed_method = GaiaCollection.get_config().get('sed_method', 'use_lut')
         use_lut = (sed_method.strip().lower() == 'use_lut')
         band = 'bp'
         cat = ref_obj_loader.loadRegion(refcat_region, band).refCat
@@ -187,12 +182,10 @@ class GaiaCollection(ObjectCollection):
         elif type(key) == slice:
             ixdata = [i for i in range(min(key.stop,len(self._id)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
-            #return [BaseObject(self._ra[i], self._dec[i], self._id[i],
             return [self._object_class(self.df.iloc[i], self, i) for i in ixes]
 
         elif type(key) == tuple and isinstance(key[0], Iterable):
             #  check it's a list of int-like?
-            #return [BaseObject(self._ra[i], self._dec[i], self._id[i],
             return [self._object_class(self.df.iloc[i], self, i) for i in key[0]]
 
     def __len__(self):

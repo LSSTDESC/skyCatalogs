@@ -51,7 +51,6 @@ object_types :
         { type: healpix, ordering : ring, nside : 32}
 
       sed_model : sncosmo
-      ##sed_file_root_env_var :
       MW_extinction : F19
       internal_extinction : None
   gaia_star :
