@@ -13,7 +13,7 @@ from desc.skycatalogs.objects.base_object import CatalogContext
 from desc.skycatalogs.objects.base_object import ObjectList, ObjectCollection
 from desc.skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from desc.skycatalogs.readers import ParquetReader
-from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
+from desc.skycatalogs.utils.sed_tools import TophatSedFactory
 from desc.skycatalogs.utils.sed_tools import MilkyWayExtinction
 from desc.skycatalogs.utils.config_utils import Config
 from desc.skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
@@ -227,8 +227,7 @@ class SkyCatalog(object):
 
         th_parameters = self._config.get_tophat_parameters();
         self._observed_sed_factory =\
-            ObservedSedFactory(th_parameters,
-                               config['Cosmology'])
+            TophatSedFactory(th_parameters, config['Cosmology'])
         if th_parameters:
             self._extinguisher = MilkyWayExtinction(self.observed_sed_factory)
 

@@ -12,7 +12,7 @@ from multiprocessing import Process, Pipe
 from astropy.coordinates import SkyCoord
 import sqlite3
 from desc.skycatalogs.utils.common_utils import print_date
-from desc.skycatalogs.utils.sed_tools import ObservedSedFactory, get_star_sed_path
+from desc.skycatalogs.utils.sed_tools import TophatSedFactory, get_star_sed_path
 from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
 from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance, write_yaml
 from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_flux_schema, make_pointsource_schema
@@ -345,8 +345,8 @@ class CatalogCreator:
             return start_width[0]
         self._sed_bins.sort(key=_bin_start_key)
 
-        self._obs_sed_factory = ObservedSedFactory(self._sed_bins,
-                                                   assemble_cosmology(self._cosmology))
+        self._obs_sed_factory = TophatSedFactory(self._sed_bins,
+                                                 assemble_cosmology(self._cosmology))
 
         def _sed_bulge_key(s):
             return int(re.match(tophat_bulge_re, s)['start'])

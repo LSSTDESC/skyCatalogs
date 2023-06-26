@@ -12,9 +12,12 @@ from numpy.random import default_rng
 from dust_extinction.parameter_averages import F19
 import galsim
 
-__all__ = ['ObservedSedFactory', 'MilkyWayExtinction', 'AB_mag',
-           'get_star_sed_path']
-class ObservedSedFactory:
+__all__ = ['TophatSedFactory', 'MilkyWayExtinction', 'get_star_sed_path']
+class TophatSedFactory:
+    '''
+    Used for modeling cosmoDC2 galaxy SEDs, which are represented with
+    a small number of wide bins
+    '''
     _clight = astropy.constants.c.to('m/s').value
     # Conversion factor below of cosmoDC2 tophat Lnu values to W/Hz comes from
     # https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/SCHEMA.md
@@ -153,7 +156,7 @@ class MilkyWayExtinction:
     '''
     def __init__(self, sed_factory, ext_bin_width=0.1, mwRv=3.1):
         '''
-        sed_factory         instance of ObservedSedFactory
+        sed_factory         instance of TophatSedFactory
 
         '''
 
@@ -179,18 +182,6 @@ class MilkyWayExtinction:
         sed = sed*mw_ext
 
         return sed
-
-class AB_mag:
-    """
-    Convert flux to AB magnitude for a set of bandpasses.
-    """
-    def __init__(self, bps):
-        ab_sed = galsim.SED(lambda nu : 10**(8.90/2.5 - 23), wave_type='nm',
-                            flux_type='fnu')
-        self.ab_fluxes = {band: ab_sed.calculateFlux(bp) for
-                          band, bp in bps.items()}
-    def __call__(self, flux, band):
-        return -2.5*np.log10(flux/self.ab_fluxes[band])
 
 _standard_dict = {'lte' : 'starSED/phoSimMLT',
                   'bergeron' : 'starSED/wDs',

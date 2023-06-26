@@ -13,7 +13,6 @@ from galsim.errors import GalSimRangeError
 
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
-from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
 from desc.skycatalogs.utils.sn_tools import SNModel
 
 '''
