@@ -22,19 +22,8 @@ there could be two subtypes for bulge components, differing in the
 form of their associated SEDs
 '''
 
-__all__ = ['BaseObject', 'ObjectCollection', 'ObjectList', 'OBJECT_TYPES',
+__all__ = ['BaseObject', 'ObjectCollection', 'ObjectList',
            'LSST_BANDS', 'load_lsst_bandpasses', 'CatalogContext']
-GALAXY=1
-GALAXY_BULGE=2
-GALAXY_DISK=3
-GALAXY_KNOTS=4
-STAR=5
-AGN=6
-SN=7
-
-OBJECT_TYPES = {'galaxy' : GALAXY, 'bulge_basic' : GALAXY_BULGE,
-                'disk_basic' : GALAXY_DISK, 'knots_basic' : GALAXY_KNOTS,
-                'star' : STAR, 'agn' : AGN, 'sn' : SN}
 
 LSST_BANDS = ('ugrizy')
 
@@ -75,7 +64,7 @@ class CatalogContext:
                 return None
         else:
             return None
-                                         
+
 
 def load_lsst_bandpasses():
     '''
@@ -262,7 +251,7 @@ class BaseObject(object):
         galactic_av = self.get_native_attribute('MW_av')
         galactic_rv = self.get_native_attribute('MW_rv')
         return internal_av, internal_rv, galactic_av, galactic_rv
-    
+
     def _apply_component_extinction(self, sed):
         # Apply Milky Way extinction.
 
@@ -413,8 +402,8 @@ class SNObject(BaseObject):
 
     def get_gsobject_components(self, gsparams=None, rng=None):
         if gsparams is not None:
-            gsparams = galsim.GSParams
-        return {None: galsim.DeltaFunction(gsparams=gsparams)}
+            gsparams = galsim.GSParams(**gsparams)
+        return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
 
     def get_observer_sed_component(self, component, mjd=None):
         sed, _ = self._get_sed(mjd=mjd)
@@ -440,7 +429,7 @@ class StarObject(BaseObject):
     def get_gsobject_components(self, gsparams=None, rng=None):
         if gsparams is not None:
             gsparams = galsim.GSParams(**gsparams)
-        return {None: galsim.DeltaFunction(gsparams=gsparams)}
+        return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
 
     def get_observer_sed_component(self, component, mjd=None):
         sed, _ = self._get_sed(mjd=mjd)
@@ -556,7 +545,7 @@ class GalaxyObject(BaseObject):
         # Apply Milky Way extinction.
         sed = sky_cat.extinguisher.extinguish(sed, mwAv)
         return sed
-    
+
 
     def get_observer_sed_component(self, component, mjd=None):
         sed, _ = self._get_sed(component=component)
