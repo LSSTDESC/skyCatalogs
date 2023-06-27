@@ -6,7 +6,7 @@ import sncosmo
 
 from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog
 from desc.skycatalogs.objects.base_object import BaseObject, load_lsst_bandpasses
-from desc.skycatalogs.utils.sn_tools import SNObject
+from desc.skycatalogs.utils.sn_tools import SNModel
 
 PIXEL = 9556
 
@@ -55,7 +55,7 @@ def explore_lc(obj):
     plt.close()
 
     # also plot SEDs
-    sn_obj = SNObject(params=params)
+    sn_obj = SNModel(params=params)
 
 
     plt.figure()
@@ -105,14 +105,18 @@ def make_sncosmo_lc(obj):
     plt.savefig(f'sn_cosmo_{obj.id}_dt{dt_rng}_fluxes.png')
 
 
-def explore(cat, obj_type_set, ix_list=[0]):
-    obj_list = cat.get_objects_by_hp(PIXEL, obj_type_set=(obj_type_set))
+def explore(cat, obj_type, ix_list=[0]):
+    obj_list = cat.get_object_type_by_hp(PIXEL, obj_type)
 
     collects = obj_list.get_collections()
     print('Number of collections: ', len(collects))
 
     icoll = 0
     for c in collects:
+        print(f'Object type: {c._object_type_unique}')
+        print('Native columns:')
+        print(c.native_columns)
+
         len_coll = len(c)
         obj0 = c[0]
         print(f"\nFor hpid {c.get_partition_id()} collection {icoll} found {len_coll} objects")
@@ -162,6 +166,6 @@ print('explore sn collection')
 ## For ix 100 there are no visible seds. For 105 almost none
 ##explore(cat, {'sn'}, ix_list = [3,7,10,100, 105])
 ##explore(cat, {'sn'}, ix_list = [202])
-explore(cat, {'sn'}, ix_list = [10])
+explore(cat, 'star', ix_list = [10])
 #print('explore both sn and star')
 #explore(cat, {'sn', 'star'})
