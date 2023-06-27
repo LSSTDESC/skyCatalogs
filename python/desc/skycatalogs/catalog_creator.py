@@ -16,7 +16,7 @@ from desc.skycatalogs.utils.sed_tools import TophatSedFactory, get_star_sed_path
 from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
 from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance, write_yaml
 from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_flux_schema, make_pointsource_schema
-from desc.skycatalogs.objects.base_object import LSST_BANDS, BaseObject
+from desc.skycatalogs.objects.base_object import LSST_BANDS
 
 from desc.skycatalogs.objects.base_object import ObjectCollection
 
@@ -91,7 +91,6 @@ def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
     o_list = galaxy_collection[l_bnd : u_bnd]
     out_dict['galaxy_id'] = [o.get_native_attribute('galaxy_id') for o in o_list]
     all_fluxes =  [o.get_LSST_fluxes(as_dict=False) for o in o_list]
-    ###all_fluxes = [galaxy_collection[i].get_LSST_fluxes(as_dict=False) for i in range(l_bnd, u_bnd)]
     all_fluxes_transpose = zip(*all_fluxes)
     for i, band in enumerate(LSST_BANDS):
         v = all_fluxes_transpose.__next__()

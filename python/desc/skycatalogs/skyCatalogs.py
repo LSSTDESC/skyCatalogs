@@ -9,7 +9,7 @@ import numpy.ma as ma
 import pyarrow.parquet as pq
 from astropy import units as u
 from desc.skycatalogs.objects.base_object import load_lsst_bandpasses
-from desc.skycatalogs.objects.base_object import CatalogContext
+from desc.skycatalogs.utils.catalog_utils import CatalogContext
 from desc.skycatalogs.objects.base_object import ObjectList, ObjectCollection
 from desc.skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from desc.skycatalogs.readers import ParquetReader
@@ -17,6 +17,9 @@ from desc.skycatalogs.utils.sed_tools import TophatSedFactory
 from desc.skycatalogs.utils.sed_tools import MilkyWayExtinction
 from desc.skycatalogs.utils.config_utils import Config
 from desc.skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
+from desc.skycatalogs.objects.sn_object import SNObject
+from desc.skycatalogs.objects.star_object import StarObject
+from desc.skycatalogs.objects.galaxy_object import GalaxyObject
 
 __all__ = ['SkyCatalog', 'open_catalog']
 
@@ -239,6 +242,15 @@ class SkyCatalog(object):
             self.catalog_context.register_source_type('gaia_star',
                                                       object_class=GaiaObject,
                                                       collection_class=GaiaCollection)
+        if 'sn' in config['object_types']:
+            self.catalog_context.register_source_type('sn',
+                                                      object_class=SNObject)
+        if 'star' in config['object_types']:
+            self.catalog_context.register_source_type('star',
+                                                      object_class=StarObject)
+        if 'galaxy' in config['object_types']:
+            self.catalog_context.register_source_type('galaxy',
+                                                      object_class=GalaxyObject)
 
     @property
     def observed_sed_factory(self):
@@ -554,7 +566,7 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     SkyCatalog
     '''
     # Get LSST bandpasses in case we need to compute fluxes
-    load_lsst_bandpasses()
+    band_passes = load_lsst_bandpasses()
     with open(config_file) as f:
         return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
                           mp=mp, verbose=verbose)
@@ -615,10 +627,16 @@ if __name__ == '__main__':
     print("For region ", rgn_poly)
     print("intersecting pixels are ", intersect_poly_hps)
 
+    at_slac = os.getenv('HOME').startswith('/sdf/home/')
+    if not at_slac:
+        obj_types = {'star', 'galaxy', 'sn'}
+    else:
+        obj_types = {'star', 'galaxy', 'sn', 'gaia_star'}
 
-    print('Invoke get_objects_by_region with box region')
+    print('Invoke get_objects_by_region with box region, no gaia')
     t0 = time.time()
-    object_list = cat.get_objects_by_region(rgn)
+    object_list = cat.get_objects_by_region(rgn,
+                                            obj_type_set={'star','galaxy','sn'})
     t_done = time.time()
     print('Took ', t_done - t0)
                                             ##### temporary obj_type_set={'galaxy', 'star'} )
@@ -631,7 +649,8 @@ if __name__ == '__main__':
 
     print('Invoke get_objects_by_region with polygonal region')
     t0 = time.time()
-    object_list_poly = cat.get_objects_by_region(rgn_poly)
+    object_list_poly = cat.get_objects_by_region(rgn_poly,
+                                                 obj_type_set=obj_types)
     t_done = time.time()
     print('Took ', t_done - t0)
 
@@ -657,7 +676,8 @@ if __name__ == '__main__':
 
     print('Invoke get_objects_by_region with diamond region')
     t0 = time.time()
-    object_list_diamond = cat.get_objects_by_region(rgn_diamond)
+    object_list_diamond = cat.get_objects_by_region(rgn_diamond,
+                                                    obj_type_set=obj_types)
     t_done = time.time()
     print('Took ', t_done - t0)
 
@@ -672,7 +692,7 @@ if __name__ == '__main__':
     # For now SIMS_SED_LIBRARY_DIR is undefined at SLAC, making it impossible
     # to get SEDs for stars. So (crudely) determine whether or not
     # we're running at SLAC
-    at_slac = os.getenv('HOME').startswith('/sdf/home/')
+
     colls = object_list.get_collections()
     got_a_sed = False
     for c in colls:
