@@ -71,12 +71,19 @@ class BaseObject(object):
     _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501],[0, 1, 0]),
                              wave_type='nm').withZeropoint('AB')
 
-    def __init__(self, ra, dec, id, object_type, redshift=None,
-                 belongs_to=None, belongs_index=None):
+    def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index,
+                 redshift=None):
         '''
-        Minimum information needed for static (not SSO) objects
-        ra, dec needed to check for region containment
-        belongs_to is object collection, if any, this object belongs to
+        Save at least minimum info needed a fixed (not SSO) object to
+        determine if it's in a region and discover all its other properties.
+        Parameters
+        ra, dec         float         in degrees
+        id              string or int, depending on object type
+        object_type     string        e.g. 'galaxy', 'star', ...
+                                      must appear in catalog config file
+        belongs_to      ObjectCollection  collection this object belongs to
+        belongs_index   int           index of object within its collection
+        redshift        float
         '''
         self._ra = ra
         self._dec = dec
@@ -353,7 +360,7 @@ class BaseObject(object):
 
 class ObjectCollection(Sequence):
     '''
-    Class for collection of static objects coming from the same
+    Class for collection of fixed (not SSO) objects coming from the same
     source (e.g., file for particular healpix)
     Many of the methods look the same as for BaseObject but they return arrays
     rather than a single number.  There are some additional methods
@@ -361,20 +368,23 @@ class ObjectCollection(Sequence):
     def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
                  region=None, mask=None, readers=None, row_group=0):
         '''
-        Minimum information needed for static objects.
-        specified, has already been used by the caller to generate mask.
-        ra, dec, id must be array-like and the same length
-        object_type  may be either single value or array-like (could be
-        useful if more than one object type is stored in the same file)
-        partition_id (e.g. healpix id)
-        sky_catalog instance of SkyCatalog class
-        (redshift should probably be ditched; no need for it)
-        (similarly for region with current code structure. Information
-        needed is encoded in mask)
+        Parameters
+        ra, dec      float, array-like of same length
+        id           array-like, same length as ra and dec.   int or string
+        object_type  single string or (if contained objects may be of
+                     different types) array-like
+        parition_id  int (e.g. healpix id)  if objects are partitioned by
+                     location; else None
+        sky_catalog  Instance of SkyCatalog class, typically obtained by
+                     calling open_catalog
+        region       maybe be used to determine which objects are in the
+                     collection
+        mask         indices to be masked off, e.g. in case not all objects
+                     in the partition (such as healpixel) are in the region
+        readers      may be used to recover properties for objects in this
+                     collection, one reader per relevant file
+        row_group    used in case backing files are in parquet format
 
-        mask  indices to be masked off, e.g. because region does not
-              include the entire healpix pixel
-        readers one per file associated with the type(s).
         '''
         self._ra = np.array(ra)
         self._dec = np.array(dec)
@@ -535,24 +545,20 @@ class ObjectCollection(Sequence):
             object_type = self._object_types[key]
 
         if isinstance(key, int) or isinstance(key, np.int64):
-            #return BaseObject(self._ra[key], self._dec[key], self._id[key],
-            return self._object_class(self._ra[key], self._dec[key], self._id[key],
-                                      object_type, belongs_to=self,
-                                      belongs_index=key)
+            return self._object_class(self._ra[key], self._dec[key],
+                                      self._id[key], object_type, self, key)
 
         elif type(key) == slice:
             ixdata = [i for i in range(min(key.stop,len(self._ra)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
-            #return [BaseObject(self._ra[i], self._dec[i], self._id[i],
             return [self._object_class(self._ra[i], self._dec[i], self._id[i],
-                                       object_type, belongs_to=self, belongs_index=i)
+                                       object_type, self, i)
                     for i in ixes]
 
         elif type(key) == tuple and isinstance(key[0], Iterable):
             #  check it's a list of int-like?
-            #return [BaseObject(self._ra[i], self._dec[i], self._id[i],
             return [self._object_class(self._ra[i], self._dec[i], self._id[i],
-                                       object_type, belongs_to=self, belongs_index=i)
+                                       object_type, self, i)
                     for i in key[0]]
 
 
