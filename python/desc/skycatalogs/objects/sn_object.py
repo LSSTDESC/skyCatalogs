@@ -25,3 +25,9 @@ class SNObject(BaseObject):
         if sed is not None:
             sed = self._apply_component_extinction(sed)
         return sed
+
+    def get_LSST_flux(self, band, sed=None, mjd=None):
+        if not band in LSST_BANDS:
+            return None
+
+        return self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)

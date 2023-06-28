@@ -53,6 +53,21 @@ class GalaxyObject(BaseObject):
         mu = 1./((1. - kappa)**2 - (gamma1**2 + gamma2**2)) # magnification
         return g1, g2, mu
 
+    def get_total_observer_sed(self, mjd=None):
+        """
+        Return the SED summed over SEDs for the individual SkyCatalog
+        components.
+        """
+        sed = super().get_total_observer_sed()
+
+        if sed is None:
+            return sed
+
+        _, _, mu = self.get_wl_params()
+        sed *= mu
+        return sed
+
+
     def get_gsobject_components(self, gsparams=None, rng=None):
 
         if gsparams is not None:
@@ -123,3 +138,16 @@ class GalaxyObject(BaseObject):
             sed = self._apply_component_extinction(sed)
 
         return sed
+
+    def get_instcat_entry(self, band = 'r', component=None):
+        '''
+        Return the string corresponding to instance catalog line
+        Parameters:
+            band       One of ['u', 'g', 'r', 'i', 'z', 'y']
+            component  Required iff the object has subcomponents (i.e.,
+                       object type is 'galaxy')
+        Returns: A string formatted like a line in an instance catalog
+        '''
+        if component not in self.subcomponents:
+            return ''
+        return form_object_string(self, band, component)

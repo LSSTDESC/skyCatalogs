@@ -170,7 +170,6 @@ def form_object_string(obj, band, component):
                 q = v
             row.append(q)
         elif c.source_type == SourceType.COMPUTE:
-            # only one is sedFilepath, and only for galaxy components
             if c.instance_name not in ['sedFilepath', 'uniqueId',
                                        'uniquePsId']:
                 raise ValueError(f'translate_utils.form_object_string: Bad COMPUTE entry {c.instance_name}')

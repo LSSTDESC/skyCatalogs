@@ -175,9 +175,6 @@ class BaseObject(object):
                        object type is 'galaxy')
         Returns: A string formatted like a line in an instance catalog
         '''
-        if self.object_type == 'galaxy':
-            if component not in self.subcomponents:
-                return ''
         return form_object_string(self, band, component)
 
     def _get_sed(self, component=None, resolution=None, mjd=None):
@@ -287,11 +284,6 @@ class BaseObject(object):
             else:
                 sed += sed_component
 
-        if sed is None:
-            return sed
-        if 'shear_1' in self.native_columns:
-            _, _, mu = self.get_wl_params()
-            sed *= mu
         return sed
 
     def get_flux(self, bandpass, sed=None, mjd=None):
@@ -323,18 +315,18 @@ class BaseObject(object):
         if not band in LSST_BANDS:
             return None
         att = f'lsst_flux_{band}'
-        if mjd is None:
-            # Check if it's already an attribute
-            val = getattr(self, att, None)
-            if val is not None:
-                return val
+
+        # Check if it's already an attribute
+        val = getattr(self, att, None)
+        if val is not None:
+            return val
 
         if att in self.native_columns:
             return self.get_native_attribute(att)
 
         val = self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
 
-        if cache and mjd is None:
+        if cache:
             setattr(self, att, val)
         return val
 
