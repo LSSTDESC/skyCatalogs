@@ -8,7 +8,6 @@ import pandas as pd
 
 import numpy as np
 import numpy.ma as ma
-from numpy.random import default_rng
 from dust_extinction.parameter_averages import F19
 import galsim
 

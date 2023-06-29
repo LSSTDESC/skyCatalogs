@@ -133,7 +133,8 @@ class GalaxyObject(BaseObject):
 
 
     def get_observer_sed_component(self, component, mjd=None):
-        sed, _ = self._get_sed(component=component)
+        # For now make SED with resolution of 1 nm
+        sed, _ = self._get_sed(component=component, resolution=1.0)
         if sed is not None:
             sed = self._apply_component_extinction(sed)
 
