@@ -69,8 +69,6 @@ class TophatSedFactory:
                          if k in cosmo_astropy_allowed}
         self.cosmology = FlatLambdaCDM(**cosmo_astropy)
 
-        self.sims_sed_library_dir = os.getenv('SIMS_SED_LIBRARY_DIR', None)
-
     # Useful for getting magnorm from f_nu values
     @property
     def ix_500nm(self):
@@ -131,17 +129,6 @@ class TophatSedFactory:
 
         return sed
 
-    def create_pointsource(self, rel_path, redshift=0):
-        '''
-        Return a galsim SED from information in a file
-        '''
-        fpath = os.path.join(self.sims_sed_library_dir, rel_path)
-
-        sed = galsim.SED(fpath, wave_type='nm', flux_type='flambda')
-        if redshift > 0:
-            sed = sed.atRedshift(redshift)
-        return sed
-
     def magnorm(self, tophat_values, z_H):
         one_Jy = 1e-26  # W/Hz/m**2
         Lnu = tophat_values[self.ix_500nm]*self._to_W_per_Hz  # convert to W/Hz
@@ -153,34 +140,38 @@ class MilkyWayExtinction:
     '''
     Applies extinction to a SED
     '''
-    def __init__(self, sed_factory, ext_bin_width=0.1, mwRv=3.1):
-        '''
-        sed_factory         instance of TophatSedFactory
-
-        '''
-
-        # Save bins to be used for extinction. F19x_range is in units of
-        # 1/micron so convert.
-        wl_ext_min = 1e3/F19.x_range[1]
-        wl_ext_max = 1e3/F19.x_range[0]
-        wl_extinct = np.linspace(wl_ext_min, wl_ext_max,
-                                 int((wl_ext_max - wl_ext_min)/ext_bin_width))
-        self.wl_extinct = wl_extinct
-        self.wl_extinct_nm = wl_extinct*u.nm
+    def __init__(self, delta_wl=0.1, mwRv=3.1, eps=1e-7):
+        """
+        Parameters
+        ----------
+        sed_factory: (remove)
+        ext_bin_width: (rename to delta_wl?)
+        delta_wl : float [0.1]
+            Wavelength sampling of the extinction function in nm
+        mwRv : float [3.1]
+            Parameter describing the shape of the Milky Way extinction
+            curve.
+        eps : float [1e-7]
+            Small numerical offset to avoid out-of-range errors in
+            the wavelength array passed to the dust_extinction code.
+        """
+        # Wavelength sampling for the extinction function. F19.x_range
+        # is in units of 1/micron so convert to nm.  The eps value
+        # is needed to avoid numerical noise at the end points causing
+        # out of range errors detected by the dust_extinction code.
+        wl_min = 1e3/F19.x_range[1] + eps
+        wl_max = 1e3/F19.x_range[0] - eps
+        npts = int((wl_max - wl_min)/delta_wl)
+        self.wls = np.linspace(wl_min, wl_max, npts)
         self.extinction = F19(Rv=mwRv)
 
-        my_wl = sed_factory.wl_deltas
-        my_wl = my_wl[np.where((wl_ext_min < my_wl) & (my_wl < wl_ext_max))]
-        self.wl_deltas = my_wl
-        self.wl_deltas_u = my_wl*u.nm
-
     def extinguish(self, sed, mwAv):
-        ext = self.extinction.extinguish(self.wl_deltas_u, Av=mwAv)
-        spec = galsim.LookupTable(self.wl_deltas, ext, interpolant='linear')
-        mw_ext = galsim.SED(spec, wave_type='nm', flux_type='1')
+        ext = self.extinction.extinguish(self.wls*u.nm, Av=mwAv)
+        lut = galsim.LookupTable(self.wls, ext, interpolant='linear')
+        mw_ext = galsim.SED(lut, wave_type='nm', flux_type='1')
         sed = sed*mw_ext
-
         return sed
+
 
 _standard_dict = {'lte' : 'starSED/phoSimMLT',
                   'bergeron' : 'starSED/wDs',

@@ -115,23 +115,6 @@ class GalaxyObject(BaseObject):
             obj_dict[component] = obj._lens(g1, g2, mu)
         return obj_dict
 
-    def _apply_component_extinction(self, sed):
-        '''
-        Apply extinction to sed for galaxy component
-        Return resulting sed
-        '''
-        iAv, iRv, mwAv, mwRv = self._get_dust()
-        if iAv > 0:
-            # Apply internal extinction model, which is assumed
-            # to be the same for all subcomponents.
-            pass  #TODO add implementation for internal extinction.
-
-        # Apply Milky Way extinction.
-        sky_cat = self._belongs_to._sky_catalog
-        sed = sky_cat.extinguisher.extinguish(sed, mwAv)
-        return sed
-
-
     def get_observer_sed_component(self, component, mjd=None):
         # For now make SED with resolution of 1 nm
         sed, _ = self._get_sed(component=component, resolution=1.0)

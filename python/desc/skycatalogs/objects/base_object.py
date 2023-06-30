@@ -26,8 +26,6 @@ __all__ = ['BaseObject', 'ObjectCollection', 'ObjectList',
 LSST_BANDS = ('ugrizy')
 
 # global for easy access for code run within mp
-
-
 def load_lsst_bandpasses():
     '''
     Read in lsst bandpasses from standard place, trim, and store in global dict
@@ -222,19 +220,16 @@ class BaseObject(object):
         # Apply Milky Way extinction.
 
         iAv, iRv, mwAv, mwRv = self._get_dust()
-        extinction = F19(Rv=mwRv)
-        # Use SED wavelengths
-        wl = sed.wave_list
-        # Restrict to the range where F19 can be evaluated. F19.x_range is
-        # in units of 1/micron, so convert to nm.
-        wl_min = 1e3/F19.x_range[1]
-        wl_max = 1e3/F19.x_range[0]
-        wl = wl[np.where((wl_min < wl) & (wl < wl_max))]
-        ext = extinction.extinguish(wl*u.nm, Av=mwAv)
-        spec = galsim.LookupTable(wl, ext)
-        mw_ext = galsim.SED(spec, wave_type='nm', flux_type='1')
-        sed = sed*mw_ext
 
+        sky_cat = self._belongs_to._sky_catalog
+        sed = sky_cat.extinguisher.extinguish(sed, mwAv)
+
+        return sed
+
+    def _get_sed_from_file(self, fpath, redshift=0):
+        sed = galsim.SED(fpath, wave_type='nm', flux_type='flambda')
+        if redshift > 0:
+            sed = sed.atRedshift(redshift)
         return sed
 
     def get_gsobject_components(self, gsparams=None, rng=None):
