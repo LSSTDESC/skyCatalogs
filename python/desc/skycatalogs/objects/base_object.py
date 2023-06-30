@@ -235,6 +235,8 @@ class BaseObject(object):
         mw_ext = galsim.SED(spec, wave_type='nm', flux_type='1')
         sed = sed*mw_ext
 
+        return sed
+
     def get_gsobject_components(self, gsparams=None, rng=None):
         """
         Return a dictionary of the GSObject components for the
