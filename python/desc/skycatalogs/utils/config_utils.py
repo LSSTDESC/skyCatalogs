@@ -100,13 +100,13 @@ class Config(DelegatorBase):
 
     def get_object_parent(self, objectname):
         if 'parent' in self._cfg['object_types'][objectname]:
-            return self._cfg['object_type'][objectname]['parent']
+            return self._cfg['object_types'][objectname]['parent']
         else:
             return None
 
     def get_object_sedmodel(self, objectname):
         if 'sed_model' in self._cfg['object_types'][objectname]:
-            return self._cfg['object_type'][objectname]['sed_model']
+            return self._cfg['object_types'][objectname]['sed_model']
         else:
             return None
 
@@ -115,17 +115,21 @@ class Config(DelegatorBase):
         Return list of named tuples
         Should maybe be part of Sky Catalogs API
         '''
+        if not self.get_config_value('SED_models/tophat', silent=True):
+            return None
         raw_bins = self._cfg['SED_models']['tophat']['bins']
 
         return [ Tophat(b[0], b[1]) for b in raw_bins]
 
-    def get_config_value(self, key_path):
+    def get_config_value(self, key_path, silent=False):
         '''
         Find value belonging to key in a config.
         Parameters
         ----------
         key_path    string   of form 'a/b/c/../q' where all but last
                              component must be a dict
+        silent      boolean  If False (default) complain when key is not
+                             found.  Else return None
 
         Returns
         -------
@@ -135,6 +139,8 @@ class Config(DelegatorBase):
         d = self._cfg
         for i in path_items[:-1]:
             if not i in d:
+                if silent:
+                    return None
                 raise ValueError(f'Item {i} not found')
             d = d[i]
             if not isinstance(d, dict):

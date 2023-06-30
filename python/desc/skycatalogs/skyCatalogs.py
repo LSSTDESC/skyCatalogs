@@ -3,91 +3,32 @@ import sys
 import re
 import yaml
 import logging
-from collections import namedtuple
 import healpy
 import numpy as np
 import numpy.ma as ma
 import pyarrow.parquet as pq
 from astropy import units as u
 from desc.skycatalogs.objects.base_object import load_lsst_bandpasses
-from desc.skycatalogs.objects.base_object import  CatalogContext
-from desc.skycatalogs.objects import *
-from desc.skycatalogs.readers import *
+from desc.skycatalogs.utils.catalog_utils import CatalogContext
+from desc.skycatalogs.objects.base_object import ObjectList, ObjectCollection
+from desc.skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from desc.skycatalogs.readers import ParquetReader
-from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
+from desc.skycatalogs.utils.sed_tools import TophatSedFactory
 from desc.skycatalogs.utils.sed_tools import MilkyWayExtinction
 from desc.skycatalogs.utils.config_utils import Config
+from desc.skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
+from desc.skycatalogs.objects.sn_object import SNObject
+from desc.skycatalogs.objects.star_object import StarObject
+from desc.skycatalogs.objects.galaxy_object import GalaxyObject
 
-__all__ = ['SkyCatalog', 'open_catalog', 'Box', 'Disk', 'PolygonalRegion']
-
-
-Box = namedtuple('Box', ['ra_min', 'ra_max', 'dec_min', 'dec_max'])
-
-# radius is measured in arcseconds
-Disk = namedtuple('Disk', ['ra', 'dec', 'radius_as'])
-
-from lsst.sphgeom import ConvexPolygon, UnitVector3d, LonLat
-class PolygonalRegion:
-
-    def __init__(self, vertices_radec=None, convex_polygon=None):
-        '''
-        Supply either an object of type lsst.sphgeom.ConvexPolygon
-        or a list of vertices, each a tuple (ra, dec) in degrees,
-        which describe a convex polygon
-        '''
-        if convex_polygon:
-            if isinstance(convex_polygon, ConvexPolygon):
-                self._convex_polygon = convex_polygon
-                return
-        if vertices_radec:
-            if not isinstance(vertices_radec, list):
-                raise TypeError(f'PolygonalRegion: Argument {vertices_radec} is not a list')
-            vertices = [UnitVector3d(LonLat.fromDegrees(v_rd[0], v_rd[1])) for v_rd in vertices_radec]
-            self._convex_polygon = ConvexPolygon(vertices)
-            return
-        raise ValueError('PolygonalRegion: Either vertices_radec or convex_polygon must have an acceptable value')
-
-    def get_vertices(self):
-        '''
-        Return vertices as list of 3d vectors
-        '''
-        return self._convex_polygon.getVertices()
-
-    def get_vertices_radec(self):
-        v3d = self.get_vertices()
-        vertices_radec = []
-        for v in v3d:
-            vertices_radec.append((LonLat.longitudeOf(v).asDegrees(),
-                                   LonLat.latitudeOf(v).asDegrees()))
-        return vertices_radec
-
-    def get_containment_mask(self, ra, dec, included=True):
-        '''
-        Parameters
-        ----------
-        ra, dec      parallel float arrays, units are degrees. Together
-                     they define the list of points to be checked for
-                     containment
-        included     boolean   If true, mask bit will be set to True for
-                               contained points, else False.    Reverse
-                               the settings if included is False
-        '''
-        # convert to radians
-        ra = [(r * u.degree).to_value(u.radian) for r in ra]
-        dec = [(d * u.degree).to_value(u.radian) for d in dec]
-
-        mask = self._convex_polygon.contains(ra, dec)
-        if included:
-            return mask
-        else:
-            return np.logical_not(mask)
+__all__ = ['SkyCatalog', 'open_catalog']
 
 # This function should maybe be moved to utils
 def _get_intersecting_hps(hp_ordering, nside, region):
     '''
     Given healpixel structure defined by hp_ordering and nside, find
-    all healpixels which instersect region, where region may be either
-    a box or a disk.
+    all healpixels which intersect region, where region may be a box,
+    a disk or a polygonal region.
     Return as some kind of iterable
     Note it's possible extra hps which don't actually intersect the region
     will be returned
@@ -121,8 +62,10 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
     Parameters
     ----------
     tbl          data table including columns named "ra", "dec", and id_column
+                 (and also "object_type" colum if galaxy is False)
     id_column    string
     region       mask should restrict to this region (or not at all if None)
+    galaxy       flag so we know whether or not to return "object_type"
 
     Returns
     -------
@@ -242,6 +185,10 @@ class SkyCatalog(object):
                          in environment variable SKYCATALOG_ROOT
         '''
         self._config = Config(config)
+        self._global_partition = None
+        if 'area_partition' in self._config.keys():       # old-style config
+            self._global_partition = self._config['area_partition']
+
         self._logger = logging.getLogger('skyCatalogs.client')
 
         if not self._logger.hasHandlers():
@@ -273,20 +220,41 @@ class SkyCatalog(object):
         self.verbose = verbose
         self._validate_config()
 
+
         # Outer dict: hpid for key. Value is another dict
         #    with keys 'files', 'object_types', each with value another dict
-        #    for 'files', map filepath to handle (initially None)
-        #    for 'object_types', map object type to filepath
+        #       for 'files', map filepath to handle (initially None)
+        #       for 'object_types', map object type to filepath
         self._hp_info = dict()
         hps = self._find_all_hps()
 
+        # NOTE: the use of TophatSedFactory is appropriate *only* for an
+        # input galaxy catalog with format like cosmoDC2, which includes
+        # definitions of tophat SEDs. A different implementation will
+        # be needed for newer galaxy catalogs
+        th_parameters = self._config.get_tophat_parameters();
         self._observed_sed_factory =\
-            ObservedSedFactory(self._config.get_tophat_parameters(),
-                               config['Cosmology'])
-        self._extinguisher = MilkyWayExtinction(self.observed_sed_factory)
+            TophatSedFactory(th_parameters, config['Cosmology'])
+
+        self._extinguisher = MilkyWayExtinction()
 
         # Make our properties accessible to BaseObject, etc.
         self.catalog_context = CatalogContext(self)
+
+        # register object types which are in the config
+        if 'gaia_star' in config['object_types']:
+            self.catalog_context.register_source_type('gaia_star',
+                                                      object_class=GaiaObject,
+                                                      collection_class=GaiaCollection)
+        if 'sn' in config['object_types']:
+            self.catalog_context.register_source_type('sn',
+                                                      object_class=SNObject)
+        if 'star' in config['object_types']:
+            self.catalog_context.register_source_type('star',
+                                                      object_class=StarObject)
+        if 'galaxy' in config['object_types']:
+            self.catalog_context.register_source_type('galaxy',
+                                                      object_class=GalaxyObject)
 
     @property
     def observed_sed_factory(self):
@@ -322,8 +290,7 @@ class SkyCatalog(object):
         Set of healpix pixels with at least one file in the directory
 
         '''
-
-        # If major organization is by healpix, healpix # will be in
+        # If major organization is by healpix, healpix # could be in
         # subdirectory name.  Otherwise there may be no subdirectories
         # or data may be organized by component type.
         # Here only handle case where data files are directly in root dir
@@ -355,7 +322,7 @@ class SkyCatalog(object):
                                 this_hp['object_types'][ot] = [f]
         return hp_set
 
-    def get_hps_by_region(self, region):
+    def get_hps_by_region(self, region, object_type='galaxy'):
         '''
         Parameters
         ----------
@@ -369,11 +336,12 @@ class SkyCatalog(object):
         Set of healpixels intersecting the region
         '''
         # If area_partition doesn't use healpix, raise exception
-
-        return _get_intersecting_hps(
-            self._config['area_partition']['ordering'],
-            self._config['area_partition']['nside'],
-            region)
+        if self._global_partition is None:
+            partition = self._config['object_types'][object_type]['area_partition']
+        else:
+            partition = self._global_partition
+        return _get_intersecting_hps(partition['ordering'], partition['nside'],
+                                     region)
 
     def get_object_type_names(self):
         '''
@@ -385,6 +353,23 @@ class SkyCatalog(object):
 
     # Add more functions to return parts of config of possible interest
     # to user
+
+    def toplevel_only(self, object_types):
+        '''
+        Parameters
+        ----------
+        object_types     Set of object type names
+        Remove object types with a parent.  Add in the parent.
+
+        Return the resulting set
+        '''
+        objs_copy = set(object_types)
+        for obj in object_types:
+            parent = self._config.get_object_parent(obj)
+            if parent is not None:
+                objs_copy.remove(obj)
+                objs_copy.add(parent)
+        return objs_copy
 
     def get_objects_by_region(self, region, obj_type_set=None, datetime=None):
         '''
@@ -406,8 +391,9 @@ class SkyCatalog(object):
         if self.verbose:
             print("Region ", region)
             print("obj_type_set ", obj_type_set)
-        if self._config['area_partition']['type'] == 'healpix':
-            hps = self.get_hps_by_region(region)
+        # This must be done per object type
+        # if self._config['area_partition']['type'] == 'healpix':
+        #     hps = self.get_hps_by_region(region)
 
         # otherwise raise a not-supported exception
 
@@ -416,155 +402,135 @@ class SkyCatalog(object):
             obj_types = self.get_object_type_names()
         else:
             obj_types = self.get_object_type_names().intersection(obj_type_set)
-        for hp in hps:
-            # Maybe have a multiprocessing switch? Run-time option when
-            # catalog is opened?
-            c = self.get_objects_by_hp(hp, region, obj_types, datetime)
-            if (len(c)) > 0:
-                object_list.append_object_list(c)
-
-        return object_list
-
-    def get_object_iterator_by_region(self, region=None, obj_type_set=None,
-                                      max_chunk=None, datetime=None):
-        '''
-        Not yet implemented.
-
-        Parameters
-        ----------
-        region         Either a box or a circle (each represented as
-                       named tuple) or object of type PolygonalRegion
-        obj_type_set   Return only these objects. Defaults to all available
-        max_chunk      If specified, iterator will return no more than this
-                       number of objections per iteration
-        datetime       Python datetime object. Ignored for all but SSO
-
-        Returns
-        -------
-        An iterator
-        '''
-        raise NotImplementedError('get_object_iterator_by_region not implemented yet. See get_objects_by_region instead for now')
-
-    def get_objects_by_hp(self, hp, region=None, obj_type_set=None,
-                          datetime=None):
-        '''
-        Find all objects in the healpixl (and region if specified)
-        of requested types
-
-        Parameters
-        ----------
-        hp     The healpix pixel.
-        region If supplied defines a disk, box or convex polygon.
-               Return only objects contained in it
-        obj_type_set   Type of objects to fetch.  Defaults to all
-        datetime       Ignored for now; no support for moving objects
-
-        Returns
-        -------
-        ObjectList containing sky objects in the region and the hp
-        '''
-        object_list = ObjectList()
-
-        if hp not in self._hp_info:
-            print(f'WARNING: In SkyCatalog.get_objects_by_hp healpixel {hp} intersects region but has no catalog file')
-            return object_list
-
-        G_COLUMNS = ['galaxy_id', 'ra', 'dec']
-        PS_COLUMNS = ['object_type', 'id', 'ra', 'dec']
-        if self.verbose:
-            print('Working on healpix pixel ', hp)
-
-        obj_types = obj_type_set
-        if obj_types is None:
-            obj_types = self._config['object_types'].keys()
-        else:
-            parents = set()
-            for ot in obj_types:
-                if 'parent' in self._config['object_types'][ot]:
-                    parents.add(self._config['object_types'][ot]['parent'])
-            obj_types = obj_types.union(parents)
-
-        # Find the right Sky Catalog file or files (depends on obj_type_set)
-        # Get file handle(s) and store if we don't already have it (them)
-
-        # Associate object types with files and files with readers.
-        # May be > one type per reader (e.g. different kinds of point sources
-        # stored in a single file)
-        # Also may be more than one file per type (galaxy has two)
-        rdr_ot = dict()   # maps readers to set of object types it reads
+        obj_types = self.toplevel_only(obj_types)
 
         for ot in obj_types:
-            # FInd files associated with this type
-            if 'file_template' in self._config['object_types'][ot]:
-                f_list = self._hp_info[hp]['object_types'][ot]
-            elif 'parent' in self._config['object_types'][ot]:
-                f_list = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
-
-            for f in f_list:
-                if self._hp_info[hp]['files'][f] is None:            # no reader yet
-                    full_path = os.path.join(self._cat_dir, f)
-                    the_reader = parquet_reader.ParquetReader(full_path, mask=None)
-                    self._hp_info[hp]['files'][f] = the_reader
-                else:
-                    the_reader = self._hp_info[hp]['files'][f]
-                # associate object type with this reader
-                if the_reader in rdr_ot:
-                    rdr_ot[the_reader].add(ot)
-                else:
-                    rdr_ot[the_reader] = set([ot])
-
-        # Now get minimal columns for objects using the readers
-        galaxy_readers = []
-        pointsource_readers = []
-
-        # First make a pass to separate out the readers
-        for rdr in rdr_ot:
-            if 'galaxy' in rdr_ot[rdr]:
-                galaxy_readers.append(rdr)
-            elif ot in rdr_ot[rdr]:
-                pointsource_readers.append(rdr)
-
-        # Make galaxy collections
-        for rdr in galaxy_readers:
-            if 'ra' not in rdr.columns:
-                continue
-
-            # Make a collection for each row group
-
-            for rg in range(rdr.n_row_groups):
-                arrow_t = rdr.read_columns(G_COLUMNS, None, rg)
-
-                ra_c, dec_c, id_c, mask = _compress_via_mask(arrow_t,
-                                                             'galaxy_id',
-                                                             region)
-
-                if ra_c is not None:
-                    new_collection = ObjectCollection(ra_c, dec_c, id_c,
-                                                      'galaxy', hp, self,
-                                                      region=region, mask=mask,
-                                                      readers=galaxy_readers,
-                                                      row_group=rg)
-                    object_list.append_collection(new_collection)
-
-        # Make point source collection
-        for rdr in pointsource_readers:
-            if 'ra' not in rdr.columns:
-                continue
-
-            # Make a collection for each row group
-            for rg in range(rdr.n_row_groups):
-                arrow_t = rdr.read_columns(PS_COLUMNS, None, rg)
-
-                ra_c, dec_c, id_c, object_type,mask = _compress_via_mask(arrow_t, 'id', region, galaxy=False)
-
-                if ra_c is not None and object_type[0] in obj_type_set:
-                    new_collection = ObjectCollection(ra_c, dec_c, id_c,
-                                                      object_type[0], hp, self,
-                                                      region=region, mask=mask,
-                                                      readers=pointsource_readers, row_group=rg)
-                    object_list.append_collection(new_collection)
+            new_list = self.get_object_type_by_region(region, ot,
+                                                      datetime=None)
+            object_list.append_object_list(new_list)
 
         return object_list
+
+    def get_object_type_by_region(self, region, object_type, datetime=None):
+        '''
+        Parameters
+        ----------
+        region        box, circle or PolygonalRegion. Supported region
+                      types made depend on object_type
+        object_type   known object type without parent
+        datetime      Ignored for now
+
+        Returns all objects found
+        '''
+
+        out_list = ObjectList()
+        if self._global_partition is not None:
+            partition = self._global_partition
+        else:
+            partition = self._config['object_types'][object_type]['area_partition']
+
+        coll_type = self.catalog_context.lookup_collection_type(object_type)
+        if coll_type is not None:
+            out_list.append_collection(coll_type.load_collection(region,
+                                                                        self))
+            return out_list
+
+        if partition != 'None':
+            if partition['type'] == 'healpix':
+                hps = self.get_hps_by_region(region, object_type)
+                for hp in hps:
+                    c = self.get_object_type_by_hp(hp, object_type, region,
+                                                    datetime)
+                    if len(c) > 0:
+                        out_list.append_object_list(c)
+                return out_list
+        else:
+            raise NotImplementedError(f'Unsupported object type {object_type}')
+
+    def get_object_type_by_hp(self, hp, object_type, region=None,
+                              datetime=None):
+        object_list = ObjectList()
+
+        #  Do we need to check more specifically by object type?
+        if hp not in self._hp_info:
+            print(f'WARNING: In SkyCatalog.get_object_type_by_hp healpixel {hp} intersects region but has no catalog file')
+            return object_list
+
+        if object_type == 'galaxy':
+            COLUMNS = ['galaxy_id', 'ra', 'dec']
+            id_name = 'galaxy_id'
+        elif object_type in ['star', 'sn']:
+            COLUMNS = ['object_type', 'id', 'ra', 'dec']
+            id_name = 'id'
+        else:
+            raise NotImplementedError(f'Unsupported object type {object_type}')
+
+        if self.verbose:
+            print('Working on healpix pixel ', hp)
+        rdr_ot = dict()   # maps readers to set of object types it reads
+
+        if 'file_template' in self._config['object_types'][object_type]:
+            f_list = self._hp_info[hp]['object_types'][object_type]
+        elif 'parent' in self._config['object_types'][object_type]:
+            f_list = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
+
+        for f in f_list:
+            if self._hp_info[hp]['files'][f] is None:            # no reader yet
+                full_path = os.path.join(self._cat_dir, f)
+                the_reader = ParquetReader(full_path, mask=None)
+                self._hp_info[hp]['files'][f] = the_reader
+            else:
+                the_reader = self._hp_info[hp]['files'][f]
+                # associate object type with this reader
+            if the_reader in rdr_ot:
+                rdr_ot[the_reader].add(object_type)
+            else:
+                rdr_ot[the_reader] = set([object_type])
+
+        # Find readers needed to get minimal columns for our object type
+        the_readers = []
+        for rdr in rdr_ot:
+            if object_type in rdr_ot[rdr]:
+                the_readers.append(rdr)
+
+        # Unfortunately galaxies and point sources can't be handled quite
+        # the same way since we need to read an extra column for pointsources
+        # There will have to be some "if galaxy... else ... code"
+        for rdr in the_readers:
+            if 'ra' not in rdr.columns:
+                continue
+
+            # Make a collection for each row group
+            for rg in range(rdr.n_row_groups):
+                arrow_t = rdr.read_columns(COLUMNS, None, rg)
+                if object_type == 'galaxy':
+                    ra_c, dec_c, id_c, mask = _compress_via_mask(arrow_t,
+                                                                 id_name,
+                                                                 region)
+                    if ra_c is not None:
+                        new_collection = ObjectCollection(ra_c, dec_c, id_c,
+                                                          'galaxy', hp, self,
+                                                          region=region,
+                                                          mask=mask,
+                                                          readers=the_readers,
+                                                          row_group=rg)
+                        object_list.append_collection(new_collection)
+
+                else:
+                    ra_c, dec_c, id_c, object_type_c, mask =\
+                        _compress_via_mask(arrow_t, id_name, region,
+                                           galaxy=False)
+                    if ra_c is not None and object_type_c[0] == object_type:
+                        new_collection = ObjectCollection(ra_c, dec_c, id_c,
+                                                          object_type_c[0], hp,
+                                                          self, region=region,
+                                                          mask=mask,
+                                                          readers=the_readers,
+                                                          row_group=rg)
+                        object_list.append_collection(new_collection)
+
+        return object_list
+
 
     # For generator version, do this a row group at a time
     #    but if region cut leaves too small a list, read more rowgroups
@@ -604,7 +570,7 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     SkyCatalog
     '''
     # Get LSST bandpasses in case we need to compute fluxes
-    load_lsst_bandpasses()
+    band_passes = load_lsst_bandpasses()
     with open(config_file) as f:
         return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
                           mp=mp, verbose=verbose)
@@ -612,13 +578,17 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
 if __name__ == '__main__':
     import time
     ###cfg_file_name = 'latest.yaml'
-    cfg_file_name = 'future_latest.yaml'
-    skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
-
+    #cfg_file_name = 'future_latest.yaml'
+    cfg_file_name = 'skyCatalog.yaml'
+    ###skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
+    skycatalog_root = os.getenv('SKYCATALOG_ROOT')
+    catalog_dir = 'reorg'
     if len(sys.argv) > 1:
         cfg_file_name = sys.argv[1]
-    cfg_file = os.path.join('/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg',
-                            cfg_file_name)
+    #cfg_file = os.path.join('/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg',
+    #                           cfg_file_name)
+    ##cfg_file = os.path.join(skycatalog_root, 'point_test', cfg_file_name)
+    cfg_file = os.path.join(skycatalog_root, catalog_dir, cfg_file_name)
 
     write_sed = False
     if len(sys.argv) > 2:
@@ -661,10 +631,16 @@ if __name__ == '__main__':
     print("For region ", rgn_poly)
     print("intersecting pixels are ", intersect_poly_hps)
 
+    at_slac = os.getenv('HOME').startswith('/sdf/home/')
+    if not at_slac:
+        obj_types = {'star', 'galaxy', 'sn'}
+    else:
+        obj_types = {'star', 'galaxy', 'sn', 'gaia_star'}
 
-    print('Invoke get_objects_by_region with box region')
+    print('Invoke get_objects_by_region with box region, no gaia')
     t0 = time.time()
-    object_list = cat.get_objects_by_region(rgn)
+    object_list = cat.get_objects_by_region(rgn,
+                                            obj_type_set={'star','galaxy','sn'})
     t_done = time.time()
     print('Took ', t_done - t0)
                                             ##### temporary obj_type_set={'galaxy', 'star'} )
@@ -677,7 +653,8 @@ if __name__ == '__main__':
 
     print('Invoke get_objects_by_region with polygonal region')
     t0 = time.time()
-    object_list_poly = cat.get_objects_by_region(rgn_poly)
+    object_list_poly = cat.get_objects_by_region(rgn_poly,
+                                                 obj_type_set=obj_types)
     t_done = time.time()
     print('Took ', t_done - t0)
 
@@ -703,7 +680,8 @@ if __name__ == '__main__':
 
     print('Invoke get_objects_by_region with diamond region')
     t0 = time.time()
-    object_list_diamond = cat.get_objects_by_region(rgn_diamond)
+    object_list_diamond = cat.get_objects_by_region(rgn_diamond,
+                                                    obj_type_set=obj_types)
     t_done = time.time()
     print('Took ', t_done - t0)
 
@@ -715,17 +693,24 @@ if __name__ == '__main__':
     #### TEMP FOR DEBUGGING
     ### exit(0)
 
+    # For now SIMS_SED_LIBRARY_DIR is undefined at SLAC, making it impossible
+    # to get SEDs for stars. So (crudely) determine whether or not
+    # we're running at SLAC
 
     colls = object_list.get_collections()
     got_a_sed = False
     for c in colls:
         n_obj = len(c)
         print("For hpid ", c.get_partition_id(), "found ", n_obj, " objects")
+        if (n_obj) < 1:
+            continue
         print("First object: ")
         print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
               ' belongs_index=', c[0]._belongs_index,
               ' object_type: ', c[0].object_type )
 
+        if (n_obj < 3):
+            continue
         print("Slice [1:3]")
         slice13 = c[1:3]
         for o in slice13:
@@ -733,32 +718,35 @@ if __name__ == '__main__':
                   o._belongs_index,  ' object_type: ', o.object_type)
             print(o.object_type)
             if o.object_type == 'star':
+                if not at_slac:
+                    print(o.get_instcat_entry())
+                    sed, magnorm = o._get_sed()
+                    print('For star magnorm: ', magnorm)
+                    if magnorm < 1000:
+                        print('Length of sed: ', len(sed.wave_list))
+            elif o.object_type == 'sn':
                 print(o.get_instcat_entry())
-                #(lmbda, f_lambda, magnorm) = o.get_sed(resolution=1.0)
-                sed, magnorm = o.get_sed(resolution=1.0)
-                print('For star magnorm: ', magnorm)
-                if magnorm < 1000:
-                    print('Length of sed: ', len(sed.wave_list))
-            else:
+            elif o.object_type == 'galaxy':
                 for cmp in ['disk', 'bulge', 'knots']:
                     print(cmp)
                     if cmp in o.subcomponents:
-                        print(o.get_instcat_entry(component=cmp))
-                        sed, _ = o.get_sed(cmp)
+                        # broken for galaxies currently
+                        ###print(o.get_instcat_entry(component=cmp))
+                        sed, _ = o._get_sed(cmp)
                         if sed:
                             print('Length of sed table: ', len(sed.wave_list))
                             if not got_a_sed:
                                 got_a_sed = True
                                 th = o.get_native_attribute(f'sed_val_{cmp}')
                                 print('Tophat values: ', th)
-                                sed, _ = o.get_sed(component=cmp)
+                                sed, _ = o._get_sed(component=cmp)
                                 print('Simple sed wavelengths:')
                                 print(sed.wave_list)
                                 print('Simple sed values:')
                                 print([sed(w) for w in sed.wave_list])
                                 if write_sed:
                                     o.write_sed('simple_sed.txt', component=cmp)
-                                sed_fine, _ = o.get_sed(component=cmp,
+                                sed_fine, _ = o._get_sed(component=cmp,
                                                         resolution=1.0)
                                 print('Bin width = 1 nm')
                                 print('Initial wl values', sed_fine.wave_list[:20])
@@ -772,7 +760,7 @@ if __name__ == '__main__':
 
                 # Try out old wrapper functions
                 print("\nget_dust:")
-                i_av, i_rv, g_av, g_rv = o.get_dust()
+                i_av, i_rv, g_av, g_rv = o._get_dust()
                 print(f'i_av={i_av} i_rv={i_rv} g_av={g_av} g_rv={g_rv}')
                 print("\nget_wl_params")
                 g1, g2, mu = o.get_wl_params()
@@ -804,6 +792,10 @@ if __name__ == '__main__':
 
     print('Total object count: ', len(object_list))
 
+    if len(object_list) == 0:
+        print('Empty object list. All done')
+        exit(0)
+
     obj = object_list[0]
     print("Type of element in object_list:", type(obj))
 
@@ -824,11 +816,18 @@ if __name__ == '__main__':
     print(f'Object list len:  {len(object_list)}')
     print(f'Objects found with "in":  {sum}')
 
+    if len(object_list) < 5:
+        print('Very short object list (< 5 elements).  done')
+        exit(0)
+
     segment = object_list[2:5]
     print('Information for slice 2:5 ')
     for o in segment:
         print(f'object {o.id} of type {o.object_type} belongs to collection {o._belongs_to}')
 
+    if len(object_list) < 304:
+        print('Object list len < 304.  All done')
+        exit(0)
     print('\nInformation for slice 285:300')
     segment = object_list[285:300]
     for o in segment:
@@ -845,3 +844,5 @@ if __name__ == '__main__':
     print(f'\nObjects in slice [300:304]')
     for o in object_list[300:304]:
         print(o.id)
+
+    print('all done')

@@ -13,8 +13,6 @@ from galsim.errors import GalSimRangeError
 
 from desc.skycatalogs.utils.translate_utils import form_object_string
 from desc.skycatalogs.utils.config_utils import Config
-from desc.skycatalogs.utils.sed_tools import ObservedSedFactory
-from desc.skycatalogs.utils.sn_tools import SNObject
 
 '''
 Main object types.   There are also may be subtypes. For example,
@@ -22,35 +20,16 @@ there could be two subtypes for bulge components, differing in the
 form of their associated SEDs
 '''
 
-__all__ = ['BaseObject', 'ObjectCollection', 'ObjectList', 'OBJECT_TYPES',
-           'LSST_BANDS', 'load_lsst_bandpasses', 'CatalogContext']
-GALAXY=1
-GALAXY_BULGE=2
-GALAXY_DISK=3
-GALAXY_KNOTS=4
-STAR=5
-AGN=6
-SN=7
-
-OBJECT_TYPES = {'galaxy' : GALAXY, 'bulge_basic' : GALAXY_BULGE,
-                'disk_basic' : GALAXY_DISK, 'knots_basic' : GALAXY_KNOTS,
-                'star' : STAR, 'agn' : AGN, 'sn' : SN}
+__all__ = ['BaseObject', 'ObjectCollection', 'ObjectList',
+           'LSST_BANDS', 'load_lsst_bandpasses']
 
 LSST_BANDS = ('ugrizy')
 
 # global for easy access for code run within mp
-
-class CatalogContext:
-    def __init__(self, the_sky_cat):
-        global sky_cat
-        self._sky_cat = the_sky_cat
-        sky_cat = the_sky_cat
-
 def load_lsst_bandpasses():
     '''
     Read in lsst bandpasses from standard place, trim, and store in global dict
     Returns: The dict
-
     '''
     global lsst_bandpasses
     lsst_bandpasses = dict()
@@ -89,12 +68,20 @@ class BaseObject(object):
 
     _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501],[0, 1, 0]),
                              wave_type='nm').withZeropoint('AB')
-    def __init__(self, ra, dec, id, object_type, redshift=None,
-                 belongs_to=None, belongs_index=None):
+
+    def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index,
+                 redshift=None):
         '''
-        Minimum information needed for static (not SSO) objects
-        ra, dec needed to check for region containment
-        belongs_to is object collection, if any, this object belongs to
+        Save at least minimum info needed a fixed (not SSO) object to
+        determine if it's in a region and discover all its other properties.
+        Parameters
+        ra, dec         float         in degrees
+        id              string or int, depending on object type
+        object_type     string        e.g. 'galaxy', 'star', ...
+                                      must appear in catalog config file
+        belongs_to      ObjectCollection  collection this object belongs to
+        belongs_index   int           index of object within its collection
+        redshift        float
         '''
         self._ra = ra
         self._dec = dec
@@ -106,6 +93,7 @@ class BaseObject(object):
 
         # All objects also include redshift information. Also MW extinction,
         # but extinction is by subcomponent for galaxies
+
 
     @property
     def ra(self):
@@ -185,12 +173,9 @@ class BaseObject(object):
                        object type is 'galaxy')
         Returns: A string formatted like a line in an instance catalog
         '''
-        if self.object_type == 'galaxy':
-            if component not in self.subcomponents:
-                return ''
         return form_object_string(self, band, component)
 
-    def get_sed(self, component=None, resolution=None, mjd=None):
+    def _get_sed(self, component=None, resolution=None, mjd=None):
         '''
         Return sed and mag_norm for a galaxy component or for a star
         Parameters
@@ -199,58 +184,21 @@ class BaseObject(object):
                      may be supported.  Ignored for stars
         resolution   desired resolution of lambda in nanometers. Ignored
                      for stars.
+        mjd          ignored for static objects
 
         Returns
         -------
         A pair (sed, mag_norm)
+
+        Must be implemented by subclass
         '''
 
-        if self._object_type == 'star':
-            # read in the file; return data from it. Arguments are ignored
-            if component:
-                warnings.warn(f'get_sed: component argument ignored for object type {self._object_type}')
-            if resolution:
-                warnings.warn(f'get_sed: resolution argument ignored for object type {self._object_type}')
-            mag_norm = self.get_native_attribute('magnorm')
-            rel_path = self.get_native_attribute('sed_filepath')
+        raise NotImplementedError('Must be implemented by BaseObject subclass if needed')
 
-            fpath = os.path.join(os.getenv('SIMS_SED_LIBRARY_DIR'),
-                                 self.get_native_attribute('sed_filepath'))
-
-            return sky_cat.observed_sed_factory.create_pointsource(rel_path), mag_norm
-        elif self._object_type == 'sn':
-            # Make an SNObject and get SED
-            params = self.get_native_attribute('salt2_params')
-            sn = SNObject(params=params)
-            if mjd < sn.mintime() or mjd > sn.maxtime():
-                return None, 0.0
-            # Already normalized so magnorm is zero
-            return sn.get_sed(mjd), 0.0
-        if self._object_type != 'galaxy':
-            raise ValueError('get_sed function only available for stars, sne and galaxy components')
-        if component not in ['disk', 'bulge', 'knots']:
-            raise ValueError(f'Cannot fetch SED for component type {component}')
-
-        th_val = self.get_native_attribute(f'sed_val_{component}')
-        if  th_val is None:   #  values for this component are not in the file
-            raise ValueError(f'{component} not part of this catalog')
-
-        # if values are all zeros or nearly no point in trying to convert
-        if max(th_val) < np.finfo('float').resolution:
-            return None, 0.0
-
-        z_h = self.get_native_attribute('redshift_hubble')
-        z = self.get_native_attribute('redshift')
-
-        sed = sky_cat.observed_sed_factory.create(th_val, z_h, z,
-                                                  resolution=resolution)
-        magnorm = sky_cat.observed_sed_factory.magnorm(th_val, z_h)
-
-        return sed, magnorm
 
     def write_sed(self, sed_file_path, component=None, resolution=None,
                   mjd=None):
-        sed, _ = self.get_sed(component=component, resolution=None, mjd=None)
+        sed, _ = self._get_sed(component=component, resolution=None, mjd=None)
 
         wl = sed.wave_list
         flambda = [sed(w) for w in wl]
@@ -259,78 +207,38 @@ class BaseObject(object):
             for lam, flam in zip(wl, flambda):
                 sed_file.write(f'{lam} {flam}\n')
 
-    def get_dust(self):
+    def _get_dust(self):
         """Return the Av, Rv parameters for internal and Milky Way extinction."""
         internal_av = 0
         internal_rv = 1.
+        # Fails for object types without these native attributes
         galactic_av = self.get_native_attribute('MW_av')
         galactic_rv = self.get_native_attribute('MW_rv')
         return internal_av, internal_rv, galactic_av, galactic_rv
 
-    def get_wl_params(self):
-        """Return the weak lensing parameters, g1, g2, mu."""
-        gamma1 = self.get_native_attribute('shear_1')
-        gamma2 = self.get_native_attribute('shear_2')
-        kappa =  self.get_native_attribute('convergence')
-        # Compute reduced shears and magnification.
-        g1 = gamma1/(1. - kappa)    # real part of reduced shear
-        g2 = gamma2/(1. - kappa)    # imaginary part of reduced shear
-        mu = 1./((1. - kappa)**2 - (gamma1**2 + gamma2**2)) # magnification
-        return g1, g2, mu
+    def _apply_component_extinction(self, sed):
+        # Apply Milky Way extinction.
+
+        iAv, iRv, mwAv, mwRv = self._get_dust()
+
+        sky_cat = self._belongs_to._sky_catalog
+        sed = sky_cat.extinguisher.extinguish(sed, mwAv)
+
+        return sed
+
+    def _get_sed_from_file(self, fpath, redshift=0):
+        sed = galsim.SED(fpath, wave_type='nm', flux_type='flambda')
+        if redshift > 0:
+            sed = sed.atRedshift(redshift)
+        return sed
 
     def get_gsobject_components(self, gsparams=None, rng=None):
         """
         Return a dictionary of the GSObject components for the
         sky catalogs object, keyed by component name.
+        Must be implemented by subclass
         """
-        if gsparams is not None:
-            gsparams = galsim.GSParams(**gsparams)
-        if self.object_type == 'star' or self.object_type == 'sn':
-            return {None: galsim.DeltaFunction(gsparams=gsparams)}
-        if self.object_type != 'galaxy':
-            raise RuntimeError("Do not know how to handle object type "
-                               f"{self.object_type}")
-        obj_dict = {}
-        for component in self.subcomponents:
-            # knots use the same major/minor axes as the disk component.
-            my_component = 'disk' if component != 'bulge' else 'bulge'
-            a = self.get_native_attribute(
-                f'size_{my_component}_true')
-            b = self.get_native_attribute(
-                f'size_minor_{my_component}_true')
-            assert a >= b
-            hlr = (a*b)**0.5   # approximation for half-light radius
-
-            e1 = self.get_native_attribute(
-                f'ellipticity_1_{my_component}_true')
-            e2 = self.get_native_attribute(
-                f'ellipticity_2_{my_component}_true')
-
-            if component == 'knots':
-                npoints = self.get_native_attribute('n_knots')
-                assert npoints > 0
-                obj = galsim.RandomKnots(npoints=npoints,
-                                         half_light_radius=hlr, rng=rng,
-                                         gsparams=gsparams)
-            else:
-                n = self.get_native_attribute(f'sersic_{component}')
-                # Quantize the n values at 0.05 so that galsim can
-                # possibly amortize sersic calculations from the previous
-                # galaxy.
-                n = round(n*20.)/20.
-                obj = galsim.Sersic(n=n, half_light_radius=hlr,
-                                    gsparams=gsparams)
-
-            # NOTE: Whether or not the minus signs in the next executable
-            # line are needed in general or just for generating DC2-like
-            # results is still TBD. They are included here in order to
-            # reproduce the effect of adding 90 degrees to position angle
-            # in the old code.
-            shear = galsim.Shear(g1=-e1, g2=-e2)
-            obj = obj._shear(shear)
-            g1, g2, mu = self.get_wl_params()
-            obj_dict[component] = obj._lens(g1, g2, mu)
-        return obj_dict
+        raise NotImplementedError('Subclass must implement get_gsobject_components')
 
     def get_observer_sed_component(self, component, mjd=None):
         """
@@ -342,41 +250,11 @@ class BaseObject(object):
         model, as implemented in the dust_extinction package, is used.
 
         The SEDs are computed assuming exposure times of 1 second.
+
+        Must be implemented by subclass
         """
-        # Create a galsim.SED for this subcomponent.
 
-        if self._object_type == 'star':
-            sed, magnorm = self.get_sed(component=component, mjd=mjd)
-            # The SED is in units of photons/nm/cm^2/s
-            # -0.9210340371976184 = -np.log(10)/2.5. Use to convert mag to flux
-            flux_500 = np.exp(-0.9210340371976184 * magnorm)
-            sed = sed.withMagnitude(0, self._bp500)
-            sed = sed*flux_500
-        elif self._object_type == 'galaxy':
-            # For sn & galaxy components sed already has correct normalization
-            sed, _ = self.get_sed(component=component)
-            if sed is None:
-                # This subcomponent has zero emission so return None.
-                return None
-        elif self._object_type == 'sn':
-            sed, _ = self.get_sed(component=component, mjd=mjd)
-            if sed is None:
-                return None
-        else:
-            # Raise NYI exception?
-            pass
-
-        iAv, iRv, mwAv, mwRv = self.get_dust()
-        if iAv > 0:
-            # Apply internal extinction model, which is assumed
-            # to be the same for all subcomponents.
-            pass  #TODO add implementation for internal extinction.
-
-        # redshift already applied by create or create_pointsource
-
-        # Apply Milky Way extinction.
-        sed = sky_cat.extinguisher.extinguish(sed, mwAv)
-        return sed
+        raise NotImplementedError('get_observer_sed_component must be implemented by subclass')
 
     def get_observer_sed_components(self, mjd=None):
         """
@@ -403,11 +281,6 @@ class BaseObject(object):
             else:
                 sed += sed_component
 
-        if sed is None:
-            return sed
-        if 'shear_1' in self.native_columns:
-            _, _, mu = self.get_wl_params()
-            sed *= mu
         return sed
 
     def get_flux(self, bandpass, sed=None, mjd=None):
@@ -439,20 +312,18 @@ class BaseObject(object):
         if not band in LSST_BANDS:
             return None
         att = f'lsst_flux_{band}'
-        if mjd is None:
-            # Check if it's already an attribute
-            val = getattr(self, att, None)
-            if val is not None:
-                return val
 
-        # For now exclude sn
-        if self.object_type != 'sn':
-            if att in self.native_columns:
-                return self.get_native_attribute(att)
+        # Check if it's already an attribute
+        val = getattr(self, att, None)
+        if val is not None:
+            return val
+
+        if att in self.native_columns:
+            return self.get_native_attribute(att)
 
         val = self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
 
-        if cache and mjd is None:
+        if cache:
             setattr(self, att, val)
         return val
 
@@ -475,9 +346,10 @@ class BaseObject(object):
         else:
             return list(fluxes.values())
 
+
 class ObjectCollection(Sequence):
     '''
-    Class for collection of static objects coming from the same
+    Class for collection of fixed (not SSO) objects coming from the same
     source (e.g., file for particular healpix)
     Many of the methods look the same as for BaseObject but they return arrays
     rather than a single number.  There are some additional methods
@@ -485,30 +357,35 @@ class ObjectCollection(Sequence):
     def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
                  region=None, mask=None, readers=None, row_group=0):
         '''
-        Minimum information needed for static objects.
-        specified, has already been used by the caller to generate mask.
-        ra, dec, id must be array-like and the same length
-        object_type  may be either single value or array-like (could be
-        useful if more than one object type is stored in the same file)
-        partition_id (e.g. healpix id)
-        sky_catalog instance of SkyCatalog class
-        (redshift should probably be ditched; no need for it)
-        (similarly for region with current code structure. Information
-        needed is encoded in mask)
+        Parameters
+        ra, dec      float, array-like of same length
+        id           array-like, same length as ra and dec.   int or string
+        object_type  single string or (if contained objects may be of
+                     different types) array-like
+        parition_id  int (e.g. healpix id)  if objects are partitioned by
+                     location; else None
+        sky_catalog  Instance of SkyCatalog class, typically obtained by
+                     calling open_catalog
+        region       maybe be used to determine which objects are in the
+                     collection
+        mask         indices to be masked off, e.g. in case not all objects
+                     in the partition (such as healpixel) are in the region
+        readers      may be used to recover properties for objects in this
+                     collection, one reader per relevant file
+        row_group    used in case backing files are in parquet format
 
-        mask  indices to be masked off, e.g. because region does not
-              include the entire healpix pixel
-        readers one per file associated with the type(s).
         '''
         self._ra = np.array(ra)
         self._dec = np.array(dec)
         self._id = np.array(id)
         self._rdrs = readers
         self._partition_id = partition_id
-        self._sky_catalog = sky_catalog   # might not need this
+        self._sky_catalog = sky_catalog
         self._config = Config(sky_catalog.raw_config)
         self._mask = mask
         self._row_group = row_group
+
+        self._object_class = sky_catalog.catalog_context.lookup_source_type(object_type)
 
         # Maybe the following is silly and object_type should always be stored
         # as arrays
@@ -551,13 +428,15 @@ class ObjectCollection(Sequence):
     def subcomponents(self):
         '''
         Return list of all subcomponents for objects in this collection.
-        Only galaxies have subcomponents
+        Only galaxies have true subcomponents
         '''
         subs = []
         if self._object_type_unique == 'galaxy':
             for s in ['bulge', 'disk', 'knots']:
                 if f'sed_val_{s}' in self.native_columns:
                     subs.append(s)
+        else:
+            return ['this_object']
         return subs
 
     def get_native_attribute(self, attribute_name):
@@ -655,21 +534,20 @@ class ObjectCollection(Sequence):
             object_type = self._object_types[key]
 
         if isinstance(key, int) or isinstance(key, np.int64):
-            return BaseObject(self._ra[key], self._dec[key], self._id[key],
-                              object_type, belongs_to=self,
-                              belongs_index=key)
+            return self._object_class(self._ra[key], self._dec[key],
+                                      self._id[key], object_type, self, key)
 
         elif type(key) == slice:
             ixdata = [i for i in range(min(key.stop,len(self._ra)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
-            return [BaseObject(self._ra[i], self._dec[i], self._id[i],
-                               object_type, belongs_to=self, belongs_index=i)
+            return [self._object_class(self._ra[i], self._dec[i], self._id[i],
+                                       object_type, self, i)
                     for i in ixes]
 
         elif type(key) == tuple and isinstance(key[0], Iterable):
             #  check it's a list of int-like?
-            return [BaseObject(self._ra[i], self._dec[i], self._id[i],
-                               object_type, belongs_to=self, belongs_index=i)
+            return [self._object_class(self._ra[i], self._dec[i], self._id[i],
+                                       object_type, self, i)
                     for i in key[0]]
 
 
