@@ -228,15 +228,20 @@ class SkyCatalog(object):
         self._hp_info = dict()
         hps = self._find_all_hps()
 
+        # NOTE: the use of TophatSedFactory is appropriate *only* for an
+        # input galaxy catalog with format like cosmoDC2, which includes
+        # definitions of tophat SEDs. A different implementation will
+        # be needed for newer galaxy catalogs
         th_parameters = self._config.get_tophat_parameters();
         self._observed_sed_factory =\
             TophatSedFactory(th_parameters, config['Cosmology'])
+
         self._extinguisher = MilkyWayExtinction()
 
         # Make our properties accessible to BaseObject, etc.
         self.catalog_context = CatalogContext(self)
 
-        # register gaia_star if in config
+        # register object types which are in the config
         if 'gaia_star' in config['object_types']:
             self.catalog_context.register_source_type('gaia_star',
                                                       object_class=GaiaObject,
