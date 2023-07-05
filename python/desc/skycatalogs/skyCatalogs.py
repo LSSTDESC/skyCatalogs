@@ -247,7 +247,7 @@ class SkyCatalog(object):
                                               object_class=GaiaObject,
                                               collection_class=GaiaCollection)
         if 'sncosmo' in config['object_types']:
-            self.cat_cxt.register_source_type('sn',
+            self.cat_cxt.register_source_type('sncosmo',
                                               object_class=SncosmoObject)
         if 'star' in config['object_types']:
             self.cat_cxt.register_source_type('star',
@@ -577,21 +577,19 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
 
 if __name__ == '__main__':
     import time
-    ###cfg_file_name = 'latest.yaml'
-    #cfg_file_name = 'future_latest.yaml'
     cfg_file_name = 'skyCatalog.yaml'
     ###skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
     skycatalog_root = os.getenv('SKYCATALOG_ROOT')
     catalog_dir = 'reorg'
     if len(sys.argv) > 1:
-        cfg_file_name = sys.argv[1]
-    #cfg_file = os.path.join('/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg',
-    #                           cfg_file_name)
-    ##cfg_file = os.path.join(skycatalog_root, 'point_test', cfg_file_name)
+        catalog_dir = sys.argv[1]
+    if len(sys.argv) > 2:
+        cfg_file_name = sys.argv[2]
+
     cfg_file = os.path.join(skycatalog_root, catalog_dir, cfg_file_name)
 
     write_sed = False
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 3:
         write_sed = True
 
     # For tract 3828
