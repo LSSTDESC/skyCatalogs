@@ -111,7 +111,7 @@ class CatalogCreator:
                  knots=True, logname='skyCatalogs.creator',
                  pkg_root=None, skip_done=False, flux_only=False,
                  main_only=False, flux_parallel=16, provenance=None,
-                 dc2=False):
+                 dc2=False, sn_object_type='sncosmo'):
         """
         Store context for catalog creation
 
@@ -150,6 +150,7 @@ class CatalogCreator:
         provenance      Whether to write per-output-file git repo provenance
         dc2             Whether to adjust values to provide input comparable
                         to that for the DC2 run
+        sn_object_type  Which object type to use for SNe.
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -181,6 +182,8 @@ class CatalogCreator:
         self._sn_truth = sn_truth
         if self._sn_truth is None:
             self._sn_truth = _sn_db
+
+        self._sn_object_type = sn_object_type
 
         self._star_truth = star_truth
         if self._star_truth is None:
@@ -705,7 +708,7 @@ class CatalogCreator:
                 params_df = pd.read_sql_query(q2, conn)
 
             nobj = len(sn_df['ra'])
-            sn_df['object_type'] = np.full((nobj,), 'sn')
+            sn_df['object_type'] = np.full((nobj,), self._sn_object_type)
 
             sn_df['MW_rv'] = np.full((nobj,), _MW_rv_constant, np.float32())
             sn_df['MW_av'] = _make_MW_extinction(np.array(sn_df['ra']),

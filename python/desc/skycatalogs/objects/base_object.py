@@ -385,7 +385,7 @@ class ObjectCollection(Sequence):
         self._mask = mask
         self._row_group = row_group
 
-        self._object_class = sky_catalog.catalog_context.lookup_source_type(object_type)
+        self._object_class = sky_catalog.cat_cxt.lookup_source_type(object_type)
 
         # Maybe the following is silly and object_type should always be stored
         # as arrays

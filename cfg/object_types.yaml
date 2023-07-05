@@ -44,7 +44,7 @@ object_types :
       sed_file_root_env_var : SIMS_SED_LIBRARY_DIR
       MW_extinction : F19
       internal_extinction : None
-  sn :
+  sncosmo :
       file_template : 'pointsource_(?P<healpix>\d+).parquet'
       data_file_type : parquet
       area_partition :

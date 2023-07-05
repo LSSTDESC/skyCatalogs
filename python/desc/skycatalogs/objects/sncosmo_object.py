@@ -1,15 +1,15 @@
 import galsim
-from desc.skycatalogs.utils.sn_tools import SNModel
+from desc.skycatalogs.utils.sn_tools import SncosmoModel
 from .base_object import BaseObject
 
 
-__all__ = ['SNObject']
+__all__ = ['SncosmoObject']
 
-class SNObject(BaseObject):
-    _type_name = 'sn'
+class SncosmoObject(BaseObject):
+    _type_name = 'sncosmo'
     def _get_sed(self, mjd=None):
         params = self.get_native_attribute('salt2_params')
-        sn = SNModel(params=params)
+        sn = SncosmoModel(params=params)
         if mjd < sn.mintime() or mjd > sn.maxtime():
             return None, 0.0
         # Already normalized so magnorm is zero

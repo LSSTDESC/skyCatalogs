@@ -3,10 +3,10 @@ from astropy import units as u
 import sncosmo
 import galsim
 
-__all__ = ['SNModel']
+__all__ = ['SncosmoModel']
 
 
-class SNModel(sncosmo.Model):
+class SncosmoModel(sncosmo.Model):
     def __init__(self, source='salt2-extended', params=None):
         '''
         params - dict of params suitable for the model
