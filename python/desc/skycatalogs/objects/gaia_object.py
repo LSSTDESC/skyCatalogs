@@ -8,8 +8,7 @@ from astropy import units as u
 import galsim
 import lsst.daf.butler as daf_butler
 import lsst.geom
-from lsst.meas.algorithms import LoadReferenceObjectsTask, \
-    ReferenceObjectLoader
+from lsst.meas.algorithms import ReferenceObjectLoader
 from desc.skycatalogs.utils.shapes import Disk, PolygonalRegion
 from desc.skycatalogs.objects.base_object import BaseObject, ObjectCollection
 
@@ -66,14 +65,14 @@ class GaiaObject(BaseObject):
         self.use_lut = self._belongs_to._use_lut
         bp_flux = obj_pars['phot_bp_mean_flux']
         rp_flux = obj_pars['phot_rp_mean_flux']
-        # Convert from flux units of nJy to AB mag for the bp passband,
-        # which we will use to normalize the SED.
-        self.bp_mag = -2.5*np.log10(bp_flux*1e-9) + 8.90
-        if rp_flux == 0.0:
+        if rp_flux == 0.0 or bp_flux == 0.0:
             self.stellar_temp = None
         else:
             try:
                 self.stellar_temp = self._stellar_temperature(bp_flux/rp_flux)
+                # Convert from flux units of nJy to AB mag for the bp passband,
+                # which we will use to normalize the SED.
+                self.bp_mag = -2.5*np.log10(bp_flux*1e-9) + 8.90
             except galsim.errors.GalSimRangeError as ex:
                 self.stellar_temp = None
             except RuntimeError as rex:
@@ -94,7 +93,7 @@ class GaiaObject(BaseObject):
         if self.use_lut:
             flambda = self.blambda(self._wavelengths)
             lut = galsim.LookupTable(self._wavelengths, flambda)
-            sed = galsim.SED(lut,  wave_type='nm', flux_type='flambda')
+            sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
         else:
             sed = galsim.SED(self.blambda, wave_type='nm', flux_type='flambda')
         return sed.withMagnitude(self.bp_mag, self._gaia_bp_bandpass)
@@ -141,7 +140,7 @@ class GaiaCollection(ObjectCollection):
         refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
                    for _ in refs]
         dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
-        config = LoadReferenceObjectsTask.ConfigClass()
+        config = ReferenceObjectLoader.ConfigClass()
         config.filterMap = {f'{_}': f'phot_{_}_mean' for _ in ('g', 'bp', 'rp')}
         ref_obj_loader = ReferenceObjectLoader(dataIds=dataIds,
                                                refCats=refCats,
