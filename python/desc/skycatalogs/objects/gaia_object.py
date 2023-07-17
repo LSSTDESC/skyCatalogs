@@ -8,8 +8,7 @@ from astropy import units as u
 import galsim
 import lsst.daf.butler as daf_butler
 import lsst.geom
-from lsst.meas.algorithms import LoadReferenceObjectsTask, \
-    ReferenceObjectLoader
+from lsst.meas.algorithms import ReferenceObjectLoader
 from desc.skycatalogs.utils.shapes import Disk, PolygonalRegion
 from desc.skycatalogs.objects.base_object import BaseObject, ObjectCollection
 
@@ -141,7 +140,7 @@ class GaiaCollection(ObjectCollection):
         refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
                    for _ in refs]
         dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
-        config = LoadReferenceObjectsTask.ConfigClass()
+        config = ReferenceObjectLoader.ConfigClass()
         config.filterMap = {f'{_}': f'phot_{_}_mean' for _ in ('g', 'bp', 'rp')}
         ref_obj_loader = ReferenceObjectLoader(dataIds=dataIds,
                                                refCats=refCats,
