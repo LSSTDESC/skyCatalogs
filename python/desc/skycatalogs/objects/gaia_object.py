@@ -66,14 +66,14 @@ class GaiaObject(BaseObject):
         self.use_lut = self._belongs_to._use_lut
         bp_flux = obj_pars['phot_bp_mean_flux']
         rp_flux = obj_pars['phot_rp_mean_flux']
-        # Convert from flux units of nJy to AB mag for the bp passband,
-        # which we will use to normalize the SED.
-        self.bp_mag = -2.5*np.log10(bp_flux*1e-9) + 8.90
-        if rp_flux == 0.0:
+        if rp_flux == 0.0 or bp_flux == 0.0:
             self.stellar_temp = None
         else:
             try:
                 self.stellar_temp = self._stellar_temperature(bp_flux/rp_flux)
+                # Convert from flux units of nJy to AB mag for the bp passband,
+                # which we will use to normalize the SED.
+                self.bp_mag = -2.5*np.log10(bp_flux*1e-9) + 8.90
             except galsim.errors.GalSimRangeError as ex:
                 self.stellar_temp = None
             except RuntimeError as rex:
@@ -94,7 +94,7 @@ class GaiaObject(BaseObject):
         if self.use_lut:
             flambda = self.blambda(self._wavelengths)
             lut = galsim.LookupTable(self._wavelengths, flambda)
-            sed = galsim.SED(lut,  wave_type='nm', flux_type='flambda')
+            sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
         else:
             sed = galsim.SED(self.blambda, wave_type='nm', flux_type='flambda')
         return sed.withMagnitude(self.bp_mag, self._gaia_bp_bandpass)
