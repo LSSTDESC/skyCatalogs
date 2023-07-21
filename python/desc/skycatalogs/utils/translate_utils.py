@@ -137,7 +137,7 @@ def form_object_string(obj, band, component):
     '''
     row = []
 
-    if obj.object_type in ['star', 'sn']:
+    if obj.object_type in ['star', 'sncosmo']:
         fmt = STAR_FMT
         columns = form_star_instance_columns(band)
     elif obj.object_type in ['galaxy', 'disk', 'bulge']:

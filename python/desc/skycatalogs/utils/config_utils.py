@@ -322,7 +322,7 @@ def assemble_provenance(pkg_root, inputs={}, schema_version=None):
 # In config just keep track of models by object type. Information
 # about the parameters they require is internal to the code.
 _AGN_MODELS = ['agn_random_walk']
-_SN_MODELS = ['sn_salt2_extended']
+_SNCOSMO_MODELS = ['sn_salt2_extended']
 
 def assemble_variability_models(object_types):
     '''
@@ -342,7 +342,7 @@ def assemble_variability_models(object_types):
     models = dict()
     if 'agn' in object_types:
         models['agn'] = _AGN_MODELS
-    if 'sn' in object_types:
-        models['sn'] = _SN_MODELS
+    if 'sncosmo' in object_types:
+        models['sncosmo'] = _SNCOSMO_MODELS
 
     return models

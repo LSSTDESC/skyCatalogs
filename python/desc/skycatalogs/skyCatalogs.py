@@ -17,7 +17,7 @@ from desc.skycatalogs.utils.sed_tools import TophatSedFactory
 from desc.skycatalogs.utils.sed_tools import MilkyWayExtinction
 from desc.skycatalogs.utils.config_utils import Config
 from desc.skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
-from desc.skycatalogs.objects.sn_object import SNObject
+from desc.skycatalogs.objects.sncosmo_object import SncosmoObject
 from desc.skycatalogs.objects.star_object import StarObject
 from desc.skycatalogs.objects.galaxy_object import GalaxyObject
 
@@ -239,22 +239,22 @@ class SkyCatalog(object):
         self._extinguisher = MilkyWayExtinction()
 
         # Make our properties accessible to BaseObject, etc.
-        self.catalog_context = CatalogContext(self)
+        self.cat_cxt = CatalogContext(self)
 
         # register object types which are in the config
         if 'gaia_star' in config['object_types']:
-            self.catalog_context.register_source_type('gaia_star',
-                                                      object_class=GaiaObject,
-                                                      collection_class=GaiaCollection)
-        if 'sn' in config['object_types']:
-            self.catalog_context.register_source_type('sn',
-                                                      object_class=SNObject)
+            self.cat_cxt.register_source_type('gaia_star',
+                                              object_class=GaiaObject,
+                                              collection_class=GaiaCollection)
+        if 'sncosmo' in config['object_types']:
+            self.cat_cxt.register_source_type('sncosmo',
+                                              object_class=SncosmoObject)
         if 'star' in config['object_types']:
-            self.catalog_context.register_source_type('star',
-                                                      object_class=StarObject)
+            self.cat_cxt.register_source_type('star',
+                                              object_class=StarObject)
         if 'galaxy' in config['object_types']:
-            self.catalog_context.register_source_type('galaxy',
-                                                      object_class=GalaxyObject)
+            self.cat_cxt.register_source_type('galaxy',
+                                              object_class=GalaxyObject)
 
     @property
     def observed_sed_factory(self):
@@ -429,7 +429,7 @@ class SkyCatalog(object):
         else:
             partition = self._config['object_types'][object_type]['area_partition']
 
-        coll_type = self.catalog_context.lookup_collection_type(object_type)
+        coll_type = self.cat_cxt.lookup_collection_type(object_type)
         if coll_type is not None:
             out_list.append_collection(coll_type.load_collection(region,
                                                                         self))
@@ -459,7 +459,7 @@ class SkyCatalog(object):
         if object_type == 'galaxy':
             COLUMNS = ['galaxy_id', 'ra', 'dec']
             id_name = 'galaxy_id'
-        elif object_type in ['star', 'sn']:
+        elif object_type in ['star', 'sncosmo']:
             COLUMNS = ['object_type', 'id', 'ra', 'dec']
             id_name = 'id'
         else:
@@ -577,21 +577,19 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
 
 if __name__ == '__main__':
     import time
-    ###cfg_file_name = 'latest.yaml'
-    #cfg_file_name = 'future_latest.yaml'
     cfg_file_name = 'skyCatalog.yaml'
     ###skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
     skycatalog_root = os.getenv('SKYCATALOG_ROOT')
     catalog_dir = 'reorg'
     if len(sys.argv) > 1:
-        cfg_file_name = sys.argv[1]
-    #cfg_file = os.path.join('/global/homes/j/jrbogart/desc_git/skyCatalogs/cfg',
-    #                           cfg_file_name)
-    ##cfg_file = os.path.join(skycatalog_root, 'point_test', cfg_file_name)
+        catalog_dir = sys.argv[1]
+    if len(sys.argv) > 2:
+        cfg_file_name = sys.argv[2]
+
     cfg_file = os.path.join(skycatalog_root, catalog_dir, cfg_file_name)
 
     write_sed = False
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 3:
         write_sed = True
 
     # For tract 3828
@@ -633,14 +631,15 @@ if __name__ == '__main__':
 
     at_slac = os.getenv('HOME').startswith('/sdf/home/')
     if not at_slac:
-        obj_types = {'star', 'galaxy', 'sn'}
+        obj_types = {'star', 'galaxy', 'sncosmo'}
     else:
-        obj_types = {'star', 'galaxy', 'sn', 'gaia_star'}
+        obj_types = {'star', 'galaxy', 'sncosmo', 'gaia_star'}
 
     print('Invoke get_objects_by_region with box region, no gaia')
     t0 = time.time()
     object_list = cat.get_objects_by_region(rgn,
-                                            obj_type_set={'star','galaxy','sn'})
+                                            obj_type_set={'star','galaxy',
+                                                          'sncosmo'})
     t_done = time.time()
     print('Took ', t_done - t0)
                                             ##### temporary obj_type_set={'galaxy', 'star'} )
@@ -724,7 +723,7 @@ if __name__ == '__main__':
                     print('For star magnorm: ', magnorm)
                     if magnorm < 1000:
                         print('Length of sed: ', len(sed.wave_list))
-            elif o.object_type == 'sn':
+            elif o.object_type == 'sncosmo':
                 print(o.get_instcat_entry())
             elif o.object_type == 'galaxy':
                 for cmp in ['disk', 'bulge', 'knots']:

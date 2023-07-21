@@ -1,4 +1,4 @@
-#from desc.skycatalogs.objects.sn_object import SNObject
+#from desc.skycatalogs.objects.sncosmo_object import SncosmoObject
 #from desc.skycatalogs.objects.galaxy_object import GalaxyObject
 #from desc.skycatalogs.objects.star_object import StarObject
 
@@ -14,7 +14,7 @@ class CatalogContext:
         # Only include collection class if it's not "standard"
         # (that is, not ObjectCollection)
         # source_type_dict['star'] = {'object_class' : StarObject}
-        # source_type_dict['sn'] = {'object_class' : SNObject}
+        # source_type_dict['sncosmo'] = {'object_class' : SncosmoObject}
         # source_type_dict['galaxy'] = {'object_class' : GalaxyObject}
         self._source_type_dict = source_type_dict
 
