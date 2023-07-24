@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import sncosmo
@@ -6,7 +7,7 @@ import sncosmo
 
 from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog
 from desc.skycatalogs.objects.base_object import BaseObject, load_lsst_bandpasses
-from desc.skycatalogs.utils.sn_tools import SNModel
+from desc.skycatalogs.utils.sn_tools import SncosmoModel
 
 PIXEL = 9556
 
@@ -55,7 +56,7 @@ def explore_lc(obj):
     plt.close()
 
     # also plot SEDs
-    sn_obj = SNModel(params=params)
+    sn_obj = SncosmoModel(params=params)
 
 
     plt.figure()
