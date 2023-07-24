@@ -44,7 +44,7 @@ class APITester(unittest.TestCase):
         hps = cat._find_all_hps()
         print('Found {} healpix pixels '.format(len(hps)))
         for h in hps: print(h)
-        assert(set(hps) == {9556, 9683, 9684, 9812, 9813, 9940})
+        assert(set(hps) == {9556, 9557, 9683, 9684, 9812, 9813, 9940})
 
         # These hps are the ones covering tract 3828
         # For this tract ra is between 55.736 and 57.564
