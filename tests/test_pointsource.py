@@ -152,9 +152,10 @@ def explore(cat, obj_type, ix_list=[0]):
             #     for dt in fluxes.keys():
             #         print(f'dt: {dt}  flux: {fluxes[dt][b]}')
 
-skycatalog_root = os.getenv('SKYCATALOG_ROOT')
+skycatalog_root = os.path.join(Path(__file__).resolve().parents[1], 'data')
+config_path = os.path.join(skycatalog_root, 'ci_sample', 'skyCatalog.yaml')
 #skycatalog_root = os.getenv('CFS_SKY_ROOT')
-config_path = os.path.join(skycatalog_root, 'point_test', 'skyCatalog.yaml')
+#config_path = os.path.join(skycatalog_root, 'point_test', 'skyCatalog.yaml')
 
 cat = open_catalog(config_path, skycatalog_root=skycatalog_root)
 
