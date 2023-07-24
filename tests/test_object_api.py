@@ -77,6 +77,17 @@ class SkyCatalogsObjecInterfaceTestCase(unittest.TestCase):
                     # Check number of knots
                     self.assertEqual(gs_obj.original.npoints, row["n_knots"])
 
+    def test_get_sed_components(self):
+        """Check sed components."""
+        for index in self.indexes:
+            obj = self.objects[index]
+            galaxy_id = obj.get_native_attribute("galaxy_id")
+            row = self.df.query(f"galaxy_id == {galaxy_id}").iloc[0]
+            seds = obj.get_observer_sed_components()
+            for component, sed in seds.items():
+                if sed is not None:
+                    self.assertEqual(sed.redshift, row["redshift"])
+
 
 if __name__ == "__main__":
     unittest.main()
