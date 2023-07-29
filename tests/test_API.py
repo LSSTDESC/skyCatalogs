@@ -44,7 +44,7 @@ class APITester(unittest.TestCase):
         hps = cat._find_all_hps()
         print('Found {} healpix pixels '.format(len(hps)))
         for h in hps: print(h)
-        assert(set(hps) == {9556, 9683, 9684, 9812, 9813, 9940})
+        assert(set(hps) == {9556, 9557, 9683, 9684, 9812, 9813, 9940})
 
         # These hps are the ones covering tract 3828
         # For this tract ra is between 55.736 and 57.564
@@ -102,7 +102,7 @@ class APITester(unittest.TestCase):
         print('Total object count: ', box_count)
 
         obj = object_list[0]
-        assert(type(obj) == BaseObject)
+        assert(isinstance(obj, BaseObject))
 
         redshift0 = object_list[0].get_native_attribute('redshift')
         print('First redshift: ', redshift0)
@@ -197,7 +197,7 @@ class APITester(unittest.TestCase):
             assert(len(fluxes) == 6)
             print('Found fluxes')
 
-            assert(type(c[0]) == BaseObject)
+            assert(isinstance(c[0], BaseObject))
 
 
         print('List len: ', len(object_list))
@@ -242,12 +242,9 @@ class APITester(unittest.TestCase):
         hp = 9556
 
         cat = self._cat
-        obj_types = {'galaxy'}
-        specified = cat.get_objects_by_hp(hp, region=None, obj_type_set=obj_types)
-        print_from_objects(f'From hp {hp} with object types {str(obj_types)}', specified)
-
-        none_specified = cat.get_objects_by_hp(hp)
-        print_from_objects(f'From hp {hp}, no specified object types', none_specified)
+        obj_type = 'galaxy'
+        specified = cat.get_object_type_by_hp(hp, obj_type, region=None)
+        print_from_objects(f'From hp {hp} with object types {obj_type}', specified)
     def testAPI_rowgroup(self):
         '''
         Compare results of get_objects_by_region when skyCatalog files
