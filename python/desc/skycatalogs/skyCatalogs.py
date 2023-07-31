@@ -371,14 +371,14 @@ class SkyCatalog(object):
                 objs_copy.add(parent)
         return objs_copy
 
-    def get_objects_by_region(self, region, obj_type_set=None, datetime=None):
+    def get_objects_by_region(self, region, obj_type_set=None, mjd=None):
         '''
         Parameters
         ----------
         region         region is a named tuple(may be box or circle)
                        or object of type PolygonalRegion
         obj_type_set   Return only these objects. Defaults to all available
-        datetime       Python datetime object. Ignored except for SSO
+        mjd            MJD of observation epoch.
 
         Returns
         -------
@@ -405,20 +405,19 @@ class SkyCatalog(object):
         obj_types = self.toplevel_only(obj_types)
 
         for ot in obj_types:
-            new_list = self.get_object_type_by_region(region, ot,
-                                                      datetime=None)
+            new_list = self.get_object_type_by_region(region, ot, mjd=mjd)
             object_list.append_object_list(new_list)
 
         return object_list
 
-    def get_object_type_by_region(self, region, object_type, datetime=None):
+    def get_object_type_by_region(self, region, object_type, mjd=None):
         '''
         Parameters
         ----------
         region        box, circle or PolygonalRegion. Supported region
                       types made depend on object_type
         object_type   known object type without parent
-        datetime      Ignored for now
+        mjd           MJD of observation epoch.
 
         Returns all objects found
         '''
@@ -431,24 +430,22 @@ class SkyCatalog(object):
 
         coll_type = self.cat_cxt.lookup_collection_type(object_type)
         if coll_type is not None:
-            out_list.append_collection(coll_type.load_collection(region,
-                                                                        self))
+            out_list.append_collection(coll_type.load_collection(region, self,
+                                                                 mjd=mjd))
             return out_list
 
         if partition != 'None':
             if partition['type'] == 'healpix':
                 hps = self.get_hps_by_region(region, object_type)
                 for hp in hps:
-                    c = self.get_object_type_by_hp(hp, object_type, region,
-                                                    datetime)
+                    c = self.get_object_type_by_hp(hp, object_type, region, mjd)
                     if len(c) > 0:
                         out_list.append_object_list(c)
                 return out_list
         else:
             raise NotImplementedError(f'Unsupported object type {object_type}')
 
-    def get_object_type_by_hp(self, hp, object_type, region=None,
-                              datetime=None):
+    def get_object_type_by_hp(self, hp, object_type, region=None, mjd=None):
         object_list = ObjectList()
 
         #  Do we need to check more specifically by object type?
@@ -511,6 +508,7 @@ class SkyCatalog(object):
                         new_collection = ObjectCollection(ra_c, dec_c, id_c,
                                                           'galaxy', hp, self,
                                                           region=region,
+                                                          mjd=mjd,
                                                           mask=mask,
                                                           readers=the_readers,
                                                           row_group=rg)
@@ -524,6 +522,7 @@ class SkyCatalog(object):
                         new_collection = ObjectCollection(ra_c, dec_c, id_c,
                                                           object_type_c[0], hp,
                                                           self, region=region,
+                                                          mjd=mjd,
                                                           mask=mask,
                                                           readers=the_readers,
                                                           row_group=rg)
@@ -536,11 +535,11 @@ class SkyCatalog(object):
     #    but if region cut leaves too small a list, read more rowgroups
     #    to achieve a reasonable size list (or exhaust the file)
     def get_object_iterator_by_hp(self, hp, obj_type_set=None,
-                                  max_chunk=None, datetime=None):
+                                  max_chunk=None, mjd=None):
         '''
         Parameters
         ----------
-        datetime       Python datetime object.
+        mjd            MJD of observation epoch
         hp             A healpix id
         obj_type_set   Return only these objects. Defaults to all available
         max_chunk      If specified, iterator will return no more than this

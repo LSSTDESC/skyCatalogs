@@ -355,7 +355,7 @@ class ObjectCollection(Sequence):
     rather than a single number.  There are some additional methods
     '''
     def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
-                 region=None, mask=None, readers=None, row_group=0):
+                 region=None, mjd=None, mask=None, readers=None, row_group=0):
         '''
         Parameters
         ra, dec      float, array-like of same length
@@ -368,6 +368,8 @@ class ObjectCollection(Sequence):
                      calling open_catalog
         region       maybe be used to determine which objects are in the
                      collection
+        mjd          MJD of the observation epoch.  This is used by
+                     time-varying objects, e.g., SNe, stars.
         mask         indices to be masked off, e.g. in case not all objects
                      in the partition (such as healpixel) are in the region
         readers      may be used to recover properties for objects in this
@@ -399,6 +401,11 @@ class ObjectCollection(Sequence):
             self._uniform_object_type = True
 
         self._region = region
+        self._mjd = mjd
+
+    @property
+    def mjd(self):
+        return self._mjd
 
     @property
     def partition_id(self):
