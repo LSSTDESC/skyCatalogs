@@ -177,9 +177,9 @@ class GaiaCollection(ObjectCollection):
         df['coord_ra'] = pm_outputs[0]
         df['coord_dec'] = pm_outputs[1]
 
-        return GaiaCollection(df, skycatalog, source_type, use_lut)
+        return GaiaCollection(df, skycatalog, source_type, use_lut, mjd)
 
-    def __init__(self, df, sky_catalog, source_type, use_lut):
+    def __init__(self, df, sky_catalog, source_type, use_lut, mjd):
         self.df = df
         self._sky_catalog = sky_catalog
         self._partition_id = None
@@ -190,6 +190,7 @@ class GaiaCollection(ObjectCollection):
         self._rdrs = []
         self._object_class = GaiaObject
         self._use_lut = use_lut
+        self._mjd = mjd
 
     @property
     def native_columns(self):
@@ -198,6 +199,10 @@ class GaiaCollection(ObjectCollection):
     @property
     def use_lut(self):
         return self._use_lut
+
+    @property
+    def mjd(self):
+        return self._mjd
 
     def __getitem__(self, key):
         if isinstance(key, int) or isinstance(key, np.int64):

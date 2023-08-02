@@ -57,6 +57,8 @@ class GaiaObjectTestCase(unittest.TestCase):
             self.assertAlmostEqual(np.degrees(row.coord_dec), obj.dec,
                                    places=15)
 
+        self.assertEqual(mjd0, object_list.mjd)
+
         # Use a plausible LSST observation date, and ensure that
         # calculated proper motion offsets are at least 10% larger
         # than the naive estimates.
@@ -71,6 +73,8 @@ class GaiaObjectTestCase(unittest.TestCase):
                                     abs(row['pm_ra']*(mjd - mjd0)/365.)/1.1)
             self.assertGreaterEqual(abs(np.radians(obj.dec) - row.coord_dec),
                                     abs(row['pm_dec']*(mjd - mjd0)/365.)/1.1)
+
+        self.assertEqual(mjd, object_list.mjd)
 
 
 if __name__ == '__main__':
