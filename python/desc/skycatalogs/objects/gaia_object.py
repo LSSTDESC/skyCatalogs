@@ -3,6 +3,7 @@ import sys
 import warnings
 import itertools
 import numpy as np
+import erfa
 import astropy.modeling
 from astropy import units as u
 import galsim
@@ -115,7 +116,7 @@ class GaiaCollection(ObjectCollection):
     def get_config():
         return GaiaCollection._gaia_config
 
-    def load_collection(region, skycatalog):
+    def load_collection(region, skycatalog, mjd=None):
         if isinstance(region, Disk):
             ra = lsst.geom.Angle(region.ra, lsst.geom.degrees)
             dec = lsst.geom.Angle(region.dec, lsst.geom.degrees)
@@ -152,9 +153,33 @@ class GaiaCollection(ObjectCollection):
         cat = ref_obj_loader.loadRegion(refcat_region, band).refCat
         df =  cat.asAstropy().to_pandas()
 
-        return GaiaCollection(df, skycatalog, source_type, use_lut)
+        if mjd is None:
+            raise RuntimeError("MJD needs to be provided for Gaia "
+                               "proper motion calculations.")
+        # The erfa.pmsafe code
+        # (https://pyerfa.readthedocs.io/en/latest/api/erfa.pmsafe.html)
+        # expects ra, dec in units of radians and pm_ra, pm_dec
+        # (proper motion) in units of radians/year.  These are the
+        # units used in the refcats files.  However, erfa.pmsafe
+        # expects parallax in arcseconds so convert from the refcats
+        # units of radians:
+        arcsec_per_radian = (1.0*u.radian).to(u.arcsec).value
+        df['parallax'] *= arcsec_per_radian
+        # radial velocity is missing from the Gaia DR2 refcats, so pass
+        # an array of zeros.
+        rv1 = np.zeros(len(df))
+        epNa = 2400000.5  # "part A" of starting and ending epochs for MJDs.
+        ep2b = mjd
+        pm_outputs = erfa.pmsafe(df['coord_ra'], df['coord_dec'],
+                                 df['pm_ra'], df['pm_dec'], df['parallax'],
+                                 rv1, epNa, df['epoch'], epNa, ep2b)
+        # Update ra, dec values.
+        df['coord_ra'] = pm_outputs[0]
+        df['coord_dec'] = pm_outputs[1]
 
-    def __init__(self, df, sky_catalog, source_type, use_lut):
+        return GaiaCollection(df, skycatalog, source_type, use_lut, mjd)
+
+    def __init__(self, df, sky_catalog, source_type, use_lut, mjd):
         self.df = df
         self._sky_catalog = sky_catalog
         self._partition_id = None
@@ -165,6 +190,7 @@ class GaiaCollection(ObjectCollection):
         self._rdrs = []
         self._object_class = GaiaObject
         self._use_lut = use_lut
+        self._mjd = mjd
 
     @property
     def native_columns(self):
@@ -173,6 +199,10 @@ class GaiaCollection(ObjectCollection):
     @property
     def use_lut(self):
         return self._use_lut
+
+    @property
+    def mjd(self):
+        return self._mjd
 
     def __getitem__(self, key):
         if isinstance(key, int) or isinstance(key, np.int64):
