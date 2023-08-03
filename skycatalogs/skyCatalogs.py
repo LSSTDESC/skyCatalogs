@@ -63,15 +63,20 @@ def _get_intersecting_hps(hp_ordering, nside, region):
     pixels.sort()
     return pixels
 
-def _compress_via_mask(tbl, id_column, region, galaxy=True):
+def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
+                       mjd=None):
     '''
     Parameters
     ----------
     tbl          data table including columns named "ra", "dec", and id_column
-                 (and also "object_type" colum if galaxy is False)
+                 (and also "object_type" colum if galaxy is False, possibly
+                 start_mjd and end_mjd if galaxy is False and mjd is not
+                 None)
     id_column    string
     region       mask should restrict to this region (or not at all if None)
-    galaxy       flag so we know whether or not to return "object_type"
+    source_type  string or set (or other container) of expected object type(s).
+                 For now, must be a singleton
+    mjd          if not none, may be used to filter transient objects
 
     Returns
     -------
@@ -82,8 +87,17 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
     If there are no objects in the region, all return values are None
 
     '''
+
     if isinstance(tbl[id_column][0], (int, np.int64)):
         tbl[id_column] = [str(an_id) for an_id in tbl[id_column]]
+
+    if not isinstance('str', source_type):
+        source_type = set(source_type)
+        if len(source_set) != 1:
+            raise NotImplementedError('_compress_via_mask only accepts singleton object_type')
+        source_type = source_type.pop()
+    galaxy = (source_type == 'galaxy')
+
     if region is not None:
         if isinstance(region, PolygonalRegion):        # special case
             # Find bounding box
@@ -94,7 +108,7 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             dec_min = min([v[1] for v in vertices])
             bnd_box = Box(ra_min, ra_max, dec_min, dec_max)
             # Compute mask for that box
-            mask = _compute_mask(bnd_box, tbl['ra'], tbl['dec'])
+            mask = _compute_region_mask(bnd_box, tbl['ra'], tbl['dec'])
             if all(mask): # even bounding box doesn't intersect table rows
                 if galaxy:
                     return None, None, None, None
@@ -104,7 +118,7 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             # Get compressed ra, dec
             ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
             dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
-            poly_mask = _compute_mask(region, ra_compress, dec_compress)
+            poly_mask = _compute_region_mask(region, ra_compress, dec_compress)
 
             # Get indices of unmasked
             ixes = np.where(~mask)
@@ -112,7 +126,7 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             # Update bounding box mask with polygonal mask
             mask[ixes] |= poly_mask
         else:
-            mask = _compute_mask(region, tbl['ra'], tbl['dec'])
+            mask = _compute_region_mask(region, tbl['ra'], tbl['dec'])
 
         if all(mask):
             if galaxy:
@@ -126,6 +140,7 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             if galaxy:
                 return ra_compress, dec_compress, id_compress, mask
             else:
+
                 object_type_compress = ma.array(tbl['object_type'],
                                                 mask=mask).compressed()
                 return ra_compress, dec_compress, id_compress, object_type_compress, mask
@@ -135,7 +150,7 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
         else:
             return tbl['ra'], tbl['dec'], tbl[id_column],tbl['object_type'],None
 
-def _compute_mask(region, ra, dec):
+def _compute_region_mask(region, ra, dec):
     '''
     Compute mask according to region for provided data
     Parameters
@@ -174,6 +189,27 @@ def _compute_mask(region, ra, dec):
         mask = obj_chord_sq > rad_chord_sq
     if isinstance(region, PolygonalRegion):
         mask = region.get_containment_mask(ra, dec, included=False)
+    return mask
+
+def _OR_interval_mask(old_mask, current_mjd, start_mjd, end_mjd):
+    '''
+    Starting with an existing mask of excluded objects, exclude additional
+    objects not visible at time current_mjd
+    Parameters
+    ----------
+    old_mask       Bit mask.  Bit set if object is to be excluded
+    current_mjd    Float
+    start_mjd      Array of float. Bound on when object starts being
+                   detectable
+    end_mjd        Array of float. Bound on when object ceases being
+                   visible
+    Returns
+    -------
+    old_mask ORed with mask of objects detectable at specified time
+    '''
+    mask = np.logical_or(old_mask, (current_mjd < start_mjd))
+    mask = np.logical_or(mask, (current_mjd  > end_mjd))
+
     return mask
 
 class SkyCatalog(object):
