@@ -158,7 +158,7 @@ class Config(DelegatorBase):
                   file path) from schema_version keyword
         Returns:  None
                   Raise exception if validation fails for any reason:
-                  desc.skycatalogs.exception.NoSchema if schema specification
+                  skycatalogs.exception.NoSchema if schema specification
                   can't be found
                   OSError if schema file can't be read
                   yaml.YAMLerror if schema can't be loaded
@@ -288,10 +288,10 @@ def assemble_provenance(pkg_root, inputs={}, schema_version=None):
 
     if not schema_version:
         schema_version = CURRENT_SCHEMA_VERSION
-    import desc.skycatalogs
+    import skycatalogs
     version_d = {'schema_version' : schema_version}
-    if '__version__' in dir(desc.skycatalogs):
-        code_version = desc.skycatalogs.__version__
+    if '__version__' in dir(skycatalogs):
+        code_version = skycatalogs.__version__
     else:
         code_version = 'unknown'
     version_d['code_version'] = code_version
