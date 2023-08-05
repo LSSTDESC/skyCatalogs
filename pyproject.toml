@@ -24,7 +24,14 @@ dependencies = [
 requires-python = ">=3.7" # For setuptools >= 61.0 support
 
 [tool.setuptools.dynamic]
-version = {attr = "desc.skycatalogs._version.__version__"}
+version = {attr = "_version.__version__"}
 
 [tool.setuptools.packages.find]
-where = ["python"]
+where = ["."]
+
+[tool.setuptools.package-data]
+"row_groups" = ["data/row_groups/*.parquet", "data/row_groups/*.yaml"]
+"gaia_dr2" = ["data/gaia_dr2/*.dat", "data/gaia_dr2/*.txt"]
+"ci_data" = ["data/ci_sample/*.parquet", "data/ci_sample/README",
+             "data/ci_sample/*.yaml", "data/ci_sample/repo/*.*",
+	     "data/ci_sample/repo/refcat/*/*.fits"]

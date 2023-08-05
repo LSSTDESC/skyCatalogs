@@ -4,13 +4,13 @@ import unittest
 import numpy as np
 import pandas as pd
 import lsst.daf.butler as daf_butler
-from desc.skycatalogs import skyCatalogs
-from desc.skycatalogs.objects import GaiaCollection
+from skycatalogs import skyCatalogs
+from skycatalogs.objects import GaiaCollection
 
 
 PACKAGE_DIR = os.path.dirname(os.path.abspath(str(Path(__file__).parent)))
-SKYCATALOG_ROOT = os.path.join(PACKAGE_DIR, "data")
-CATALOG_DIR = os.path.join(PACKAGE_DIR, "data", "ci_sample")
+SKYCATALOG_ROOT = os.path.join(PACKAGE_DIR, "skycatalogs", "data")
+CATALOG_DIR = os.path.join(PACKAGE_DIR, "skycatalogs", "data", "ci_sample")
 
 
 CONFIG = {'area_partition': None,

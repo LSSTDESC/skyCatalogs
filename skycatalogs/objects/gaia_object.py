@@ -11,26 +11,28 @@ import galsim
 import lsst.daf.butler as daf_butler
 import lsst.geom
 from lsst.meas.algorithms import ReferenceObjectLoader
-from desc.skycatalogs.utils.shapes import Disk, PolygonalRegion
-from desc.skycatalogs.objects.base_object import BaseObject, ObjectCollection
+from skycatalogs.utils.shapes import Disk, PolygonalRegion
+from skycatalogs.objects.base_object import BaseObject, ObjectCollection
 
 
 __all__ = ['GaiaObject', 'GaiaCollection']
 
 
 _FILE_PATH = str(PurePath(__file__))
-_SKYCATALOGS_DIR = _FILE_PATH[:_FILE_PATH.rindex('/python')]
+_SKYCATALOGS_DIR = _FILE_PATH[:_FILE_PATH.rindex('/skycatalogs')]
 
 
 # Read in function for stellar temperature estimation given bp and rp
 # fluxes
-_TEMP_EST_DATA_FILE = os.path.join(_SKYCATALOGS_DIR, 'data', 'gaia_dr2',
+_TEMP_EST_DATA_FILE = os.path.join(_SKYCATALOGS_DIR, 'skycatalogs',
+                                   'data', 'gaia_dr2',
                                    'gaia_dr2_temp_from_bp-rp_ratio.txt')
 _TEMP_FUNC = galsim.LookupTable(*np.genfromtxt(_TEMP_EST_DATA_FILE))
 
 # Read in the Gaia DR2 passband for the bp flux to use for setting the
 # SED normalizations.
-_GAIA_PB_FILE = os.path.join(_SKYCATALOGS_DIR, 'data', 'gaia_dr2',
+_GAIA_PB_FILE = os.path.join(_SKYCATALOGS_DIR, 'skycatalogs',
+                             'data', 'gaia_dr2',
                              'GaiaDR2_RevisedPassbands.dat')
 _GAIA_PBS = np.genfromtxt(_GAIA_PB_FILE, names=['wl', 'g', 'g_err', 'bp',
                                                 'bp_err', 'rp', 'rp_err'])

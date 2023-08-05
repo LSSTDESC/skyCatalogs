@@ -4,7 +4,7 @@ import git
 import logging
 from jsonschema import validate
 
-from desc.skycatalogs.utils.exceptions import NoSchemaVersionError, ConfigDuplicateKeyError
+from .exceptions import NoSchemaVersionError, ConfigDuplicateKeyError
 
 from collections import namedtuple
 
@@ -138,7 +138,7 @@ class Config(DelegatorBase):
         path_items = key_path.split('/')
         d = self._cfg
         for i in path_items[:-1]:
-            if not i in d:
+            if not i in d.keys():
                 if silent:
                     return None
                 raise ValueError(f'Item {i} not found')
@@ -250,7 +250,7 @@ def _find_schema_path(schema_spec):
     '''
     fname = f'skycatalogs_schema_{self._cfg["schema_spec"]}'
     here = os.path.dirname(__file__)
-    return os.path.join(here, '../../../../cfg', fname)
+    return os.path.join(here, '../../cfg', fname)
 
 def create_config(catalog_name, logname=None):
     return Config({'catalog_name' : catalog_name}, logname)

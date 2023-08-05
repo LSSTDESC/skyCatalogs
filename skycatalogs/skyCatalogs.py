@@ -8,18 +8,18 @@ import numpy as np
 import numpy.ma as ma
 import pyarrow.parquet as pq
 from astropy import units as u
-from desc.skycatalogs.objects.base_object import load_lsst_bandpasses
-from desc.skycatalogs.utils.catalog_utils import CatalogContext
-from desc.skycatalogs.objects.base_object import ObjectList, ObjectCollection
-from desc.skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
-from desc.skycatalogs.readers import ParquetReader
-from desc.skycatalogs.utils.sed_tools import TophatSedFactory
-from desc.skycatalogs.utils.sed_tools import MilkyWayExtinction
-from desc.skycatalogs.utils.config_utils import Config
-from desc.skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
-from desc.skycatalogs.objects.sncosmo_object import SncosmoObject
-from desc.skycatalogs.objects.star_object import StarObject
-from desc.skycatalogs.objects.galaxy_object import GalaxyObject
+from skycatalogs.objects.base_object import load_lsst_bandpasses
+from skycatalogs.utils.catalog_utils import CatalogContext
+from skycatalogs.objects.base_object import ObjectList, ObjectCollection
+from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
+from skycatalogs.readers import ParquetReader
+from skycatalogs.utils.sed_tools import TophatSedFactory
+from skycatalogs.utils.sed_tools import MilkyWayExtinction
+from skycatalogs.utils.config_utils import Config
+from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
+from skycatalogs.objects.sncosmo_object import SncosmoObject
+from skycatalogs.objects.star_object import StarObject
+from skycatalogs.objects.galaxy_object import GalaxyObject
 
 __all__ = ['SkyCatalog', 'open_catalog']
 
@@ -577,7 +577,6 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
 if __name__ == '__main__':
     import time
     cfg_file_name = 'skyCatalog.yaml'
-    ###skycatalog_root = os.path.join(os.getenv('SCRATCH'),'desc/skycatalogs')
     skycatalog_root = os.getenv('SKYCATALOG_ROOT')
     catalog_dir = 'reorg'
     if len(sys.argv) > 1:

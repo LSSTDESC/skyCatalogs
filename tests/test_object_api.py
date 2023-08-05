@@ -3,12 +3,12 @@ from pathlib import Path
 import unittest
 import numpy as np
 import pandas as pd
-from desc.skycatalogs import skyCatalogs
+from skycatalogs import skyCatalogs
 
 
 PACKAGE_DIR = os.path.dirname(os.path.abspath(str(Path(__file__).parent)))
-SKYCATALOG_ROOT = os.path.join(PACKAGE_DIR, "data")
-CATALOG_DIR = os.path.join(PACKAGE_DIR, "data", "ci_sample")
+SKYCATALOG_ROOT = os.path.join(PACKAGE_DIR, "skycatalogs", "data")
+CATALOG_DIR = os.path.join(PACKAGE_DIR, "skycatalogs", "data", "ci_sample")
 SKYCATALOG = os.path.join(CATALOG_DIR, "skyCatalog.yaml")
 
 

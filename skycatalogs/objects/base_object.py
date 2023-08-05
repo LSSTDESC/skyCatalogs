@@ -11,8 +11,8 @@ import galsim
 import logging
 from galsim.errors import GalSimRangeError
 
-from desc.skycatalogs.utils.translate_utils import form_object_string
-from desc.skycatalogs.utils.config_utils import Config
+from skycatalogs.utils.translate_utils import form_object_string
+from skycatalogs.utils.config_utils import Config
 
 '''
 Main object types.   There are also may be subtypes. For example,

@@ -1,7 +1,3 @@
-#from desc.skycatalogs.objects.sncosmo_object import SncosmoObject
-#from desc.skycatalogs.objects.galaxy_object import GalaxyObject
-#from desc.skycatalogs.objects.star_object import StarObject
-
 __all__ = ['CatalogContext']
 class CatalogContext:
     def __init__(self, the_sky_cat):

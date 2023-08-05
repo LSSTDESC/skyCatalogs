@@ -1,5 +1,5 @@
 import galsim
-from desc.skycatalogs.utils.sn_tools import SncosmoModel
+from skycatalogs.utils.sn_tools import SncosmoModel
 from .base_object import BaseObject
 
 
