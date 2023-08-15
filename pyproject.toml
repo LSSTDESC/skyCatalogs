@@ -26,8 +26,15 @@ requires-python = ">=3.7" # For setuptools >= 61.0 support
 [tool.setuptools.dynamic]
 version = {attr = ".skycatalogs._version.__version__"}
 
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["./"]
+namespaces = false
+exclude = ["tests/*"]
+
+
 
 [tool.setuptools.package-data]
 "skycatalogs" = [
