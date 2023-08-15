@@ -10,8 +10,8 @@ for details
 import os
 import argparse
 import logging
-from desc.skycatalogs.catalog_creator import CatalogCreator
-from desc.skycatalogs.utils.common_utils import print_date, log_callinfo
+from skycatalogs.catalog_creator import CatalogCreator
+from skycatalogs.utils.common_utils import print_date, log_callinfo
 
 parser = argparse.ArgumentParser(description='''
 Create Sky Catalogs. By default create a galaxy catalog for a

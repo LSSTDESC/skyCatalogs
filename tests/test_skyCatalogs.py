@@ -2,7 +2,7 @@
 Example unit tests for skyCatalogs package
 """
 import unittest
-import desc.skycatalogs
+import skycatalogs
 
 class skyCatalogsTestCase(unittest.TestCase):
     def setUp(self):

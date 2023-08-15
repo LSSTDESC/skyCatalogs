@@ -4,7 +4,7 @@ import git
 import logging
 from jsonschema import validate
 
-from desc.skycatalogs.utils.exceptions import NoSchemaVersionError, ConfigDuplicateKeyError
+from .exceptions import NoSchemaVersionError, ConfigDuplicateKeyError
 
 from collections import namedtuple
 
@@ -138,7 +138,7 @@ class Config(DelegatorBase):
         path_items = key_path.split('/')
         d = self._cfg
         for i in path_items[:-1]:
-            if not i in d:
+            if not i in d.keys():
                 if silent:
                     return None
                 raise ValueError(f'Item {i} not found')
@@ -158,7 +158,7 @@ class Config(DelegatorBase):
                   file path) from schema_version keyword
         Returns:  None
                   Raise exception if validation fails for any reason:
-                  desc.skycatalogs.exception.NoSchema if schema specification
+                  skycatalogs.exception.NoSchema if schema specification
                   can't be found
                   OSError if schema file can't be read
                   yaml.YAMLerror if schema can't be loaded
@@ -250,7 +250,7 @@ def _find_schema_path(schema_spec):
     '''
     fname = f'skycatalogs_schema_{self._cfg["schema_spec"]}'
     here = os.path.dirname(__file__)
-    return os.path.join(here, '../../../../cfg', fname)
+    return os.path.join(here, '../../cfg', fname)
 
 def create_config(catalog_name, logname=None):
     return Config({'catalog_name' : catalog_name}, logname)
@@ -288,10 +288,10 @@ def assemble_provenance(pkg_root, inputs={}, schema_version=None):
 
     if not schema_version:
         schema_version = CURRENT_SCHEMA_VERSION
-    import desc.skycatalogs
+    import skycatalogs
     version_d = {'schema_version' : schema_version}
-    if '__version__' in dir(desc.skycatalogs):
-        code_version = desc.skycatalogs.__version__
+    if '__version__' in dir(skycatalogs):
+        code_version = skycatalogs.__version__
     else:
         code_version = 'unknown'
     version_d['code_version'] = code_version

@@ -11,10 +11,10 @@ import numpy as np
 #import pandas as pd
 
 
-from desc.skycatalogs.skyCatalogs import SkyCatalog, open_catalog
-from desc.skycatalogs.skyCatalogs import Box, Disk, PolygonalRegion
-from desc.skycatalogs.skyCatalogs import _get_intersecting_hps
-from desc.skycatalogs.objects.base_object import BaseObject
+from skycatalogs.skyCatalogs import SkyCatalog, open_catalog
+from skycatalogs.skyCatalogs import Box, Disk, PolygonalRegion
+from skycatalogs.skyCatalogs import _get_intersecting_hps
+from skycatalogs.objects.base_object import BaseObject
 
 class APITester(unittest.TestCase):
 
@@ -23,7 +23,7 @@ class APITester(unittest.TestCase):
         Open the catalog
         '''
         skycatalog_root = os.path.join(Path(__file__).resolve().parents[1],
-                                       'data')
+                                       'skycatalogs', 'data')
         self._skycatalog_root = skycatalog_root
         cfg_path = os.path.join(skycatalog_root, 'ci_sample', 'skyCatalog.yaml')
         self._cat = open_catalog(cfg_path, skycatalog_root=skycatalog_root)

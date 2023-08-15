@@ -11,14 +11,14 @@ import pyarrow.parquet as pq
 from multiprocessing import Process, Pipe
 from astropy.coordinates import SkyCoord
 import sqlite3
-from desc.skycatalogs.utils.common_utils import print_date
-from desc.skycatalogs.utils.sed_tools import TophatSedFactory, get_star_sed_path
-from desc.skycatalogs.utils.config_utils import create_config, assemble_SED_models
-from desc.skycatalogs.utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance, write_yaml
-from desc.skycatalogs.utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_flux_schema, make_pointsource_schema
-from desc.skycatalogs.objects.base_object import LSST_BANDS
+from .utils.common_utils import print_date
+from .utils.sed_tools import TophatSedFactory, get_star_sed_path
+from .utils.config_utils import create_config, assemble_SED_models
+from .utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance, write_yaml
+from .utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_flux_schema, make_pointsource_schema
+from .objects.base_object import LSST_BANDS
 
-from desc.skycatalogs.objects.base_object import ObjectCollection
+from .objects.base_object import ObjectCollection
 
 # from dm stack
 from dustmaps.sfd import SFDQuery
@@ -140,7 +140,7 @@ class CatalogCreator:
         knots_mag_cut   No knots for galaxies with i_mag > cut
         knots           If True include knots
         logname         logname for Python logger
-        pkg_root        defaults to three levels up from __file__
+        pkg_root        defaults to one level up from __file__
         skip_done       If True, skip over files which already exist. Otherwise
                         (by default) overwrite with new version.
                         Output info message in either case if file exists.
@@ -165,7 +165,7 @@ class CatalogCreator:
             self._pkg_root = pkg_root
         else:
             self._pkg_root = os.path.join(os.path.dirname(__file__),
-                                          '../../..')
+                                          '..')
 
         self._global_partition = area_partition
         if area_partition is not None:
@@ -484,7 +484,7 @@ class CatalogCreator:
         None
         '''
 
-        from desc.skycatalogs import open_catalog, SkyCatalog
+        from .skyCatalogs import open_catalog, SkyCatalog
 
         self._gal_flux_schema = make_galaxy_flux_schema(self._logname)
 
@@ -751,7 +751,7 @@ class CatalogCreator:
         None
         '''
 
-        from desc.skycatalogs import open_catalog, SkyCatalog
+        from .skyCatalogs import open_catalog, SkyCatalog
 
         self._ps_flux_schema = make_star_flux_schema(self._logname)
         if not config_file:
