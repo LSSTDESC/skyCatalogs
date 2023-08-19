@@ -76,7 +76,7 @@ class BaseObject(object):
         determine if it's in a region and discover all its other properties.
         Parameters
         ra, dec         float         in degrees
-        id              string or int, depending on object type
+        id              string        int types are cast as str
         object_type     string        e.g. 'galaxy', 'star', ...
                                       must appear in catalog config file
         belongs_to      ObjectCollection  collection this object belongs to
@@ -85,7 +85,7 @@ class BaseObject(object):
         '''
         self._ra = ra
         self._dec = dec
-        self._id = id
+        self._id = str(id)
         self._object_type = object_type
         self._redshift = redshift
         self._belongs_to = belongs_to
