@@ -20,6 +20,7 @@ from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
 from skycatalogs.objects.sncosmo_object import SncosmoObject
 from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
+from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
 
 __all__ = ['SkyCatalog', 'open_catalog']
 
@@ -96,7 +97,7 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
             raise NotImplementedError('_compress_via_mask only accepts singleton object_type')
         source_type = source_type.pop()
     no_obj_type_return = (source_type in {'galaxy', 'snana'})
-    time_filter = ('mjd_start' in tbl) and ('mjd_end' in tbl) and mjd is not None
+    time_filter = ('start_mjd' in tbl) and ('end_mjd' in tbl) and mjd is not None
 
     if region is not None:
         if isinstance(region, PolygonalRegion):        # special case
@@ -129,7 +130,7 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
             mask = _compute_region_mask(region, tbl['ra'], tbl['dec'])
 
         if time_filter:
-            time_mask = _compute_time_mask(tbl['mjd_start'], tbl['mjd_end'])
+            time_mask = _compute_time_mask(tbl['start_mjd'], tbl['end_mjd'])
             mask = np.logical_or(mask, time_mask)
 
         if all(mask):
@@ -151,7 +152,7 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
     else:
         if no_obj_type_return:
             if time_filter:
-                time_mask = _compute_time_mask(tbl['mjd_start'], tbl['mjd_end'],
+                time_mask = _compute_time_mask(tbl['start_mjd'], tbl['end_mjd'],
                                                mjd)
                 ra_compress = ma.array(tbl['ra'], mask=time_mask).compressed()
                 dec_compress = ma.array(tbl['dec'], mask=time_mask).compressed()
@@ -522,7 +523,7 @@ class SkyCatalog(object):
             COLUMNS = ['galaxy_id', 'ra', 'dec']
             id_name = 'galaxy_id'
         elif object_type in ['snana']:
-            COLUMNS = ['id', 'ra', 'dec', 'mjd_start', 'mjd_end']
+            COLUMNS = ['id', 'ra', 'dec', 'start_mjd', 'end_mjd']
             id_name = 'id'
         elif object_type in ['star', 'sncosmo']:
             COLUMNS = ['object_type', 'id', 'ra', 'dec']

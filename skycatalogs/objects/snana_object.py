@@ -2,7 +2,7 @@ import galsim
 import h5py
 from .base_object import BaseObject,ObjectCollection
 
-__all__ = ['SnanaObject']
+__all__ = ['SnanaObject', 'SnanaCollection']
 
 class SnanaObject(BaseObject):
     _type_name = 'snana'
