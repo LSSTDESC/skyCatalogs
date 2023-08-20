@@ -130,7 +130,8 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
             mask = _compute_region_mask(region, tbl['ra'], tbl['dec'])
 
         if time_filter:
-            time_mask = _compute_time_mask(tbl['start_mjd'], tbl['end_mjd'])
+            time_mask = _compute_time_mask(mjd, tbl['start_mjd'],
+                                           tbl['end_mjd'])
             mask = np.logical_or(mask, time_mask)
 
         if all(mask):
@@ -152,8 +153,8 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
     else:
         if no_obj_type_return:
             if time_filter:
-                time_mask = _compute_time_mask(tbl['start_mjd'], tbl['end_mjd'],
-                                               mjd)
+                time_mask = _compute_time_mask(mjd, tbl['start_mjd'],
+                                               tbl['end_mjd'])
                 ra_compress = ma.array(tbl['ra'], mask=time_mask).compressed()
                 dec_compress = ma.array(tbl['dec'], mask=time_mask).compressed()
                 id_compress = ma.array(tbl[id_column],
@@ -205,24 +206,22 @@ def _compute_region_mask(region, ra, dec):
         mask = region.get_containment_mask(ra, dec, included=False)
     return mask
 
-def _OR_interval_mask(old_mask, current_mjd, start_mjd, end_mjd):
+def _compute_time_mask(current_mjd, start_mjd, end_mjd):
     '''
     Starting with an existing mask of excluded objects, exclude additional
     objects not visible at time current_mjd
     Parameters
     ----------
-    old_mask       Bit mask.  Bit set if object is to be excluded
-    current_mjd    Float
+    current_mjd    Float  Time for which mask will be computed
     start_mjd      Array of float. Bound on when object starts being
                    detectable
     end_mjd        Array of float. Bound on when object ceases being
                    visible
     Returns
     -------
-    old_mask ORed with mask of objects detectable at specified time
+    mask of objects detectable at specified time
     '''
-    mask = np.logical_or(old_mask, (current_mjd < start_mjd))
-    mask = np.logical_or(mask, (current_mjd  > end_mjd))
+    mask = np.logical_or((current_mjd > end_mjd), (current_mjd < start_mjd))
 
     return mask
 
