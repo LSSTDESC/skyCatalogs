@@ -586,6 +586,11 @@ class SkyCatalog(object):
                                                     mask=mask,
                                                     readers=the_readers,
                                                     row_group=rg)
+                        if object_type == 'snana':
+                            # file pattern really should come from cfg
+                            base = f'snana_{hp}.hdf5'
+                            SED_file = os.path.join(self._cat_dir, base)
+                            new_collection.set_SED_file(SED_file)
                         object_list.append_collection(new_collection)
 
                 else:
@@ -704,9 +709,9 @@ if __name__ == '__main__':
 
     at_slac = os.getenv('HOME').startswith('/sdf/home/')
     if not at_slac:
-        obj_types = {'star', 'galaxy', 'sncosmo'}
+        obj_types = {'star', 'galaxy', 'sncosmo', 'snana'}
     else:
-        obj_types = {'star', 'galaxy', 'sncosmo', 'gaia_star'}
+        obj_types = {'star', 'galaxy', 'sncosmo', 'snana', 'gaia_star'}
 
     print('Invoke get_objects_by_region with box region, no gaia')
     t0 = time.time()

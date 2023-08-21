@@ -1,11 +1,19 @@
 import galsim
 import h5py
+import numpy as np
 from .base_object import BaseObject,ObjectCollection
 
 __all__ = ['SnanaObject', 'SnanaCollection']
 
 class SnanaObject(BaseObject):
     _type_name = 'snana'
+
+    def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index,
+                 redshift=None):
+        super().__init__(ra, dec, id, object_type, belongs_to, belongs_index,
+                         redshift)
+        self._time_sampling = None
+        self._lambda = None
 
     def _get_sed(self, mjd=None):
         if mjd is None:
@@ -18,8 +26,8 @@ class SnanaObject(BaseObject):
         if mjd < mjd_start or mjd > mjd_end:
             return None, 0.0
         # For now find the SED with mjd closest to ours and return that
-
-        # What do we do about magnorm?
+        # What should we do about magnorm?
+        return _read_nearest_SED(mjd)
 
 
     def get_gsobject_components(self, gsparams=None, rng=None):
@@ -40,7 +48,29 @@ class SnanaObject(BaseObject):
         return self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
 
     def _read_nearest_SED(self, mjd):
-        pass   # until I figure it out
+        # Find row with closest mjd and return it along with
+        # (for now) magnorm of 0.0
+
+        f = h5py.File(self._belongs_to._SED_file, 'r')
+        if self._time_sampling is None:
+            self._time_sampling = np.array(f[self._id]['mjd'])
+        if self._lambda is None:
+            self._lambda = np.array(f[self._id]['lambda'])
+
+        last_ix = len(self._time_sampling) - 1
+        if mjd < self._time_sampling[0]:
+            mjd_ix = 0
+        elif mjd > self._time_sampling[last_ix]:
+            mjd_ix = last_ix
+        else:
+            ixes = np.argmin(np.abs(self._time_sampling - mjd))
+            if isinstance(ixes, list):
+                mjd_ix = ixes[0]
+            else:
+                mjd_ix = ixes
+
+        return f[self._id]['flambda'][mjd_ix]
+
 
 class SnanaCollection(ObjectCollection):
     '''
@@ -48,9 +78,5 @@ class SnanaCollection(ObjectCollection):
     in that it keeps track of where the file is which contains a library
     of SEDs for each sn
     '''
-    def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
-                 region=None, mjd=None, mask=None, readers=None, row_group=0,
-                 SED_file=None):
+    def set_SED_file(self, SED_file):
         self._SED_file = SED_file
-        super().__init__(ra, dec, id, object_type, partition_id, sky_catalog,
-                         region, mjd, mask, readers, row_group)

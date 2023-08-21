@@ -554,6 +554,8 @@ class ObjectCollection(Sequence):
                                       self._id[key], object_type, self, key)
 
         elif type(key) == slice:
+            if key.start is None:
+                key.start = 0
             ixdata = [i for i in range(min(key.stop,len(self._ra)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
             return [self._object_class(self._ra[i], self._dec[i], self._id[i],
