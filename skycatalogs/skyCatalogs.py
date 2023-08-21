@@ -303,7 +303,7 @@ class SkyCatalog(object):
             self.cat_cxt.register_source_type('gaia_star',
                                               object_class=GaiaObject,
                                               collection_class=GaiaCollection,
-                                              load=True)
+                                              custom_load=True)
         if 'sncosmo' in config['object_types']:
             self.cat_cxt.register_source_type('sncosmo',
                                               object_class=SncosmoObject)
@@ -652,7 +652,8 @@ if __name__ == '__main__':
     import time
     cfg_file_name = 'skyCatalog.yaml'
     skycatalog_root = os.getenv('SKYCATALOG_ROOT')
-    catalog_dir = 'reorg'
+    ##catalog_dir = 'reorg'
+    catalog_dir = 'sncosmo'
     if len(sys.argv) > 1:
         catalog_dir = sys.argv[1]
     if len(sys.argv) > 2:
