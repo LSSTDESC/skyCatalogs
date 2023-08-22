@@ -657,8 +657,7 @@ if __name__ == '__main__':
     import time
     cfg_file_name = 'skyCatalog.yaml'
     skycatalog_root = os.getenv('SKYCATALOG_ROOT')
-    ##catalog_dir = 'reorg'
-    catalog_dir = 'sncosmo'
+    catalog_dir = 'reorg'
     if len(sys.argv) > 1:
         catalog_dir = sys.argv[1]
     if len(sys.argv) > 2:
