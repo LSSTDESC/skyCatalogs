@@ -76,6 +76,8 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
     If there are no objects in the region, all return values are None
 
     '''
+    if isinstance(tbl[id_column][0], (int, np.int64)):
+        tbl[id_column] = [str(an_id) for an_id in tbl[id_column]]
     if region is not None:
         if isinstance(region, PolygonalRegion):        # special case
             # Find bounding box
