@@ -18,16 +18,16 @@ class SnanaObject(BaseObject):
     def _get_sed(self, mjd=None):
         if mjd is None:
             return None, 0.0
-        model = self.get_native_attribute('model_name')
-        param_names = self.get_native_attribute('model_param_names')
-        param_values = self.get_native_attribute('model_param_values')
-        mjd_start = self.get_native_attribute('mjd_start')
-        mjd_end = self.get_native_attribute('mjd_start')
+        #model = self.get_native_attribute('model_name')
+        #param_names = self.get_native_attribute('model_param_names')
+        #param_values = self.get_native_attribute('model_param_values')
+        mjd_start = self.get_native_attribute('start_mjd')
+        mjd_end = self.get_native_attribute('end_mjd')
         if mjd < mjd_start or mjd > mjd_end:
             return None, 0.0
         # For now find the SED with mjd closest to ours and return that
         # What should we do about magnorm?
-        return _read_nearest_SED(mjd)
+        return self._read_nearest_SED(mjd), 0.0
 
 
     def get_gsobject_components(self, gsparams=None, rng=None):
@@ -37,19 +37,15 @@ class SnanaObject(BaseObject):
 
     def get_observer_sed_component(self, component, mjd=None):
         sed, _ = self._get_sed(mjd=mjd)
-        if sed is not None:
-            sed = self._apply_component_extinction(sed)
+        # Can't do this now because don't have native attributes for
+        # MW_av, MW_rv
+        #if sed is not None:
+        #    sed = self._apply_component_extinction(sed)
         return sed
 
-    def get_LSST_flux(self, band, sed=None, mjd=None):
-        if not band in LSST_BANDS:
-            return None
-
-        return self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
-
     def _read_nearest_SED(self, mjd):
-        # Find row with closest mjd and return it along with
-        # (for now) magnorm of 0.0
+        # Find row with closest mjd and return galsim.SED generated
+        # from it
 
         f = h5py.File(self._belongs_to._SED_file, 'r')
         if self._time_sampling is None:
@@ -69,7 +65,11 @@ class SnanaObject(BaseObject):
             else:
                 mjd_ix = ixes
 
-        return f[self._id]['flambda'][mjd_ix]
+        lut = galsim.LookupTable(f[self._id]['lambda'],
+                                 f[self._id]['flambda'][mjd_ix],
+                                 interpolant='linear')
+        return galsim.SED(lut, wave_type='A', flux_type='flambda')
+
 
 
 class SnanaCollection(ObjectCollection):
