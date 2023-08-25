@@ -12,7 +12,7 @@ class SnanaObject(BaseObject):
                  redshift=None):
         super().__init__(ra, dec, id, object_type, belongs_to, belongs_index,
                          redshift)
-        self._time_sampling = None
+        self._mjds = None
         self._lambda = None
 
     def _get_sed(self, mjd=None):
@@ -27,7 +27,7 @@ class SnanaObject(BaseObject):
             return None, 0.0
         # For now find the SED with mjd closest to ours and return that
         # What should we do about magnorm?
-        return self._read_nearest_SED(mjd), 0.0
+        return self._linear_interp_SED(mjd), 0.0
 
 
     def get_gsobject_components(self, gsparams=None, rng=None):
@@ -48,18 +48,18 @@ class SnanaObject(BaseObject):
         # from it
 
         f = h5py.File(self._belongs_to._SED_file, 'r')
-        if self._time_sampling is None:
-            self._time_sampling = np.array(f[self._id]['mjd'])
+        if self._mjds is None:
+            self._mjds = np.array(f[self._id]['mjd'])
         if self._lambda is None:
             self._lambda = np.array(f[self._id]['lambda'])
 
-        last_ix = len(self._time_sampling) - 1
-        if mjd < self._time_sampling[0]:
+        last_ix = len(self._mjds) - 1
+        if mjd < self._mjds[0]:
             mjd_ix = 0
-        elif mjd > self._time_sampling[last_ix]:
+        elif mjd > self._mjds[last_ix]:
             mjd_ix = last_ix
         else:
-            ixes = np.argmin(np.abs(self._time_sampling - mjd))
+            ixes = np.argmin(np.abs(self._mjds - mjd))
             if isinstance(ixes, list):
                 mjd_ix = ixes[0]
             else:
@@ -67,6 +67,36 @@ class SnanaObject(BaseObject):
 
         lut = galsim.LookupTable(f[self._id]['lambda'],
                                  f[self._id]['flambda'][mjd_ix],
+                                 interpolant='linear')
+        return galsim.SED(lut, wave_type='A', flux_type='flambda')
+
+    def _linear_interp_SED(self, mjd):
+        f = h5py.File(self._belongs_to._SED_file, 'r')
+        if self._mjds is None:
+            self._mjds = np.array(f[self._id]['mjd'])
+        if self._lambda is None:
+            self._lambda = np.array(f[self._id]['lambda'])
+
+        last_ix = len(self._mjds) - 1
+        if mjd <= self._mjds[0]:
+            flambda = f[self._id]['flambda'][0]
+        elif mjd >= self._mjds[last_ix]:
+            flambda = f[self._id]['flambda'][last_ix]
+        else:
+            ixes = np.argmax((mjd - self._mjds ) > 0)
+            if isinstance(ixes, list):
+                mjd_ix = ixes[0]
+            else:
+                mjd_ix = ixes
+            mjds = self._mjds
+            below = f[self._id]['flambda'][mjd_ix]
+            above = f[self._id]['flambda'][mjd_ix + 1]
+            ratio =  (mjd - mjds[mjd_ix])/(mjds[mjd_ix + 1] - mjds[mjd_ix])
+            flambda = below + ratio * (above - below)
+
+
+        lut = galsim.LookupTable(f[self._id]['lambda'],
+                                 flambda,
                                  interpolant='linear')
         return galsim.SED(lut, wave_type='A', flux_type='flambda')
 
