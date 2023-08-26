@@ -159,7 +159,7 @@ class GaiaCollection(ObjectCollection):
         use_lut = (sed_method.strip().lower() == 'use_lut')
         band = 'bp'
         cat = ref_obj_loader.loadRegion(refcat_region, band).refCat
-        df =  cat.asAstropy().to_pandas()
+        df = cat.asAstropy().to_pandas().sort_values('id')
 
         if mjd is None:
             raise RuntimeError("MJD needs to be provided for Gaia "

@@ -42,8 +42,8 @@ def _get_intersecting_hps(hp_ordering, nside, region):
                                         region.dec_max, region.dec_max],
                                        lonlat=True)
 
-        return healpy.query_polygon(nside, vec, inclusive=True, nest=False)
-    if isinstance(region, Disk):
+        pixels =  healpy.query_polygon(nside, vec, inclusive=True, nest=False)
+    elif isinstance(region, Disk):
         # Convert inputs to the types query_disk expects
         center = healpy.pixelfunc.ang2vec(region.ra, region.dec,
                                           lonlat=True)
@@ -51,11 +51,17 @@ def _get_intersecting_hps(hp_ordering, nside, region):
 
         pixels = healpy.query_disc(nside, center, radius_rad, inclusive=True,
                                    nest=False)
-        return pixels
 
-    if isinstance(region, PolygonalRegion):
-        return healpy.query_polygon(nside, region.get_vertices(),
-                                    inclusive=True, nest=False)
+    elif isinstance(region, PolygonalRegion):
+        pixels = healpy.query_polygon(nside, region.get_vertices(),
+                                      inclusive=True, nest=False)
+    else:
+        raise ValueError('Unsupported region type')
+
+    # ensure pixels are always presented in the same order
+    pixels = list(pixels)
+    pixels.sort()
+    return pixels
 
 def _compress_via_mask(tbl, id_column, region, galaxy=True):
     '''
@@ -289,7 +295,7 @@ class SkyCatalog(object):
 
         Returns
         -------
-        Set of healpix pixels with at least one file in the directory
+        Sorted list of healpix pixels with at least one file in the directory
 
         '''
         # If major organization is by healpix, healpix # could be in
@@ -322,7 +328,9 @@ class SkyCatalog(object):
                                 this_hp['object_types'][ot].append(f)
                             else:
                                 this_hp['object_types'][ot] = [f]
-        return hp_set
+        hp_list = list(hp_set)
+        hp_list.sort()
+        return hp_list
 
     def get_hps_by_region(self, region, object_type='galaxy'):
         '''
@@ -393,11 +401,6 @@ class SkyCatalog(object):
         if self.verbose:
             print("Region ", region)
             print("obj_type_set ", obj_type_set)
-        # This must be done per object type
-        # if self._config['area_partition']['type'] == 'healpix':
-        #     hps = self.get_hps_by_region(region)
-
-        # otherwise raise a not-supported exception
 
         object_list = ObjectList()
         if obj_type_set is None:
@@ -405,6 +408,10 @@ class SkyCatalog(object):
         else:
             obj_types = self.get_object_type_names().intersection(obj_type_set)
         obj_types = self.toplevel_only(obj_types)
+
+        # Ensure they're always ordered the same way
+        obj_types = list(obj_types)
+        obj_types.sort()
 
         for ot in obj_types:
             new_list = self.get_object_type_by_region(region, ot, mjd=mjd)
