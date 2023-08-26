@@ -83,17 +83,13 @@ class SnanaObject(BaseObject):
         elif mjd >= self._mjds[last_ix]:
             flambda = f[self._id]['flambda'][last_ix]
         else:
-            ixes = np.argmax((mjd - self._mjds ) > 0)
-            if isinstance(ixes, list):
-                mjd_ix = ixes[0]
-            else:
-                mjd_ix = ixes
+            # First index where condition is False
+            mjd_ix = np.argmin((mjd - self._mjds ) > 0)
             mjds = self._mjds
-            below = f[self._id]['flambda'][mjd_ix]
-            above = f[self._id]['flambda'][mjd_ix + 1]
-            ratio =  (mjd - mjds[mjd_ix])/(mjds[mjd_ix + 1] - mjds[mjd_ix])
+            below = f[self._id]['flambda'][mjd_ix - 1]
+            above = f[self._id]['flambda'][mjd_ix]
+            ratio =  (mjd - mjds[mjd_ix - 1])/(mjds[mjd_ix] - mjds[mjd_ix - 1])
             flambda = below + ratio * (above - below)
-
 
         lut = galsim.LookupTable(f[self._id]['lambda'],
                                  flambda,
