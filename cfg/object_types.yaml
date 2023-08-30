@@ -66,5 +66,4 @@ object_types :
       area_partition :
         { type: healpix, ordering : ring, nside : 32}
       sed_model : snana
-      MW_extinction : F19              # need to check
       internal_extinction : None
