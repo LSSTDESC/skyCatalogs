@@ -116,9 +116,8 @@ class GalaxyObject(BaseObject):
             obj_dict[component] = obj._lens(g1, g2, mu)
         return obj_dict
 
-    def get_observer_sed_component(self, component, mjd=None):
-        # For now make SED with resolution of 1 nm
-        sed, _ = self._get_sed(component=component, resolution=1.0)
+    def get_observer_sed_component(self, component, mjd=None, resolution=None):
+        sed, _ = self._get_sed(component=component, resolution=resolution)
         if sed is not None:
             sed = self._apply_component_extinction(sed)
 

@@ -140,13 +140,11 @@ class MilkyWayExtinction:
     '''
     Applies extinction to a SED
     '''
-    def __init__(self, delta_wl=0.1, mwRv=3.1, eps=1e-7):
+    def __init__(self, delta_wl=1.0, mwRv=3.1, eps=1e-7):
         """
         Parameters
         ----------
-        sed_factory: (remove)
-        ext_bin_width: (rename to delta_wl?)
-        delta_wl : float [0.1]
+        delta_wl : float [1.0]
             Wavelength sampling of the extinction function in nm
         mwRv : float [3.1]
             Parameter describing the shape of the Milky Way extinction
@@ -168,7 +166,7 @@ class MilkyWayExtinction:
     def extinguish(self, sed, mwAv):
         ext = self.extinction.extinguish(self.wls*u.nm, Av=mwAv)
         lut = galsim.LookupTable(self.wls, ext, interpolant='linear')
-        mw_ext = galsim.SED(lut, wave_type='nm', flux_type='1')
+        mw_ext = galsim.SED(lut, wave_type='nm', flux_type='1').thin()
         sed = sed*mw_ext
         return sed
 
