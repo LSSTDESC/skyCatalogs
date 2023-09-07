@@ -72,7 +72,7 @@ if len(args.file) > 0:
             try:
                 val = args.__getattribute__(k)
             except AttributeError as e:
-                raise ValueException(f'Unknown attribute {k} in options file {args.file}')
+                raise ValueError(f'Unknown attribute {k} in options file {args.file}')
             args.__setattr__(k, opt_dict[k])
 
 logname = 'skyCatalogs.creator'
