@@ -69,6 +69,10 @@ if len(args.file) > 0:
     with open(args.file) as f:
         opt_dict = yaml.safe_load(f)
         for k in opt_dict:
+            try:
+                val = args.__getattribute__(k)
+            except AttributeError as e:
+                raise ValueException(f'Unknown attribute {k} in options file {args.file}')
             args.__setattr__(k, opt_dict[k])
 
 logname = 'skyCatalogs.creator'
