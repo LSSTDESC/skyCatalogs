@@ -1,0 +1,5 @@
+pixels : [9683]
+main_only : True
+galaxy_magnitude_cut : 20.0
+no_pointsources : True
+catalog_dir : input_config
