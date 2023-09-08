@@ -59,22 +59,20 @@ parser.add_argument('--provenance', '--prov', choices=['yaml'], help='''
                      written. Only supported format currently is as a
                      small yaml file, written to the data directory.''')
 parser.add_argument('--dc2', action='store_true', help='If supplied provide values comparable to those used for DC2 run. Default is False')
-parser.add_argument('--file', default='', help='''
+parser.add_argument('--options-file', default=None, help='''
                     path to yaml file associating option names with values. Values for any options
                     included will take precedence.''')
 
 args = parser.parse_args()
 
-if len(args.file) > 0:
-    with open(args.file) as f:
+if args.options_file:
+    with open(args.options_file) as f:
         opt_dict = yaml.safe_load(f)
         for k in opt_dict:
-            try:
-                val = args.__getattribute__(k)
-            except AttributeError as e:
-                raise ValueError(f'Unknown attribute {k} in options file {args.file}')
-            args.__setattr__(k, opt_dict[k])
-
+            if k in args:
+                args.__setattr__(k, opt_dict[k])
+            else:
+                raise ValueError(f'Unknown attribute "{k}" in options file {args.options_file}')
 logname = 'skyCatalogs.creator'
 logger = logging.getLogger(logname)
 logger.setLevel(args.log_level)
