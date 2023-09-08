@@ -10,6 +10,7 @@ for details
 import os
 import argparse
 import logging
+import yaml
 from skycatalogs.catalog_creator import CatalogCreator
 from skycatalogs.utils.common_utils import print_date, log_callinfo
 
@@ -57,10 +58,21 @@ parser.add_argument('--provenance', '--prov', choices=['yaml'], help='''
                      Persist git provenance information for each file
                      written. Only supported format currently is as a
                      small yaml file, written to the data directory.''')
-
 parser.add_argument('--dc2', action='store_true', help='If supplied provide values comparable to those used for DC2 run. Default is False')
+parser.add_argument('--options-file', default=None, help='''
+                    path to yaml file associating option names with values. Values for any options
+                    included will take precedence.''')
 
 args = parser.parse_args()
+
+if args.options_file:
+    with open(args.options_file) as f:
+        opt_dict = yaml.safe_load(f)
+        for k in opt_dict:
+            if k in args:
+                args.__setattr__(k, opt_dict[k])
+            else:
+                raise ValueError(f'Unknown attribute "{k}" in options file {args.options_file}')
 logname = 'skyCatalogs.creator'
 logger = logging.getLogger(logname)
 logger.setLevel(args.log_level)
