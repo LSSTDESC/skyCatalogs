@@ -58,10 +58,14 @@ parser.add_argument('--provenance', '--prov', choices=['yaml'], help='''
                      Persist git provenance information for each file
                      written. Only supported format currently is as a
                      small yaml file, written to the data directory.''')
-parser.add_argument('--dc2', action='store_true', help='If supplied provide values comparable to those used for DC2 run. Default is False')
 parser.add_argument('--options-file', default=None, help='''
-                    path to yaml file associating option names with values. Values for any options
-                    included will take precedence.''')
+                    path to yaml file associating option names with values.
+                    Values for any options included will take precedence.''')
+parser.add_argument('--dc2', action='store_true',
+                    help='''If supplied provide values comparable to those
+                            used for DC2 run. Default is False''')
+parser.add_argument('--galaxy-nsides', default=32,
+                    help='''Pixel nsides for galaxy output. Must be power of 2''')
 
 args = parser.parse_args()
 
@@ -108,6 +112,7 @@ creator = CatalogCreator(parts, area_partition=None,
                          skip_done=args.skip_done,
                          flux_only=args.flux_only, main_only=args.main_only,
                          flux_parallel=args.flux_parallel,
+                         galaxy_nsides=args.galaxy_nsides,
                          provenance=provenance,
                          dc2=args.dc2)
 logger.info(f'Starting with healpix pixel {parts[0]}')
