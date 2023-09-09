@@ -88,9 +88,10 @@ def _get_tophat_info(columns):
     sed_bins        List of  the tophat bins, sorted by "start" (left edge) value
     sed_bulge_names To be fetched from input catalog
     sed_disk_names  To be fetched from input catalog
-
-
     '''
+    tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
+    tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
+
     # Save all the start, width values
     sed_bulge_names = [i for i in columns if (i.startswith('sed') and
                                               i.endswith('bulge'))]
@@ -175,15 +176,15 @@ def _generate_subpixel_masks(ra, dec, subpixels, nside=32):
 
     Returns
     -------
-    masks      dict          (mask, # unmasked) for each subpixel, keyed by subpixel id
+    masks      dict          mask for each subpixel, keyed by subpixel id
     '''
 
-    pix_id = np.array(healpy.pixelfunc.and2pix(nside, ra, dec, lonlat=True))
+    pix_id = np.array(healpy.pixelfunc.ang2pix(nside, ra, dec, lonlat=True))
     masks = dict()
     source_count = len(ra)
     for p in subpixels:
         m = np.array(pix_id != p)
-        masks[p] = (m,  source_count - np.count_nonzero(m))
+        masks[p] = m
 
     return masks
 
@@ -400,6 +401,49 @@ class CatalogCreator:
                 return
         self.write_config()
 
+    def _write_subpixel(self, dat=None, output_path=None, arrow_schema=None,
+                        to_rename=dict(), stride=100000):
+        '''
+        Write out data for a single healpixel, single source type
+        Parameters
+        ----------
+        dat           dict    The data to write out. Column names are the keys;
+                              values are numpy array
+        output_path   string  path to output file
+        arrow_schema          Schema for output parquet file
+        stride        int     number of rows to include in a row group
+        to_rename     dict    Associate input column name with output name
+                              if they differ
+        '''
+        dlen = 0
+        for val in dat.values():
+            dlen = len(val)
+            break
+        if dlen == 0: return
+
+        last_row_ix = dlen - 1
+        u_bnd = min(stride, dlen)
+        l_bnd = 0
+        rg_written = 0
+        writer = None
+
+        while u_bnd > l_bnd:
+            out_dict = {k : dat[k][l_bnd : u_bnd] for k in dat if k not in to_rename}
+            for k in to_rename:
+                out_dict[to_rename[k]] = dat[k][l_bnd : u_bnd]
+            out_df = pd.DataFrame.from_dict(out_dict)
+            out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
+            if not writer:
+                writer = pq.ParquetWriter(output_path, arrow_schema)
+
+            writer.write_table(out_table)
+            rg_written += 1
+            l_bnd = u_bnd
+            u_bnd = min(l_bnd + stride, last_row_ix + 1)
+
+        writer.close()
+        self._logger.debug(f'# row groups written to {output_path}: {rg_written}')
+
     def create_galaxy_pixel(self, pixel, gal_cat, arrow_schema):
         """
         Parameters
@@ -413,6 +457,8 @@ class CatalogCreator:
 
         if self._galaxy_nside > 32:
             out_pixels = _find_subpixels(pixel, self._galaxy_nside)
+            self._logger.debug(f'For nside={self._galaxy_nside} subpixesl are')
+            self._logger.debug(out_pixels)
         else:
             out_pixels = [32]
         self._out_pixels = out_pixels
@@ -426,10 +472,6 @@ class CatalogCreator:
 
         if skip_count == len(out_pixels):
             return
-
-        # Used to finding tophat parameters from cosmoDC2 column names
-        tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
-        tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
 
         # Number of rows to include in a row group
         stride = self._galaxy_stride
@@ -481,13 +523,14 @@ class CatalogCreator:
         if self._sed_subdir:
             #  Generate full paths for disk and bulge SED files, even though
             #  we don't actually write the files here
-            bulge_path = _generate_sed_path(df['galaxy_id'], self._sed_subdir,
-                                            'bulge')
-            disk_path =  _generate_sed_path(df['galaxy_id'], self._sed_subdir,
-                                            'disk')
+            df['bulge_sed_file_path'] =\
+                _generate_sed_path(df['galaxy_id'], self._sed_subdir, 'bulge')
+            df['disk_sed_file_path'] =\
+                _generate_sed_path(df['galaxy_id'], self._sed_subdir, 'disk')
 
         if self._knots:
             # adjust disk sed; create knots sed
+            sed_knot_names = [i.replace('disk', 'knots') for i in sed_disk_names]
             eps = np.finfo(np.float32).eps
             mag_mask = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut,0, 1)
             self._logger.debug(f'Count of mags <=  cut (so adjustment performed: {np.count_nonzero(mag_mask)}')
@@ -497,37 +540,50 @@ class CatalogCreator:
                 df[d_name] = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 1,
                                       np.clip(1 - df['knots_flux_ratio'], eps, None)) * df[d_name]
         # Re-form sed columns into two arrays
-        bulge_seds = (np.array([df[sbn] for sbn in sed_bulge_names]).T).tolist()
-        disk_seds = (np.array([df[sdn] for sdn in sed_disk_names]).T).tolist()
+        df['sed_val_bulge'] = (np.array([df[sbn] for sbn in sed_bulge_names])\
+                               .T).tolist()
+        for k in sed_bulge_names:
+            del(df[k])
+        df['sed_val_disk'] = (np.array([df[sdn] for sdn in sed_disk_names])\
+                              .T).tolist()
+        for k in sed_disk_names:
+            del(df[k])
         if self._knots:
-            sed_knot_names = [i.replace('disk', 'knots') for i in sed_disk_names]
-            knots_seds = (np.array([df[kdn] for kdn in sed_knot_names]).T).tolist()
+            knot_names = [i.replace('disk', 'knots') for i in sed_disk_names]
+            df['sed_val_knots'] = (np.array([df[kdn] for kdn in knot_names])\
+                                .T).tolist()
+            for k in knot_names:
+                del(df[k])
 
         #  Compute mag_norm from TH sed and redshift
-        bulge_magnorm = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
-                         in zip(bulge_seds, df['redshiftHubble']) ]
-        disk_magnorm = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
-                        in zip(disk_seds, df['redshiftHubble']) ]
+        df['bulge_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
+                               in zip(df['sed_val_bulge'],
+                                      df['redshiftHubble']) ]
+        df['disk_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
+                              in zip(df['sed_val_disk'],
+                                     df['redshiftHubble']) ]
         if self._knots:
-            knots_magnorm = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
-                             in zip(knots_seds, df['redshiftHubble']) ]
+            df['knots_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for \
+                                   (s, z) in zip(df['sed_val_knots'],
+                                                 df['redshiftHubble']) ]
 
-        MW_rv = np.full_like(df['sersic_bulge'], _MW_rv_constant)
-        MW_av = _make_MW_extinction(df['ra'], df['dec'])
+        df['MW_rv'] = np.full_like(df['sersic_bulge'], _MW_rv_constant)
+        df['MW_av'] = _make_MW_extinction(df['ra'], df['dec'])
         self._logger.debug('Made extinction')
 
         # Some columns need to be renamed
-        to_modify = ['redshiftHubble', 'peculiarVelocity']
+        to_rename = {'redshiftHubble' : 'redshift_hubble',
+                     'peculiarVelocity' : 'peculiar_velocity'}
         if self._dc2:
-            to_modify += ['ellipticity_1_disk_true_dc2',
-                          'ellipticity_2_disk_true_dc2',
-                          'ellipticity_1_bulge_true_dc2',
-                          'ellipticity_2_bulge_true_dc2']
+            to_rename['ellipticity_1_disk_true_dc2'] = 'ellipticity_1_disk_true'
+            to_rename['ellipticity_2_disk_true_dc2'] = 'ellipticity_2_disk_true'
+            to_rename['ellipticity_1_bulge_true_dc2'] = 'ellipticity_1_bulge_true'
+            to_rename['ellipticity_2_bulge_true_dc2'] = 'ellipticity_2_bulge_true'
 
         if len(self._out_pixels) > 1:
-            subpixel_masks = _generate_subpixel_masks(df['ra'], df['dec'],  self._out_pixels)
+            subpixel_masks = _generate_subpixel_masks(df['ra'], df['dec'],  self._out_pixels, nside=self._galaxy_nside)
         else:
-            subpixel_masks = {pixel : (None, last_row_ix + 1)}
+            subpixel_masks = {pixel : None}
 
         for p, val in subpixel_masks.items():
             output_path = os.path.join(self._output_dir, f'galaxy_{p}.parquet')
@@ -537,69 +593,18 @@ class CatalogCreator:
                 else:
                     continue
 
-            if val[0] is not None:
+
+            if val is not None:
                 compressed = dict()
                 for k in df:
-                    compressed[k] = ma.array(df[k], mask=val[0]).compressed())
-                self.write_subpixel(dat=compressed, datlen=val[1], pixel=p,
-                                    output_path=output_path)
+                    compressed[k] = ma.array(df[k], mask=val).compressed()
+                self._write_subpixel(dat=compressed, output_path=output_path,
+                                     arrow_schema=arrow_schema,
+                                     stride=stride, to_rename=to_rename)
             else:
-                self.write_subpixel(dat=df, datlen=val[1], pixel=p,
-                                    output_path=output_path)
-
-        ##### Everything below belongs in new routine write_subpixel
-        ##### except for the bit about provenance
-
-        #  Write row groups of size stride (or less) until input is exhausted
-        last_row_ix = len(df['galaxy_id']) - 1
-        u_bnd = min(stride, last_row_ix + 1)
-        l_bnd = 0
-        rg_written = 0
-        writer = None
-
-        while u_bnd > l_bnd:
-            out_dict = {k : df[k][l_bnd : u_bnd] for k in non_sed if k not in to_modify}
-            out_dict['redshift_hubble'] = df['redshiftHubble'][l_bnd : u_bnd]
-            out_dict['peculiar_velocity'] = df['peculiarVelocity'][l_bnd : u_bnd]
-            if self._dc2:
-                out_dict['ellipticity_1_disk_true'] =\
-                        df['ellipticity_1_disk_true_dc2'][l_bnd : u_bnd]
-                out_dict['ellipticity_2_disk_true'] =\
-                        - df['ellipticity_2_disk_true_dc2'][l_bnd : u_bnd]
-                out_dict['ellipticity_1_bulge_true'] =\
-                        df['ellipticity_1_bulge_true_dc2'][l_bnd : u_bnd]
-                out_dict['ellipticity_2_bulge_true'] =\
-                        - df['ellipticity_2_bulge_true_dc2'][l_bnd : u_bnd]
-
-            out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
-            out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
-            out_dict['bulge_magnorm'] = bulge_magnorm[l_bnd : u_bnd]
-            out_dict['disk_magnorm'] = disk_magnorm[l_bnd : u_bnd]
-            out_dict['MW_rv'] = MW_rv[l_bnd : u_bnd]
-            out_dict['MW_av'] = MW_av[l_bnd : u_bnd]
-
-            if self._knots:
-                out_dict['sed_val_knots'] = knots_seds[l_bnd : u_bnd]
-                out_dict['n_knots'] = df['n_knots'][l_bnd : u_bnd]
-                out_dict['knots_magnorm'] = knots_magnorm[l_bnd : u_bnd]
-
-            if self._sed_subdir:
-                out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]
-                out_dict['disk_sed_file_path'] = disk_path[l_bnd : u_bnd]
-
-            out_df = pd.DataFrame.from_dict(out_dict)
-            out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
-            if not writer:
-                writer = pq.ParquetWriter(output_path, arrow_schema)
-
-            writer.write_table(out_table)
-            rg_written += 1
-            l_bnd = u_bnd
-            u_bnd = min(l_bnd + stride, last_row_ix + 1)
-
-        writer.close()
-        self._logger.debug(f'# row groups written: {rg_written}')
-
+                self._write_subpixel(dat=df, output_path=output_path,
+                                     arrow_schema=arrow_schema,
+                                     stride=stride, to_rename=to_rename)
 
         if self._provenance == 'yaml':
             self.write_provenance_file(output_path)
@@ -1001,7 +1006,9 @@ class CatalogCreator:
                        assemble_SED_models(self._sed_bins))
         config.add_key('MW_extinction_values', assemble_MW_extinction())
         config.add_key('Cosmology', assemble_cosmology(self._cosmology))
-        config.add_key('object_types', assemble_object_types(self._pkg_root))
+        config.add_key('object_types',
+                       assemble_object_types(self._pkg_root,
+                                             galaxy_nside=self._galaxy_nside))
 
         config.add_key('galaxy_magnitude_cut', self._mag_cut)
         config.add_key('knots_magnitude_cut', self._knots_mag_cut)

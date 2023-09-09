@@ -64,7 +64,7 @@ parser.add_argument('--options-file', default=None, help='''
 parser.add_argument('--dc2', action='store_true',
                     help='''If supplied provide values comparable to those
                             used for DC2 run. Default is False''')
-parser.add_argument('--galaxy-nsides', default=32,
+parser.add_argument('--galaxy-nside', default=32, type=int,
                     help='''Pixel nsides for galaxy output. Must be power of 2''')
 
 args = parser.parse_args()
@@ -112,7 +112,7 @@ creator = CatalogCreator(parts, area_partition=None,
                          skip_done=args.skip_done,
                          flux_only=args.flux_only, main_only=args.main_only,
                          flux_parallel=args.flux_parallel,
-                         galaxy_nsides=args.galaxy_nsides,
+                         galaxy_nside=args.galaxy_nside,
                          provenance=provenance,
                          dc2=args.dc2)
 logger.info(f'Starting with healpix pixel {parts[0]}')
