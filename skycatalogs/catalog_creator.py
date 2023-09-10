@@ -181,7 +181,6 @@ def _generate_subpixel_masks(ra, dec, subpixels, nside=32):
 
     pix_id = np.array(healpy.pixelfunc.ang2pix(nside, ra, dec, lonlat=True))
     masks = dict()
-    source_count = len(ra)
     for p in subpixels:
         m = np.array(pix_id != p)
         masks[p] = m
@@ -338,6 +337,28 @@ class CatalogCreator:
         self._dc2 = dc2
 
         self._obs_sed_factory = None
+
+    def _make_tophat_columns(self, dat, names, cmp):
+        '''
+        Create columns sed_val_cmp, cmp_magnorm where cmp is one of "disk", "bulge", "knots"
+        Parameters
+        ----------
+        dat          Data read from input galaxy catalog. Includes keys for everything in names
+                     plus entry for redshiftHubble
+        names        Names of SED columns for this component
+        cmp          Component name
+
+        Returns
+        -------
+        Add keys  sed_val_cmp, cmp_magnorm to dat.  Values are associated data. Return dat.
+        '''
+        sed_vals = (np.array([dat[k] for k in names]).T).tolist()
+        dat['sed_val_' + cmp] = sed_vals
+        dat[cmp + '_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
+                                 in zip(sed_vals, dat['redshiftHubble'])]
+        for k in names:
+            del(dat[k])
+        return dat
 
     def create(self, catalog_type):
         """
@@ -501,7 +522,7 @@ class CatalogCreator:
         if self._knots:
             non_sed += ['knots_flux_ratio', 'n_knots', 'mag_i_lsst']
 
-        # Find sed bin definitiona and all the tophat quantities needed
+        # Find sed bin definition and all the tophat quantities needed
         q = gal_cat.list_all_quantities()
 
         sed_bins, sed_bulge_names, sed_disk_names = _get_tophat_info(q)
@@ -519,6 +540,19 @@ class CatalogCreator:
             df = gal_cat.get_quantities(to_fetch + [r_mag_name],
                                         native_filters=hp_filter,
                                         filters=mag_cut_filter)
+
+        df['MW_rv'] = np.full_like(df['sersic_bulge'], _MW_rv_constant)
+        df['MW_av'] = _make_MW_extinction(df['ra'], df['dec'])
+        self._logger.debug('Made extinction')
+
+        # Some columns need to be renamed
+        to_rename = {'redshiftHubble' : 'redshift_hubble',
+                     'peculiarVelocity' : 'peculiar_velocity'}
+        if self._dc2:
+            to_rename['ellipticity_1_disk_true_dc2'] = 'ellipticity_1_disk_true'
+            to_rename['ellipticity_2_disk_true_dc2'] = 'ellipticity_2_disk_true'
+            to_rename['ellipticity_1_bulge_true_dc2'] = 'ellipticity_1_bulge_true'
+            to_rename['ellipticity_2_bulge_true_dc2'] = 'ellipticity_2_bulge_true'
 
         if self._sed_subdir:
             #  Generate full paths for disk and bulge SED files, even though
@@ -539,46 +573,6 @@ class CatalogCreator:
                 df[k_name] = mag_mask * np.clip(df['knots_flux_ratio'], None, 1-eps) * df[d_name]
                 df[d_name] = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 1,
                                       np.clip(1 - df['knots_flux_ratio'], eps, None)) * df[d_name]
-        # Re-form sed columns into two arrays
-        df['sed_val_bulge'] = (np.array([df[sbn] for sbn in sed_bulge_names])\
-                               .T).tolist()
-        for k in sed_bulge_names:
-            del(df[k])
-        df['sed_val_disk'] = (np.array([df[sdn] for sdn in sed_disk_names])\
-                              .T).tolist()
-        for k in sed_disk_names:
-            del(df[k])
-        if self._knots:
-            knot_names = [i.replace('disk', 'knots') for i in sed_disk_names]
-            df['sed_val_knots'] = (np.array([df[kdn] for kdn in knot_names])\
-                                .T).tolist()
-            for k in knot_names:
-                del(df[k])
-
-        #  Compute mag_norm from TH sed and redshift
-        df['bulge_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
-                               in zip(df['sed_val_bulge'],
-                                      df['redshiftHubble']) ]
-        df['disk_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
-                              in zip(df['sed_val_disk'],
-                                     df['redshiftHubble']) ]
-        if self._knots:
-            df['knots_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for \
-                                   (s, z) in zip(df['sed_val_knots'],
-                                                 df['redshiftHubble']) ]
-
-        df['MW_rv'] = np.full_like(df['sersic_bulge'], _MW_rv_constant)
-        df['MW_av'] = _make_MW_extinction(df['ra'], df['dec'])
-        self._logger.debug('Made extinction')
-
-        # Some columns need to be renamed
-        to_rename = {'redshiftHubble' : 'redshift_hubble',
-                     'peculiarVelocity' : 'peculiar_velocity'}
-        if self._dc2:
-            to_rename['ellipticity_1_disk_true_dc2'] = 'ellipticity_1_disk_true'
-            to_rename['ellipticity_2_disk_true_dc2'] = 'ellipticity_2_disk_true'
-            to_rename['ellipticity_1_bulge_true_dc2'] = 'ellipticity_1_bulge_true'
-            to_rename['ellipticity_2_bulge_true_dc2'] = 'ellipticity_2_bulge_true'
 
         if len(self._out_pixels) > 1:
             subpixel_masks = _generate_subpixel_masks(df['ra'], df['dec'],  self._out_pixels, nside=self._galaxy_nside)
@@ -593,15 +587,24 @@ class CatalogCreator:
                 else:
                     continue
 
-
             if val is not None:
                 compressed = dict()
                 for k in df:
                     compressed[k] = ma.array(df[k], mask=val).compressed()
+
+                compressed = self._make_tophat_columns(compressed, sed_disk_names, 'disk')
+                compressed = self._make_tophat_columns(compressed, sed_bulge_names, 'bulge')
+                if self._knots:
+                    compressed = self._make_tophat_columns(compressed, sed_knot_names, 'knots')
+
                 self._write_subpixel(dat=compressed, output_path=output_path,
                                      arrow_schema=arrow_schema,
                                      stride=stride, to_rename=to_rename)
             else:
+                df = self._make_tophat_columns(df, sed_disk_names, 'disk')
+                df = self._make_tophat_columns(df, sed_bulge_names, 'bulge')
+                if self._knots:
+                    df = self._make_tophat_columns(df, sed_knot_names, 'knots')
                 self._write_subpixel(dat=df, output_path=output_path,
                                      arrow_schema=arrow_schema,
                                      stride=stride, to_rename=to_rename)
