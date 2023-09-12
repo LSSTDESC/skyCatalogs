@@ -223,7 +223,8 @@ class CatalogCreator:
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator',
                  pkg_root=None, skip_done=False, flux_only=False,
-                 main_only=False, flux_parallel=16, galaxy_nside=32, provenance=None,
+                 main_only=False, flux_parallel=16, galaxy_nside=32,
+                 galaxy_stride=1000000, provenance=None,
                  dc2=False, sn_object_type='sncosmo'):
         """
         Store context for catalog creation
@@ -261,6 +262,7 @@ class CatalogCreator:
         main_only       Only create main files, not flux files
         flux_parallel   Number of processes to divide work of computing fluxes
         galaxy_nside    Healpix configuration value "nside" for galaxy output
+        galaxy_stride   Max number of rows per galaxy row group
         provenance      Whether to write per-output-file git repo provenance
         dc2             Whether to adjust values to provide input comparable
                         to that for the DC2 run
@@ -274,7 +276,7 @@ class CatalogCreator:
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
         _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
 
-        self._galaxy_stride = 1000000
+        self._galaxy_stride = galaxy_stride
         if pkg_root:
             self._pkg_root = pkg_root
         else:
@@ -481,7 +483,7 @@ class CatalogCreator:
             self._logger.debug(f'For nside={self._galaxy_nside} subpixesl are')
             self._logger.debug(out_pixels)
         else:
-            out_pixels = [32]
+            out_pixels = [pixel]
         self._out_pixels = out_pixels
         skip_count = 0
         for p in out_pixels:
@@ -675,9 +677,6 @@ class CatalogCreator:
                 self._logger.info(f'Skipping regeneration of {output_path}')
                 return
 
-        # Use same value for row group as was used for main file
-        stride = self._galaxy_stride
-
         # If there are multiple row groups, each is stored in a separate
         # object collection. Need to loop over them
         object_list = self._cat.get_object_type_by_hp(pixel, 'galaxy')
@@ -686,79 +685,76 @@ class CatalogCreator:
 
         for object_coll in object_list.get_collections():
             _galaxy_collection = object_coll
-            # prefetch everything we need. Getting a quantity for one object
-            # ensures the quantity is read for the whole row group
+            # prefetch everything we need.
             for att in ['galaxy_id', 'shear_1', 'shear_2', 'convergence',
                         'redshift_hubble', 'MW_av', 'MW_rv', 'sed_val_bulge',
                         'sed_val_disk', 'sed_val_knots'] :
                 v = object_coll.get_native_attribute(att)
             l_bnd = 0
-            u_bnd = min(len(object_coll), stride)
+            u_bnd = len(object_coll)
             rg_written = 0
-            while u_bnd > l_bnd:
-                self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
 
-                out_dict = {'galaxy_id': [], 'lsst_flux_u' : [],
-                            'lsst_flux_g' : [], 'lsst_flux_r' : [],
-                            'lsst_flux_i' : [], 'lsst_flux_z' : [],
-                            'lsst_flux_y' : []}
+            self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
 
-                n_parallel = self._flux_parallel
+            out_dict = {'galaxy_id': [], 'lsst_flux_u' : [],
+                        'lsst_flux_g' : [], 'lsst_flux_r' : [],
+                        'lsst_flux_i' : [], 'lsst_flux_z' : [],
+                        'lsst_flux_y' : []}
 
-                if n_parallel == 1:
-                    n_per = u_bnd - l_bnd
-                else:
-                    n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
-                l = l_bnd
-                u = min(l_bnd + n_per, u_bnd)
-                readers = []
+            n_parallel = self._flux_parallel
 
-                if n_parallel == 1:
-                    out_dict = _do_galaxy_flux_chunk(None, _galaxy_collection,
-                                                     l, u)
-                else:
-                    # Expect to be able to do about 1500/minute/process
-                    tm = int((n_per*60)/500)  # Give ourselves a cushion
-                    self._logger.info(f'Using timeout value {tm} for {n_per} sources')
-                    p_list = []
-                    for i in range(n_parallel):
-                        conn_rd, conn_wrt = Pipe(duplex=False)
-                        readers.append(conn_rd)
+            if n_parallel == 1:
+                n_per = u_bnd - l_bnd
+            else:
+                n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
+            l = l_bnd
+            u = min(l_bnd + n_per, u_bnd)
+            readers = []
 
-                        # For debugging call directly
-                        proc = Process(target=_do_galaxy_flux_chunk,
-                                       name=f'proc_{i}',
-                                       args=(conn_wrt, _galaxy_collection,l, u))
-                        proc.start()
-                        p_list.append(proc)
-                        l = u
-                        u = min(l + n_per, u_bnd)
+            if n_parallel == 1:
+                out_dict = _do_galaxy_flux_chunk(None, _galaxy_collection,
+                                                 l, u)
+            else:
+                # Expect to be able to do about 1500/minute/process
+                tm = max(int((n_per*60)/500), 5)  # Give ourselves a cushion
+                self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+                p_list = []
+                for i in range(n_parallel):
+                    conn_rd, conn_wrt = Pipe(duplex=False)
+                    readers.append(conn_rd)
 
-                    self._logger.debug('Processes started') # outside for loop
-                    for i in range(n_parallel):
-                        ready = readers[i].poll(tm)
-                        if not ready:
-                            self._logger.error(f'Process {i} timed out after {tm} sec')
-                            sys.exit(1)
-                        dat = readers[i].recv()   # lines up with if
-                        for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
-                                  'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
-                                  'lsst_flux_y']:
-                            out_dict[k] += dat[k]
-                    for p in p_list:
-                        p.join()
+                    # For debugging call directly
+                    proc = Process(target=_do_galaxy_flux_chunk,
+                                   name=f'proc_{i}',
+                                   args=(conn_wrt, _galaxy_collection,l, u))
+                    proc.start()
+                    p_list.append(proc)
+                    l = u
+                    u = min(l + n_per, u_bnd)
 
-                out_df = pd.DataFrame.from_dict(out_dict) # outdent from for
-                out_table = pa.Table.from_pandas(out_df,
-                                                 schema=self._gal_flux_schema)
+                self._logger.debug('Processes started') # outside for loop
+                for i in range(n_parallel):
+                    ready = readers[i].poll(tm)
+                    if not ready:
+                        self._logger.error(f'Process {i} timed out after {tm} sec')
+                        sys.exit(1)
+                    dat = readers[i].recv()   # lines up with if
+                    for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
+                              'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
+                              'lsst_flux_y']:
+                        out_dict[k] += dat[k]
+                for p in p_list:    # indent same as "for i in range(.."
+                    p.join()
 
-                if not writer:
-                    writer = pq.ParquetWriter(output_path, self._gal_flux_schema)
-                writer.write_table(out_table)
-                l_bnd = u_bnd
-                u_bnd = min(l_bnd + stride, len(object_coll))
+            out_df = pd.DataFrame.from_dict(out_dict) # outdent from for
+            out_table = pa.Table.from_pandas(out_df,
+                                             schema=self._gal_flux_schema)
 
-                rg_written +=1
+            if not writer:
+                writer = pq.ParquetWriter(output_path, self._gal_flux_schema)
+            writer.write_table(out_table)
+
+            rg_written +=1
 
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
