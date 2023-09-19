@@ -37,10 +37,8 @@ class SnanaObject(BaseObject):
 
     def get_observer_sed_component(self, component, mjd=None):
         sed, _ = self._get_sed(mjd=mjd)
-        # Can't do this now because don't have native attributes for
-        # MW_av, MW_rv
-        #if sed is not None:
-        #    sed = self._apply_component_extinction(sed)
+        if sed is not None:
+            sed = self._apply_component_extinction(sed)
         return sed
 
     def _read_nearest_SED(self, mjd):
