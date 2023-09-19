@@ -18,7 +18,6 @@ class AddExtinction():
         starts_with  string      Form of input an output file name is always
                                  <starts_with><pixel>.parquet
         '''
-
         self._in_dir = in_dir
         self._out_dir = out_dir
         self._starts_with = starts_with
