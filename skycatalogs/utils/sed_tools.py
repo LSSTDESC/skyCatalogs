@@ -114,7 +114,7 @@ class TophatSedFactory:
         flambda *= (1e7/1e4)  # (erg/joule)*(m**2/cm**2)
 
         # Create the lookup table.
-        lut = galsim.LookupTable(self.wl_deltas, flambda, interpolant='nearest')
+        lut = galsim.LookupTable(self.wl_deltas, flambda, interpolant='linear')
 
         if resolution:
             wl_min = min(self.wl_deltas)
