@@ -379,7 +379,7 @@ class SkyCatalog(object):
             if parent is not None:
                 objs_copy.remove(obj)
                 objs_copy.add(parent)
-        return objs_copy
+        return sorted(objs_copy)  # Sorted to make sure order is deterministic.
 
     def get_objects_by_region(self, region, obj_type_set=None, mjd=None):
         '''
