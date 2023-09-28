@@ -5,4 +5,3 @@ gitpython
 dust_extinction
 sncosmo
 palpy
-rubin-sim=1.1.1
