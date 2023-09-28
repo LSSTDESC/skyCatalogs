@@ -57,6 +57,9 @@ def load_lsst_bandpasses():
         else:
             bp_full_path = f'LSST_{band}.dat'
         bp = galsim.Bandpass(bp_full_path, 'nm')
+
+        # Mirror behavior in imsim.RubinBandpass:
+        # https://github.com/LSSTDESC/imSim/blob/main/imsim/bandpass.py#L9
         # Trim the edges to avoid 1.e-4 values out to very high and low wavelengths.
         bp = bp.truncate(relative_throughput=1.e-3)
         # Remove wavelength values selectively for improved speed but preserve flux integrals.
