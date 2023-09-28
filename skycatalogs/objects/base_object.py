@@ -56,7 +56,13 @@ def load_lsst_bandpasses():
             bp_full_path = os.path.join(bp_dir, f'total_{band}.dat')
         else:
             bp_full_path = f'LSST_{band}.dat'
-        lsst_bandpasses[band] = galsim.Bandpass(bp_full_path, 'nm').thin()
+        bp = galsim.Bandpass(bp_full_path, 'nm')
+        # Trim the edges to avoid 1.e-4 values out to very high and low wavelengths.
+        bp = bp.truncate(relative_throughput=1.e-3)
+        # Remove wavelength values selectively for improved speed but preserve flux integrals.
+        bp = bp.thin()
+        bp = bp.withZeropoint('AB')
+        lsst_bandpasses[band] = bp
 
     return lsst_bandpasses
 
