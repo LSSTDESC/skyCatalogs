@@ -4,4 +4,3 @@ stackvana>=0.2023.32
 gitpython
 dust_extinction
 sncosmo
-palpy
