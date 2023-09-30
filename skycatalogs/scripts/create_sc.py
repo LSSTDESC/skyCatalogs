@@ -8,6 +8,7 @@ for details
 '''
 
 import os
+import numpy as np
 import argparse
 import logging
 import yaml
@@ -65,9 +66,10 @@ parser.add_argument('--dc2', action='store_true',
                     help='''If supplied provide values comparable to those
                             used for DC2 run. Default is False''')
 parser.add_argument('--galaxy-nside', default=32, type=int,
+                    choices=2**np.arange(15),
                     help='''Pixel nsides for galaxy output. Must be power of 2''')
-parser.add_argument('--galaxy-stride', default=1000000, type=int,
-                    help='''max # rows in a galaxy row group''')
+parser.add_argument('--galaxy-stride', default=1_000_000, type=int,
+                    help='''max # rows in a galaxy row group; default 1 million''')
 
 args = parser.parse_args()
 

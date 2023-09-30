@@ -118,7 +118,7 @@ def _get_tophat_info(columns):
 
     return sed_bins, sed_bulge_names, sed_disk_names
 
-_nside_allowed = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+_nside_allowed = 2**np.arange(15)
 
 def _find_subpixels(pixel, subpixel_nside, pixel_nside=32, nest=False):
     '''
@@ -478,9 +478,12 @@ class CatalogCreator:
         arrow_schema    schema to use for output file
         """
 
+        # The typical galaxy input file to date (cosmoDC2 or diffsky)
+        # is partitioned into nside=32 healpixels. This code will only
+        # output pixels of of the same size or smaller.
         if self._galaxy_nside > 32:
             out_pixels = _find_subpixels(pixel, self._galaxy_nside)
-            self._logger.debug(f'For nside={self._galaxy_nside} subpixesl are')
+            self._logger.debug(f'For nside={self._galaxy_nside} subpixels are')
             self._logger.debug(out_pixels)
         else:
             out_pixels = [pixel]
