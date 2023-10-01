@@ -268,7 +268,7 @@ def assemble_MW_extinction():
     rv = {'mode' : 'constant', 'value' : 3.1}
     return {'r_v' : rv, 'a_v' : av}
 
-def assemble_object_types(pkg_root):
+def assemble_object_types(pkg_root, galaxy_nside=32):
     '''
     Include all supported object types even though a particular catalog
     might not use them all
@@ -276,6 +276,7 @@ def assemble_object_types(pkg_root):
     t_path = os.path.join(pkg_root, 'cfg', 'object_types.yaml')
     with open(t_path) as f:
         d = yaml.safe_load(f)
+        d['object_types']['galaxy']['area_partition']['nside'] = galaxy_nside
         return d['object_types']
 
 def assemble_SED_models(bins):

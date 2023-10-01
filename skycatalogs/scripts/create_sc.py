@@ -8,6 +8,7 @@ for details
 '''
 
 import os
+import numpy as np
 import argparse
 import logging
 import yaml
@@ -58,10 +59,17 @@ parser.add_argument('--provenance', '--prov', choices=['yaml'], help='''
                      Persist git provenance information for each file
                      written. Only supported format currently is as a
                      small yaml file, written to the data directory.''')
-parser.add_argument('--dc2', action='store_true', help='If supplied provide values comparable to those used for DC2 run. Default is False')
 parser.add_argument('--options-file', default=None, help='''
-                    path to yaml file associating option names with values. Values for any options
-                    included will take precedence.''')
+                    path to yaml file associating option names with values.
+                    Values for any options included will take precedence.''')
+parser.add_argument('--dc2', action='store_true',
+                    help='''If supplied provide values comparable to those
+                            used for DC2 run. Default is False''')
+parser.add_argument('--galaxy-nside', default=32, type=int,
+                    choices=2**np.arange(15),
+                    help='''Pixel nsides for galaxy output. Must be power of 2''')
+parser.add_argument('--galaxy-stride', default=1_000_000, type=int,
+                    help='''max # rows in a galaxy row group; default 1 million''')
 
 args = parser.parse_args()
 
@@ -108,6 +116,8 @@ creator = CatalogCreator(parts, area_partition=None,
                          skip_done=args.skip_done,
                          flux_only=args.flux_only, main_only=args.main_only,
                          flux_parallel=args.flux_parallel,
+                         galaxy_nside=args.galaxy_nside,
+                         galaxy_stride=args.galaxy_stride,
                          provenance=provenance,
                          dc2=args.dc2)
 logger.info(f'Starting with healpix pixel {parts[0]}')

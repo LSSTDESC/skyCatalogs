@@ -5,6 +5,8 @@ import math
 import logging
 import yaml
 import numpy as np
+import numpy.ma as ma
+import healpy
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -75,6 +77,117 @@ def _generate_sed_path(ids, subdir, cmp):
     r = [f'{subdir}/{cmp}_{id}.txt' for id in ids]
     return r
 
+def _get_tophat_info(columns):
+    '''
+    Parameters
+    ----------
+    columns    list of column names including the ones with per-tophat information
+
+    Returns
+    -------
+    sed_bins        List of  the tophat bins, sorted by "start" (left edge) value
+    sed_bulge_names To be fetched from input catalog
+    sed_disk_names  To be fetched from input catalog
+    '''
+    tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
+    tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
+
+    # Save all the start, width values
+    sed_bulge_names = [i for i in columns if (i.startswith('sed') and
+                                              i.endswith('bulge'))]
+    sed_disk_names = [i for i in columns if (i.startswith('sed') and
+                                             i.endswith('disk'))]
+
+    sed_bins = [[int(re.match(tophat_bulge_re, s)['start']),
+                 int(re.match(tophat_bulge_re, s)['width'])] for s in sed_bulge_names]
+
+    # Sort sed by value for start. Finishes off work on sed_bins
+    def _bin_start_key(start_width):
+        return start_width[0]
+    sed_bins.sort(key=_bin_start_key)
+
+    # Moving on to tophat_fetch
+    def _sed_bulge_key(s):
+        return int(re.match(tophat_bulge_re, s)['start'])
+    def _sed_disk_key(s):
+        return int(re.match(tophat_disk_re, s)['start'])
+
+    # Sort into increaing order by start wavelength
+    sed_bulge_names.sort(key=_sed_bulge_key)
+    sed_disk_names.sort(key=_sed_disk_key)
+
+    return sed_bins, sed_bulge_names, sed_disk_names
+
+_nside_allowed = 2**np.arange(15)
+
+def _find_subpixels(pixel, subpixel_nside, pixel_nside=32, nest=False):
+    '''
+    Return list of pixels of specified nside inside a given pixel
+    Parameters
+    ----------
+    pixel           int       the id of the input pixel
+    subpixel_nside  int       nside for subpixels
+    pixel_nside     int       nside of original pixel (default=32)
+    nest            boolean   True if pixel ordering for original pixel is nested
+                              (default = False)
+    Returns
+    -------
+    List of subpixel ids (nested ordering iff original was).  If subpixel resolution
+    is no better than original, just return original pixel id
+    '''
+    if pixel_nside not in _nside_allowed:
+        raise ValueError(f'Disallowed pixel nside value {pixel_nside}')
+    if subpixel_nside not in _nside_allowed:
+        raise ValueError(f'Disallowed subpixel nside value {subpixel_nside}')
+    if pixel_nside >= subpixel_nside:
+        return [pixel]
+
+    if not nest:
+        nest_pixel = healpy.ring2nest(pixel_nside, pixel)
+    else:
+        nest_pixel = pixel
+
+    def _next_level(pixel):
+        return [4 * pixel, 4 * pixel + 1, 4 * pixel + 2, 4 * pixel + 3]
+
+    pixels = [nest_pixel]
+    current_nside = pixel_nside
+    while current_nside < subpixel_nside:
+        pixels = [pix for p in pixels for pix in _next_level(p)]
+        current_nside = current_nside * 2
+
+    if nest:
+        return pixels
+    else:
+        return [healpy.nest2ring(subpixel_nside, p) for p in pixels]
+
+def _generate_subpixel_masks(ra, dec, subpixels, nside=32):
+    '''
+    Given ra, dec values for objects within a particular pixel and a list of its
+    subpixels for some greater value of nside, return dict with subpixel ids as
+    keys and values a mask which masks off all values except those belonging to subpixel
+
+    Parameters
+    ----------
+    ra         float array   ra for all objects in a particular pixel
+    dec        float array   dec for all objects in a particular pixel
+    subpixels  int array     pixels for which masks should be generated
+    nside      int           healpix ordering parameter
+
+    Returns
+    -------
+    masks      dict          mask for each subpixel, keyed by subpixel id
+    '''
+
+    pix_id = np.array(healpy.pixelfunc.ang2pix(nside, ra, dec, lonlat=True))
+    masks = dict()
+    for p in subpixels:
+        m = np.array(pix_id != p)
+        masks[p] = m
+
+    return masks
+
+
 # Collection of galaxy objects for current row group, current pixel
 # Used while doing flux computation
 
@@ -110,7 +223,8 @@ class CatalogCreator:
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator',
                  pkg_root=None, skip_done=False, flux_only=False,
-                 main_only=False, flux_parallel=16, provenance=None,
+                 main_only=False, flux_parallel=16, galaxy_nside=32,
+                 galaxy_stride=1000000, provenance=None,
                  dc2=False, sn_object_type='sncosmo'):
         """
         Store context for catalog creation
@@ -147,6 +261,8 @@ class CatalogCreator:
         flux_only       Only create flux files, not main files
         main_only       Only create main files, not flux files
         flux_parallel   Number of processes to divide work of computing fluxes
+        galaxy_nside    Healpix configuration value "nside" for galaxy output
+        galaxy_stride   Max number of rows per galaxy row group
         provenance      Whether to write per-output-file git repo provenance
         dc2             Whether to adjust values to provide input comparable
                         to that for the DC2 run
@@ -160,7 +276,7 @@ class CatalogCreator:
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
         _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
 
-        self._galaxy_stride = 1000000
+        self._galaxy_stride = galaxy_stride
         if pkg_root:
             self._pkg_root = pkg_root
         else:
@@ -218,10 +334,33 @@ class CatalogCreator:
         self._flux_only = flux_only
         self._main_only = main_only
         self._flux_parallel = flux_parallel
+        self._galaxy_nside = galaxy_nside
         self._provenance = provenance
         self._dc2 = dc2
 
         self._obs_sed_factory = None
+
+    def _make_tophat_columns(self, dat, names, cmp):
+        '''
+        Create columns sed_val_cmp, cmp_magnorm where cmp is one of "disk", "bulge", "knots"
+        Parameters
+        ----------
+        dat          Data read from input galaxy catalog. Includes keys for everything in names
+                     plus entry for redshiftHubble
+        names        Names of SED columns for this component
+        cmp          Component name
+
+        Returns
+        -------
+        Add keys  sed_val_cmp, cmp_magnorm to dat.  Values are associated data. Return dat.
+        '''
+        sed_vals = (np.array([dat[k] for k in names]).T).tolist()
+        dat['sed_val_' + cmp] = sed_vals
+        dat[cmp + '_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
+                                 in zip(sed_vals, dat['redshiftHubble'])]
+        for k in names:
+            del(dat[k])
+        return dat
 
     def create(self, catalog_type):
         """
@@ -285,26 +424,80 @@ class CatalogCreator:
                 return
         self.write_config()
 
+    def _write_subpixel(self, dat=None, output_path=None, arrow_schema=None,
+                        to_rename=dict(), stride=100000):
+        '''
+        Write out data for a single healpixel, single source type
+        Parameters
+        ----------
+        dat           dict    The data to write out. Column names are the keys;
+                              values are numpy array
+        output_path   string  path to output file
+        arrow_schema          Schema for output parquet file
+        stride        int     number of rows to include in a row group
+        to_rename     dict    Associate input column name with output name
+                              if they differ
+        '''
+        dlen = 0
+        for val in dat.values():
+            dlen = len(val)
+            break
+        if dlen == 0: return
+
+        last_row_ix = dlen - 1
+        u_bnd = min(stride, dlen)
+        l_bnd = 0
+        rg_written = 0
+        writer = None
+
+        while u_bnd > l_bnd:
+            out_dict = {k : dat[k][l_bnd : u_bnd] for k in dat if k not in to_rename}
+            for k in to_rename:
+                out_dict[to_rename[k]] = dat[k][l_bnd : u_bnd]
+            out_df = pd.DataFrame.from_dict(out_dict)
+            out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
+            if not writer:
+                writer = pq.ParquetWriter(output_path, arrow_schema)
+
+            writer.write_table(out_table)
+            rg_written += 1
+            l_bnd = u_bnd
+            u_bnd = min(l_bnd + stride, last_row_ix + 1)
+
+        writer.close()
+        self._logger.debug(f'# row groups written to {output_path}: {rg_written}')
+
     def create_galaxy_pixel(self, pixel, gal_cat, arrow_schema):
         """
         Parameters
         ----------
-        pixel           Pixel for which catalog is to be generated.
+        pixel           Pixel for which catalog(s) is(are) to be generated.
+                        Note: input pixels are assumed to use nside=32. Output
+                        pixels may be finer
         gal_cat         GCRCatalogs-loaded galaxy truth (e.g. cosmoDC2)
         arrow_schema    schema to use for output file
         """
 
-        output_path = os.path.join(self._output_dir, f'galaxy_{pixel}.parquet')
-        if os.path.exists(output_path):
-            if not self._skip_done:
-                self._logger.info(f'Overwriting file {output_path}')
-            else:
-                self._logger.info(f'Skipping regeneration of {output_path}')
-                return
+        # The typical galaxy input file to date (cosmoDC2 or diffsky)
+        # is partitioned into nside=32 healpixels. This code will only
+        # output pixels of of the same size or smaller.
+        if self._galaxy_nside > 32:
+            out_pixels = _find_subpixels(pixel, self._galaxy_nside)
+            self._logger.debug(f'For nside={self._galaxy_nside} subpixels are')
+            self._logger.debug(out_pixels)
+        else:
+            out_pixels = [pixel]
+        self._out_pixels = out_pixels
+        skip_count = 0
+        for p in out_pixels:
+            output_path = os.path.join(self._output_dir, f'galaxy_{p}.parquet')
+            if os.path.exists(output_path):
+                if self._skip_done:
+                    self._logger.info(f'Skipping regeneration of {output_path}')
+                    skip_count = skip_count + 1
 
-        # Used to finding tophat parameters from cosmoDC2 column names
-        tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
-        tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
+        if skip_count == len(out_pixels):
+            return
 
         # Number of rows to include in a row group
         stride = self._galaxy_stride
@@ -332,34 +525,15 @@ class CatalogCreator:
                         'ellipticity_2_bulge_true']
 
         if self._knots:
-                   non_sed += ['knots_flux_ratio', 'n_knots', 'mag_i_lsst']
-        # Find all the tophat sed numbers
+            non_sed += ['knots_flux_ratio', 'n_knots', 'mag_i_lsst']
+
+        # Find sed bin definition and all the tophat quantities needed
         q = gal_cat.list_all_quantities()
-        sed_bulge_names = [i for i in q if (i.startswith('sed') and
-                                            i.endswith('bulge'))]
-        sed_disk_names = [i for i in q if (i.startswith('sed') and
-                                           i.endswith('disk'))]
-        # Save all the start, width values
-        self._sed_bins = [[int(re.match(tophat_bulge_re, s)['start']), int(re.match(tophat_bulge_re, s)['width'])] for s in sed_bulge_names]
 
-        # Sort by value for start
-        def _bin_start_key(start_width):
-            return start_width[0]
-        self._sed_bins.sort(key=_bin_start_key)
-
+        sed_bins, sed_bulge_names, sed_disk_names = _get_tophat_info(q)
+        self._sed_bins = sed_bins
         self._obs_sed_factory = TophatSedFactory(self._sed_bins,
                                                  assemble_cosmology(self._cosmology))
-
-        def _sed_bulge_key(s):
-            return int(re.match(tophat_bulge_re, s)['start'])
-        def _sed_disk_key(s):
-            return int(re.match(tophat_disk_re, s)['start'])
-
-        # Sort into increaing order by start wavelength
-        sed_bulge_names.sort(key=_sed_bulge_key)
-        sed_disk_names.sort(key=_sed_disk_key)
-        if self._knots:
-            sed_knot_names = [i.replace('disk', 'knots') for i in sed_disk_names]
 
         #Fetch the data
         to_fetch = non_sed + sed_bulge_names + sed_disk_names
@@ -372,16 +546,30 @@ class CatalogCreator:
                                         native_filters=hp_filter,
                                         filters=mag_cut_filter)
 
+        df['MW_rv'] = np.full_like(df['sersic_bulge'], _MW_rv_constant)
+        df['MW_av'] = _make_MW_extinction(df['ra'], df['dec'])
+        self._logger.debug('Made extinction')
+
+        # Some columns need to be renamed
+        to_rename = {'redshiftHubble' : 'redshift_hubble',
+                     'peculiarVelocity' : 'peculiar_velocity'}
+        if self._dc2:
+            to_rename['ellipticity_1_disk_true_dc2'] = 'ellipticity_1_disk_true'
+            to_rename['ellipticity_2_disk_true_dc2'] = 'ellipticity_2_disk_true'
+            to_rename['ellipticity_1_bulge_true_dc2'] = 'ellipticity_1_bulge_true'
+            to_rename['ellipticity_2_bulge_true_dc2'] = 'ellipticity_2_bulge_true'
+
         if self._sed_subdir:
             #  Generate full paths for disk and bulge SED files, even though
             #  we don't actually write the files here
-            bulge_path = _generate_sed_path(df['galaxy_id'], self._sed_subdir,
-                                            'bulge')
-            disk_path =  _generate_sed_path(df['galaxy_id'], self._sed_subdir,
-                                            'disk')
+            df['bulge_sed_file_path'] =\
+                _generate_sed_path(df['galaxy_id'], self._sed_subdir, 'bulge')
+            df['disk_sed_file_path'] =\
+                _generate_sed_path(df['galaxy_id'], self._sed_subdir, 'disk')
 
         if self._knots:
             # adjust disk sed; create knots sed
+            sed_knot_names = [i.replace('disk', 'knots') for i in sed_disk_names]
             eps = np.finfo(np.float32).eps
             mag_mask = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut,0, 1)
             self._logger.debug(f'Count of mags <=  cut (so adjustment performed: {np.count_nonzero(mag_mask)}')
@@ -390,82 +578,42 @@ class CatalogCreator:
                 df[k_name] = mag_mask * np.clip(df['knots_flux_ratio'], None, 1-eps) * df[d_name]
                 df[d_name] = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 1,
                                       np.clip(1 - df['knots_flux_ratio'], eps, None)) * df[d_name]
-        # Re-form sed columns into two arrays
-        bulge_seds = (np.array([df[sbn] for sbn in sed_bulge_names]).T).tolist()
-        disk_seds = (np.array([df[sdn] for sdn in sed_disk_names]).T).tolist()
-        if self._knots:
-            knots_seds = (np.array([df[kdn] for kdn in sed_knot_names]).T).tolist()
 
-        #  Compute mag_norm from TH sed and redshift
-        bulge_magnorm = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
-                         in zip(bulge_seds, df['redshiftHubble']) ]
-        disk_magnorm = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
-                        in zip(disk_seds, df['redshiftHubble']) ]
-        if self._knots:
-            knots_magnorm = [self._obs_sed_factory.magnorm(s, z) for (s, z)\
-                             in zip(knots_seds, df['redshiftHubble']) ]
+        if len(self._out_pixels) > 1:
+            subpixel_masks = _generate_subpixel_masks(df['ra'], df['dec'],  self._out_pixels, nside=self._galaxy_nside)
+        else:
+            subpixel_masks = {pixel : None}
 
-        MW_rv = np.full_like(df['sersic_bulge'], _MW_rv_constant)
-        MW_av = _make_MW_extinction(df['ra'], df['dec'])
-        self._logger.debug('Made extinction')
+        for p, val in subpixel_masks.items():
+            output_path = os.path.join(self._output_dir, f'galaxy_{p}.parquet')
+            if os.path.exists(output_path):
+                if not self._skip_done:
+                    self._logger.info(f'Overwriting file {output_path}')
+                else:
+                    continue
 
-        #  Write row groups of size stride (or less) until input is exhausted
-        last_row_ix = len(df['galaxy_id']) - 1
-        u_bnd = min(stride, last_row_ix + 1)
-        l_bnd = 0
-        rg_written = 0
-        writer = None
+            if val is not None:
+                compressed = dict()
+                for k in df:
+                    compressed[k] = ma.array(df[k], mask=val).compressed()
 
-        # Some columns need to be renamed
-        to_modify = ['redshiftHubble', 'peculiarVelocity']
-        if self._dc2:
-            to_modify += ['ellipticity_1_disk_true_dc2',
-                          'ellipticity_2_disk_true_dc2',
-                          'ellipticity_1_bulge_true_dc2',
-                          'ellipticity_2_bulge_true_dc2']
+                compressed = self._make_tophat_columns(compressed, sed_disk_names, 'disk')
+                compressed = self._make_tophat_columns(compressed, sed_bulge_names, 'bulge')
+                if self._knots:
+                    compressed = self._make_tophat_columns(compressed, sed_knot_names, 'knots')
 
-        while u_bnd > l_bnd:
-            out_dict = {k : df[k][l_bnd : u_bnd] for k in non_sed if k not in to_modify}
-            out_dict['redshift_hubble'] = df['redshiftHubble'][l_bnd : u_bnd]
-            out_dict['peculiar_velocity'] = df['peculiarVelocity'][l_bnd : u_bnd]
-            if self._dc2:
-                out_dict['ellipticity_1_disk_true'] =\
-                        df['ellipticity_1_disk_true_dc2'][l_bnd : u_bnd]
-                out_dict['ellipticity_2_disk_true'] =\
-                        - df['ellipticity_2_disk_true_dc2'][l_bnd : u_bnd]
-                out_dict['ellipticity_1_bulge_true'] =\
-                        df['ellipticity_1_bulge_true_dc2'][l_bnd : u_bnd]
-                out_dict['ellipticity_2_bulge_true'] =\
-                        - df['ellipticity_2_bulge_true_dc2'][l_bnd : u_bnd]
+                self._write_subpixel(dat=compressed, output_path=output_path,
+                                     arrow_schema=arrow_schema,
+                                     stride=stride, to_rename=to_rename)
+            else:
+                df = self._make_tophat_columns(df, sed_disk_names, 'disk')
+                df = self._make_tophat_columns(df, sed_bulge_names, 'bulge')
+                if self._knots:
+                    df = self._make_tophat_columns(df, sed_knot_names, 'knots')
+                self._write_subpixel(dat=df, output_path=output_path,
+                                     arrow_schema=arrow_schema,
+                                     stride=stride, to_rename=to_rename)
 
-            out_dict['sed_val_bulge'] = bulge_seds[l_bnd : u_bnd]
-            out_dict['sed_val_disk'] = disk_seds[l_bnd : u_bnd]
-            out_dict['bulge_magnorm'] = bulge_magnorm[l_bnd : u_bnd]
-            out_dict['disk_magnorm'] = disk_magnorm[l_bnd : u_bnd]
-            out_dict['MW_rv'] = MW_rv[l_bnd : u_bnd]
-            out_dict['MW_av'] = MW_av[l_bnd : u_bnd]
-
-            if self._knots:
-                out_dict['sed_val_knots'] = knots_seds[l_bnd : u_bnd]
-                out_dict['n_knots'] = df['n_knots'][l_bnd : u_bnd]
-                out_dict['knots_magnorm'] = knots_magnorm[l_bnd : u_bnd]
-
-            if self._sed_subdir:
-                out_dict['bulge_sed_file_path'] = bulge_path[l_bnd : u_bnd]
-                out_dict['disk_sed_file_path'] = disk_path[l_bnd : u_bnd]
-
-            out_df = pd.DataFrame.from_dict(out_dict)
-            out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
-            if not writer:
-                writer = pq.ParquetWriter(output_path, arrow_schema)
-
-            writer.write_table(out_table)
-            rg_written += 1
-            l_bnd = u_bnd
-            u_bnd = min(l_bnd + stride, last_row_ix + 1)
-
-        writer.close()
-        self._logger.debug(f'# row groups written: {rg_written}')
         if self._provenance == 'yaml':
             self.write_provenance_file(output_path)
 
@@ -532,9 +680,6 @@ class CatalogCreator:
                 self._logger.info(f'Skipping regeneration of {output_path}')
                 return
 
-        # Use same value for row group as was used for main file
-        stride = self._galaxy_stride
-
         # If there are multiple row groups, each is stored in a separate
         # object collection. Need to loop over them
         object_list = self._cat.get_object_type_by_hp(pixel, 'galaxy')
@@ -543,79 +688,76 @@ class CatalogCreator:
 
         for object_coll in object_list.get_collections():
             _galaxy_collection = object_coll
-            # prefetch everything we need. Getting a quantity for one object
-            # ensures the quantity is read for the whole row group
+            # prefetch everything we need.
             for att in ['galaxy_id', 'shear_1', 'shear_2', 'convergence',
                         'redshift_hubble', 'MW_av', 'MW_rv', 'sed_val_bulge',
                         'sed_val_disk', 'sed_val_knots'] :
                 v = object_coll.get_native_attribute(att)
             l_bnd = 0
-            u_bnd = min(len(object_coll), stride)
+            u_bnd = len(object_coll)
             rg_written = 0
-            while u_bnd > l_bnd:
-                self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
 
-                out_dict = {'galaxy_id': [], 'lsst_flux_u' : [],
-                            'lsst_flux_g' : [], 'lsst_flux_r' : [],
-                            'lsst_flux_i' : [], 'lsst_flux_z' : [],
-                            'lsst_flux_y' : []}
+            self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
 
-                n_parallel = self._flux_parallel
+            out_dict = {'galaxy_id': [], 'lsst_flux_u' : [],
+                        'lsst_flux_g' : [], 'lsst_flux_r' : [],
+                        'lsst_flux_i' : [], 'lsst_flux_z' : [],
+                        'lsst_flux_y' : []}
 
-                if n_parallel == 1:
-                    n_per = u_bnd - l_bnd
-                else:
-                    n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
-                l = l_bnd
-                u = min(l_bnd + n_per, u_bnd)
-                readers = []
+            n_parallel = self._flux_parallel
 
-                if n_parallel == 1:
-                    out_dict = _do_galaxy_flux_chunk(None, _galaxy_collection,
-                                                     l, u)
-                else:
-                    # Expect to be able to do about 1500/minute/process
-                    tm = int((n_per*60)/500)  # Give ourselves a cushion
-                    self._logger.info(f'Using timeout value {tm} for {n_per} sources')
-                    p_list = []
-                    for i in range(n_parallel):
-                        conn_rd, conn_wrt = Pipe(duplex=False)
-                        readers.append(conn_rd)
+            if n_parallel == 1:
+                n_per = u_bnd - l_bnd
+            else:
+                n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
+            l = l_bnd
+            u = min(l_bnd + n_per, u_bnd)
+            readers = []
 
-                        # For debugging call directly
-                        proc = Process(target=_do_galaxy_flux_chunk,
-                                       name=f'proc_{i}',
-                                       args=(conn_wrt, _galaxy_collection,l, u))
-                        proc.start()
-                        p_list.append(proc)
-                        l = u
-                        u = min(l + n_per, u_bnd)
+            if n_parallel == 1:
+                out_dict = _do_galaxy_flux_chunk(None, _galaxy_collection,
+                                                 l, u)
+            else:
+                # Expect to be able to do about 1500/minute/process
+                tm = max(int((n_per*60)/500), 5)  # Give ourselves a cushion
+                self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+                p_list = []
+                for i in range(n_parallel):
+                    conn_rd, conn_wrt = Pipe(duplex=False)
+                    readers.append(conn_rd)
 
-                    self._logger.debug('Processes started') # outside for loop
-                    for i in range(n_parallel):
-                        ready = readers[i].poll(tm)
-                        if not ready:
-                            self._logger.error(f'Process {i} timed out after {tm} sec')
-                            sys.exit(1)
-                        dat = readers[i].recv()   # lines up with if
-                        for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
-                                  'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
-                                  'lsst_flux_y']:
-                            out_dict[k] += dat[k]
-                    for p in p_list:
-                        p.join()
+                    # For debugging call directly
+                    proc = Process(target=_do_galaxy_flux_chunk,
+                                   name=f'proc_{i}',
+                                   args=(conn_wrt, _galaxy_collection,l, u))
+                    proc.start()
+                    p_list.append(proc)
+                    l = u
+                    u = min(l + n_per, u_bnd)
 
-                out_df = pd.DataFrame.from_dict(out_dict) # outdent from for
-                out_table = pa.Table.from_pandas(out_df,
-                                                 schema=self._gal_flux_schema)
+                self._logger.debug('Processes started') # outside for loop
+                for i in range(n_parallel):
+                    ready = readers[i].poll(tm)
+                    if not ready:
+                        self._logger.error(f'Process {i} timed out after {tm} sec')
+                        sys.exit(1)
+                    dat = readers[i].recv()   # lines up with if
+                    for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
+                              'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
+                              'lsst_flux_y']:
+                        out_dict[k] += dat[k]
+                for p in p_list:    # indent same as "for i in range(.."
+                    p.join()
 
-                if not writer:
-                    writer = pq.ParquetWriter(output_path, self._gal_flux_schema)
-                writer.write_table(out_table)
-                l_bnd = u_bnd
-                u_bnd = min(l_bnd + stride, len(object_coll))
+            out_df = pd.DataFrame.from_dict(out_dict) # outdent from for
+            out_table = pa.Table.from_pandas(out_df,
+                                             schema=self._gal_flux_schema)
 
-                rg_written +=1
+            if not writer:
+                writer = pq.ParquetWriter(output_path, self._gal_flux_schema)
+            writer.write_table(out_table)
+
+            rg_written +=1
 
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
@@ -866,7 +1008,9 @@ class CatalogCreator:
                        assemble_SED_models(self._sed_bins))
         config.add_key('MW_extinction_values', assemble_MW_extinction())
         config.add_key('Cosmology', assemble_cosmology(self._cosmology))
-        config.add_key('object_types', assemble_object_types(self._pkg_root))
+        config.add_key('object_types',
+                       assemble_object_types(self._pkg_root,
+                                             galaxy_nside=self._galaxy_nside))
 
         config.add_key('galaxy_magnitude_cut', self._mag_cut)
         config.add_key('knots_magnitude_cut', self._knots_mag_cut)
