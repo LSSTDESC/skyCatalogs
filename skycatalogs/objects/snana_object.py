@@ -18,17 +18,12 @@ class SnanaObject(BaseObject):
     def _get_sed(self, mjd=None):
         if mjd is None:
             return None, 0.0
-        #model = self.get_native_attribute('model_name')
-        #param_names = self.get_native_attribute('model_param_names')
-        #param_values = self.get_native_attribute('model_param_values')
         mjd_start = self.get_native_attribute('start_mjd')
         mjd_end = self.get_native_attribute('end_mjd')
         if mjd < mjd_start or mjd > mjd_end:
             return None, 0.0
-        # For now find the SED with mjd closest to ours and return that
-        # What should we do about magnorm?
-        return self._linear_interp_SED(mjd), 0.0
 
+        return self._linear_interp_SED(mjd), 0.0
 
     def get_gsobject_components(self, gsparams=None, rng=None):
         if gsparams is not None:
@@ -42,9 +37,10 @@ class SnanaObject(BaseObject):
         return sed
 
     def _read_nearest_SED(self, mjd):
-        # Find row with closest mjd and return galsim.SED generated
-        # from it
-
+        '''
+        Find row with closest mjd and return galsim.SED generated
+        from it
+        '''
         f = h5py.File(self._belongs_to._SED_file, 'r')
         if self._mjds is None:
             self._mjds = np.array(f[self._id]['mjd'])
@@ -69,6 +65,10 @@ class SnanaObject(BaseObject):
         return galsim.SED(lut, wave_type='A', flux_type='flambda')
 
     def _linear_interp_SED(self, mjd):
+        '''
+        Return galsim SED obtained by interpolating between SEDs
+        for nearest mjds among the templates
+        '''
         f = h5py.File(self._belongs_to._SED_file, 'r')
         if self._mjds is None:
             self._mjds = np.array(f[self._id]['mjd'])
@@ -93,7 +93,6 @@ class SnanaObject(BaseObject):
                                  flambda,
                                  interpolant='linear')
         return galsim.SED(lut, wave_type='A', flux_type='flambda')
-
 
 
 class SnanaCollection(ObjectCollection):
