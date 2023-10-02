@@ -101,7 +101,8 @@ class GaiaObject(BaseObject):
             return None
         if self.use_lut:
             flambda = self.blambda(self._wavelengths)
-            lut = galsim.LookupTable(self._wavelengths, flambda)
+            lut = galsim.LookupTable(self._wavelengths, flambda,
+                                     interpolant='linear')
             sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
         else:
             sed = galsim.SED(self.blambda, wave_type='nm', flux_type='flambda')
