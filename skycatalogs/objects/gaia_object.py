@@ -1,6 +1,7 @@
 import os
 import sys
 import warnings
+from functools import wraps
 import itertools
 from pathlib import PurePath
 import numpy as np
@@ -16,6 +17,15 @@ from skycatalogs.objects.base_object import BaseObject, ObjectCollection
 
 
 __all__ = ['GaiaObject', 'GaiaCollection']
+
+
+def ignore_erfa_warnings(func):
+    @wraps(func)
+    def call_func(*args, **kwargs):
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'ERFA', erfa.ErfaWarning)
+            return func(*args, **kwargs)
+    return call_func
 
 
 _FILE_PATH = str(PurePath(__file__))
@@ -125,6 +135,7 @@ class GaiaCollection(ObjectCollection):
     def get_config():
         return GaiaCollection._gaia_config
 
+    @ignore_erfa_warnings
     def load_collection(region, skycatalog, mjd=None):
         if isinstance(region, Disk):
             ra = lsst.geom.Angle(region.ra, lsst.geom.degrees)
