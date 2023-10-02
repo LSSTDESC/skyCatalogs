@@ -520,8 +520,8 @@ class CatalogCreator:
                                         native_filters=hp_filter,
                                         filters=mag_cut_filter)
 
-        MW_rv = make_MW_extinction_rv(df['ra'], df['dec'])
-        MW_av = make_MW_extinction_av(df['ra'], df['dec'])
+        df['MW_rv'] = make_MW_extinction_rv(df['ra'], df['dec'])
+        df['MW_av'] = make_MW_extinction_av(df['ra'], df['dec'])
         self._logger.debug('Made extinction')
 
         # Some columns need to be renamed
