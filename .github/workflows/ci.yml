@@ -1,0 +1,71 @@
+name: skyCatalogs CI
+
+on:
+    push:
+        branches:
+            - main
+            - releases/*
+
+    pull_request:
+        branches:
+            - main
+            - releases/*
+
+jobs:
+    build:
+        runs-on: ${{ matrix.os }}
+
+        strategy:
+            matrix:
+                os: [ ubuntu-latest ]
+                py: [ "3.11" ]
+                CC: [ gcc ]
+                CXX: [ g++ ]
+
+        defaults:
+            run:
+                # cf. https://github.com/conda-incubator/setup-miniconda#important
+                shell: bash -l {0}
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Setup conda
+              uses: conda-incubator/setup-miniconda@v2
+              with:
+                  activate-environment: stack
+                  python-version: ${{ matrix.py }}
+                  condarc-file: etc/.condarc
+
+            - name: Install conda deps
+              run: |
+                conda info
+                conda list
+                conda install -y mamba
+                mamba install -y --file etc/conda_requirements.txt
+                conda info
+                mamba list
+
+            - name: Install rubin_sim_data
+              run: |
+                mkdir rubin_sim_data
+                mkdir rubin_sim_data/sims_sed_library
+                # Just get the skybrightness, throughputs, and SED data for now.
+                curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/rubin_sim_data/skybrightness_may_2021.tgz | tar -C rubin_sim_data -xz
+                curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/rubin_sim_data/throughputs_2023_09_07.tgz | tar -C rubin_sim_data -xz
+                curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/sed_library/seds_170124.tar.gz  | tar -C rubin_sim_data/sims_sed_library -xz
+
+            - name: Install skyCatalogs
+              run:
+                pip install .
+
+            - name: Install test deps
+              run:
+                conda install -y pytest nose
+
+            - name: Run tests
+              run: |
+                export RUBIN_SIM_DATA_DIR=`pwd`/rubin_sim_data
+                export SIMS_SED_LIBRARY_DIR=${RUBIN_SIM_DATA_DIR}/sims_sed_library
+                eups list lsst_distrib
+                pytest
