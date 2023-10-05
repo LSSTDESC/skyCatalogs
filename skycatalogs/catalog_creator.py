@@ -55,11 +55,11 @@ def _get_tophat_info(columns):
     '''
     Parameters
     ----------
-    columns    list of column names including the ones with per-tophat information
+    columns    list of column names including the ones with per-tophat info
 
     Returns
     -------
-    sed_bins        List of  the tophat bins, sorted by "start" (left edge) value
+    sed_bins        List of  the tophat bins, sorted by "start" (left edge)
     sed_bulge_names To be fetched from input catalog
     sed_disk_names  To be fetched from input catalog
     '''
@@ -316,17 +316,19 @@ class CatalogCreator:
 
     def _make_tophat_columns(self, dat, names, cmp):
         '''
-        Create columns sed_val_cmp, cmp_magnorm where cmp is one of "disk", "bulge", "knots"
+        Create columns sed_val_cmp, cmp_magnorm where cmp is one of "disk",
+        "bulge", "knots"
+
         Parameters
         ----------
-        dat          Data read from input galaxy catalog. Includes keys for everything in names
-                     plus entry for redshiftHubble
+        dat          Data read from input galaxy catalog. Includes keys for
+                     everything in names plus entry for redshiftHubble
         names        Names of SED columns for this component
         cmp          Component name
 
         Returns
         -------
-        Add keys  sed_val_cmp, cmp_magnorm to dat.  Values are associated data. Return dat.
+        Add keys  sed_val_cmp, cmp_magnorm to input dat. Then return dat.
         '''
         sed_vals = (np.array([dat[k] for k in names]).T).tolist()
         dat['sed_val_' + cmp] = sed_vals
@@ -808,7 +810,6 @@ class CatalogCreator:
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
             self._logger.debug('Created arrow table from star dataframe')
 
-            #writer = pq.ParquetWriter(output_path, arrow_schema)
             writer.write_table(out_table)
 
         if sn_cat:
@@ -829,7 +830,11 @@ class CatalogCreator:
             sn_df['object_type'] = np.full((nobj,), self._sn_object_type)
 
             sn_df['MW_rv'] = make_MW_extinction_rv(sn_df['ra'], sn_df['dec'])
+<<<<<<< HEAD
             sn_df['MW_av'] = make_MW_extinction_ra(np.array(sn_df['ra']),
+=======
+            sn_df['MW_av'] = make_MW_extinction_av(np.array(sn_df['ra']),
+>>>>>>> e52fac5 (Visual clean-up (eliminate commented-out code, etc.))
                                                    np.array(sn_df['dec']))
 
             # Add fillers for columns not relevant for sn
