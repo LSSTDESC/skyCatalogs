@@ -18,8 +18,8 @@ from .utils.sed_tools import TophatSedFactory, get_star_sed_path
 from .utils.config_utils import create_config, assemble_SED_models
 from .utils.config_utils import assemble_MW_extinction, assemble_cosmology, assemble_object_types, assemble_provenance, write_yaml
 from .utils.parquet_schema_utils import make_galaxy_schema, make_galaxy_flux_schema, make_star_flux_schema, make_pointsource_schema
+from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.base_object import LSST_BANDS
-
 from .objects.base_object import ObjectCollection
 
 # from dm stack
@@ -29,33 +29,9 @@ from dustmaps.sfd import SFDQuery
 Code to create a sky catalog for particular object types
 """
 
-#####pixels = [9556, 9683, 9684, 9812, 9813, 9940]
-
 __all__ = ['CatalogCreator']
 
 _MW_rv_constant = 3.1
-_Av_adjustment = 2.742
-
-def _make_MW_extinction(ra, dec):
-    '''
-    Given arrays of ra & dec, create a MW Av column corresponding to V-band
-    correction.
-    See "Plotting Dust Maps" example in
-    https://dustmaps.readthedocs.io/en/latest/examples.html
-
-    The coefficient _Av_adjustment comes Table 6 in Schlafly & Finkbeiner (2011)
-    See http://iopscience.iop.org/0004-637X/737/2/103/article#apj398709t6
-
-    Parameters
-    ----------
-    ra, dec - arrays specifying positions where Av is to be computed
-    Return:
-    Array of Av values
-    '''
-
-    sfd = SFDQuery()
-    ebv_raw = np.array(sfd.query_equ(ra, dec))
-    return _Av_adjustment * ebv_raw
 
 def _generate_sed_path(ids, subdir, cmp):
     '''
@@ -544,8 +520,8 @@ class CatalogCreator:
                                         native_filters=hp_filter,
                                         filters=mag_cut_filter)
 
-        df['MW_rv'] = np.full_like(df['sersic_bulge'], _MW_rv_constant)
-        df['MW_av'] = _make_MW_extinction(df['ra'], df['dec'])
+        MW_rv = make_MW_extinction_rv(df['ra'], df['dec'])
+        MW_av = make_MW_extinction_av(df['ra'], df['dec'])
         self._logger.debug('Made extinction')
 
         # Some columns need to be renamed
@@ -581,6 +557,7 @@ class CatalogCreator:
             subpixel_masks = _generate_subpixel_masks(df['ra'], df['dec'],  self._out_pixels, nside=self._galaxy_nside)
         else:
             subpixel_masks = {pixel : None}
+
 
         for p, val in subpixel_masks.items():
             output_path = os.path.join(self._output_dir, f'galaxy_{p}.parquet')
@@ -825,6 +802,7 @@ class CatalogCreator:
 
             # NOTE MW_av calculation for stars does not use SFD dust map
             star_df['MW_av'] = star_df['ebv'] * _MW_rv_constant
+
             star_df['variability_model'] = np.full((nobj,), '')
             star_df['salt2_params'] = np.full((nobj,), None)
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
@@ -850,8 +828,8 @@ class CatalogCreator:
             nobj = len(sn_df['ra'])
             sn_df['object_type'] = np.full((nobj,), self._sn_object_type)
 
-            sn_df['MW_rv'] = np.full((nobj,), _MW_rv_constant, np.float32())
-            sn_df['MW_av'] = _make_MW_extinction(np.array(sn_df['ra']),
+            sn_df['MW_rv'] = make_MW_extinction_rv(sn_df['ra'], sn_df['dec'])
+            sn_df['MW_av'] = make_MW_extinction_ra(np.array(sn_df['ra']),
                                                    np.array(sn_df['dec']))
 
             # Add fillers for columns not relevant for sn
