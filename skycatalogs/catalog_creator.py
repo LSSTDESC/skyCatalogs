@@ -34,9 +34,8 @@ Code to create a sky catalog for particular object types
 __all__ = ['CatalogCreator']
 
 _MW_rv_constant = 3.1
-
-
 _Av_adjustment = 2.742
+
 def _make_MW_extinction(ra, dec):
     '''
     Given arrays of ra & dec, create a MW Av column corresponding to V-band
@@ -56,7 +55,6 @@ def _make_MW_extinction(ra, dec):
 
     sfd = SFDQuery()
     ebv_raw = np.array(sfd.query_equ(ra, dec))
-
     return _Av_adjustment * ebv_raw
 
 def _generate_sed_path(ids, subdir, cmp):
@@ -811,7 +809,7 @@ class CatalogCreator:
             cols = ','.join(['format("%s",simobjid) as id', 'ra', 'decl as dec',
                              'magNorm as magnorm', 'mura', 'mudecl as mudec',
                              'radialVelocity as radial_velocity', 'parallax',
-                             'sedFilename as sed_filepath'])
+                             'sedFilename as sed_filepath', 'ebv'])
             q = f'select {cols} from stars where hpid={pixel} '
             with sqlite3.connect(star_cat) as conn:
                 star_df = pd.read_sql_query(q, conn)
@@ -825,8 +823,8 @@ class CatalogCreator:
 
             star_df['MW_rv'] = np.full((nobj,), _MW_rv_constant, np.float32())
 
-            star_df['MW_av'] = _make_MW_extinction(np.array(star_df['ra']),
-                                                   np.array(star_df['dec']))
+            # NOTE MW_av calculation for stars does not use SFD dust map
+            star_df['MW_av'] = star_df['ebv'] * _MW_rv_constant
             star_df['variability_model'] = np.full((nobj,), '')
             star_df['salt2_params'] = np.full((nobj,), None)
             out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
