@@ -52,7 +52,6 @@ class SnanaObject(BaseObject):
         if flux > 0.0:
             with h5py.File(self._belongs_to._SED_file, 'r') as f:
                 cors = f[self._id][f'magcor_{bandpass}']
-                rough_mag = _to_mag(flux)
 
                 # interpolate corrections
                 if mjd_ix_l == mjd_ix_u:
@@ -60,14 +59,18 @@ class SnanaObject(BaseObject):
                 else:
                     mag_cor = cors[mjd_ix_l] + mjd_fraction *\
                         (cors[mjd_ix_u] - cors[mjd_ix_l])
-                corrected_flux = _to_flux(rough_mag + mag_cor)
 
                 #dbg = True
-                dbd = False
+                dbg = False
+
+                # Do everything in flux units
+                flux_cor = _to_flux(mag_cor)
+                corrected_flux = flux * flux_cor
+
                 if dbg:
                     print(f'Band {bandpass} uncorrected flux: {flux}')
-                    print(f'                uncorrected mag: {rough_mag}')
                     print(f'                mag correction: {mag_cor}')
+                    print(f' multiplicative flux correction: {flux_cor}')
 
                 if cache:
                     att = f'lsst_flux_{band}'
