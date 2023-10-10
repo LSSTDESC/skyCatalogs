@@ -2,6 +2,7 @@ import galsim
 import h5py
 import numpy as np
 from .base_object import BaseObject,ObjectCollection
+from skycatalogs.utils.exceptions import SkyCatalogsRuntimeError
 
 __all__ = ['SnanaObject', 'SnanaCollection']
 
@@ -40,41 +41,46 @@ class SnanaObject(BaseObject):
             sed = self._apply_component_extinction(sed)
         return sed
 
-    def get_LSST_flux(self, bandpass, sed=None, cache=True, mjd=None):
-        def _to_flux(m):
-            return np.exp(-0.921034037196184 * m)
-        def _to_mag(f):
-            return np.log(flux)/(-0.921034037196184)
+    def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
+        def _flux_ratio(mag):
+            # -0.9210340371976184 = -np.log(10)/2.5. 
+            return np.exp(-0.921034037196184 * mag)
 
-        flux = super().get_LSST_flux(bandpass, sed, mjd)
+        flux = super().get_LSST_flux(band, sed, mjd)
+
+        if flux < 0:
+            raise SkyCatalogsRuntimeError('Negative flux')
+
+        if flux == 0.0:
+            return flux
 
         mjd_ix_l, mjd_ix_u, mjd_fraction = self._find_mjd_interval(mjd)
-        if flux > 0.0:
-            with h5py.File(self._belongs_to._SED_file, 'r') as f:
-                cors = f[self._id][f'magcor_{bandpass}']
 
-                # interpolate corrections
-                if mjd_ix_l == mjd_ix_u:
-                    mag_cor = cors[mjd_ix_l]
-                else:
-                    mag_cor = cors[mjd_ix_l] + mjd_fraction *\
-                        (cors[mjd_ix_u] - cors[mjd_ix_l])
+        with h5py.File(self._belongs_to._SED_file, 'r') as f:
+            cors = f[self._id][f'magcor_{band}']
 
-                #dbg = True
-                dbg = False
+        # interpolate corrections
+        if mjd_ix_l == mjd_ix_u:
+            mag_cor = cors[mjd_ix_l]
+        else:
+            mag_cor = cors[mjd_ix_l] + mjd_fraction *\
+                (cors[mjd_ix_u] - cors[mjd_ix_l])
 
-                # Do everything in flux units
-                flux_cor = _to_flux(mag_cor)
-                corrected_flux = flux * flux_cor
+        #dbg = True
+        dbg = False
 
-                if dbg:
-                    print(f'Band {bandpass} uncorrected flux: {flux}')
-                    print(f'                mag correction: {mag_cor}')
-                    print(f' multiplicative flux correction: {flux_cor}')
+        # Do everything in flux units
+        flux_cor = _flux_ratio(mag_cor)
+        corrected_flux = flux * flux_cor
 
-                if cache:
-                    att = f'lsst_flux_{band}'
-                    setattr(self, att, corrected_flux)
+        if dbg:
+            print(f'Band {band} uncorrected flux: {flux}')
+            print(f'                mag correction: {mag_cor}')
+            print(f' multiplicative flux correction: {flux_cor}')
+
+        if cache:
+            att = f'lsst_flux_{band}'
+            setattr(self, att, corrected_flux)
         return corrected_flux
 
     def _find_mjd_interval(self, mjd=None):
@@ -89,8 +95,8 @@ class SnanaObject(BaseObject):
 
         Returns
         -------
-        A triple:     index below, index above, and fraction of distance
-                      mjd is from entry below to entry above
+        A tuple:     index below, index above, and fraction of distance
+                     mjd is from entry below to entry above
         '''
         if not mjd:
             mjd = self._belongs_to._mjd
@@ -99,23 +105,20 @@ class SnanaObject(BaseObject):
             store = (mjd == self._belongs_to._mjd)
 
         if store:
-            if self._mjd_ix_l:
+            if self._mjd_ix_l is not None
                 # just return previously-computed values
                 return self._mjd_ix_l, self._mjd_ix_u, self._mjd_fraction
 
-        if not self._mjds:
+        if  self._mjds is None:
             with h5py.File(self._belongs_to._SED_file, 'r') as f:
                 self._mjds = np.array(f[self._id]['mjd'])
 
         last_ix = len(self._mjds) - 1
+        mjd_fraction = None
         if mjd <= self._mjds[0]:
-            mjd_ix_l = 0
-            mjd_ix_u = 0
-            mjd_fraction = None
+            mjd_ix_l =  mjd_ix_u = 0
         elif mjd >= self._mjds[last_ix]:
-            mjd_ix_l = last_ix
-            mjd_ix_u = last_ix
-            mjd_fraction = None
+            mjd_ix_l = mjd_ix_u = last_ix
         else:
             mjd_ix_u = np.argmin((mjd - self._mjds ) > 0)
             mjd_ix_l = mjd_ix_u - 1
@@ -130,36 +133,6 @@ class SnanaObject(BaseObject):
 
         return mjd_ix_l, mjd_ix_u, mjd_fraction
 
-    def _read_nearest_SED(self, mjd=None):
-        '''
-        Find row with closest mjd and return galsim.SED generated
-        from it
-        '''
-
-        if self._mjd_ix_l is None:
-            mjd_ix_l, mjd_ix_u, mjd_fraction = self._find_mjd_interval()
-        else:
-            mjd_ix_l = self._mjd_ix_l
-            mjd_ix_u = self._mjd_ix_u
-            mjd_fraction = self._mjd_fraction
-
-        f = h5py.File(self._belongs_to._SED_file, 'r')
-        if self._lambda is None:
-            self._lambda = np.array(f[self._id]['lambda'])
-
-        if mjd_ix_l == mjd_ix_u:
-            mjd_ix = mjd_ix_l
-
-        else:
-            if mjd_fraction < 0.5:
-                mjd_ix = mjd_ix_l
-            else:
-                mjd_ix = mjd_ix_u
-
-        lut = galsim.LookupTable(f[self._id]['lambda'],
-                                 f[self._id]['flambda'][mjd_ix],
-                                 interpolant='linear')
-        return galsim.SED(lut, wave_type='A', flux_type='flambda')
 
     def _linear_interp_SED(self, mjd=None):
         '''
@@ -167,31 +140,30 @@ class SnanaObject(BaseObject):
         for nearest mjds among the templates
         '''
 
-        if not self._mjd_ix_l:
-            mjd_ix_l,mjd_ix_u,mjd_fraction = self._find_mjd_interval(mjd)
-        else:
-            mjd_ix_l = self._mjd_ix_l
-            mjd_ix_u = self._mjd_ix_u
-            mjd_fraction = self._mjd_fraction
+        mjd_ix_l,mjd_ix_u,mjd_fraction = self._find_mjd_interval(mjd)        
+        # if self._mjd_ix_l is None:
+        #     mjd_ix_l,mjd_ix_u,mjd_fraction = self._find_mjd_interval(mjd)
+        # else:
+        #     mjd_ix_l = self._mjd_ix_l
+        #     mjd_ix_u = self._mjd_ix_u
+        #     mjd_fraction = self._mjd_fraction
 
         with h5py.File(self._belongs_to._SED_file, 'r') as f:
-            if self._mjds is None:
+            if self._mjds is None or self._lambda is None:
                 self._mjds = np.array(f[self._id]['mjd'])
-            if self._lambda is None:
                 self._lambda = np.array(f[self._id]['lambda'])
 
-            if self._mjd_ix_l == self._mjd_ix_u:
-                flambda = f[slef._id]['flamba'][self._mjd_ix_l]
-            else:
-                mjd_ix = self._mjd_ix_u
-                mjds = self._mjds
-                below = f[self._id]['flambda'][mjd_ix - 1]
-                above = f[self._id]['flambda'][mjd_ix]
-                flambda = below + mjd_fraction * (above - below)
+        if mjd_ix_l == mjd_ix_u:
+            flambda = f[self._id]['flamba'][mjd_ix_l]
+        else:
+            mjd_ix = mjd_ix_u
+            below = f[self._id]['flambda'][mjd_ix - 1]
+            above = f[self._id]['flambda'][mjd_ix]
+            flambda = below + mjd_fraction * (above - below)
 
-            lut = galsim.LookupTable(f[self._id]['lambda'],
-                                     flambda,
-                                     interpolant='linear')
+        lut = galsim.LookupTable(f[self._id]['lambda'],
+                                 flambda,
+                                 interpolant='linear')
         return galsim.SED(lut, wave_type='A', flux_type='flambda')
 
 
