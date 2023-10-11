@@ -120,7 +120,7 @@ class SnanaObject(BaseObject):
         if index == 0:
             mjd_ix_l =  mjd_ix_u = 0
         elif index == len(mjds):
-            mjd_ix_l = mjd_ix_u = last_ix
+            mjd_ix_l = mjd_ix_u = index - 1
         else:
             mjd_ix_l = index - 1
             mjd_ix_u = index
