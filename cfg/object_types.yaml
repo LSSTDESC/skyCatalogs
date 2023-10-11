@@ -60,3 +60,10 @@ object_types :
         dstype : gaia_dr2_20200414
       area_partition : None
       sed_method : use_lut
+  snana :
+      file_template : 'snana_(?P<healpix>\d+).parquet'
+      data_file_type : parquet
+      area_partition :
+        { type: healpix, ordering : ring, nside : 32}
+      sed_model : snana
+      internal_extinction : None

@@ -20,6 +20,7 @@ from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
 from skycatalogs.objects.sncosmo_object import SncosmoObject
 from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
+from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
 
 __all__ = ['SkyCatalog', 'open_catalog']
 
@@ -63,19 +64,24 @@ def _get_intersecting_hps(hp_ordering, nside, region):
     pixels.sort()
     return pixels
 
-def _compress_via_mask(tbl, id_column, region, galaxy=True):
+def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
+                       mjd=None):
     '''
     Parameters
     ----------
     tbl          data table including columns named "ra", "dec", and id_column
-                 (and also "object_type" colum if galaxy is False)
+                 (and also "object_type" colum if galaxy is False, possibly
+                 start_mjd and end_mjd if galaxy is False and mjd is not
+                 None)
     id_column    string
     region       mask should restrict to this region (or not at all if None)
-    galaxy       flag so we know whether or not to return "object_type"
+    source_type  string or set (or other container) of expected object type(s).
+                 For now, must be a singleton
+    mjd          if not none, may be used to filter transient objects
 
     Returns
     -------
-    4 values for galaxies: ra, dec, id, mask
+    4 values for galaxies and snana: ra, dec, id, mask
     5 values for pointsources: ra, dec, id, object_type, mask
     If objects are in the region, ra, dec, id correspond to those objects.
     mask will mask off unused objects
@@ -84,6 +90,15 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
     '''
     if isinstance(tbl[id_column][0], (int, np.int64)):
         tbl[id_column] = [str(an_id) for an_id in tbl[id_column]]
+
+    if not isinstance(source_type, str):
+        source_type = set(source_type)
+        if len(source_type) != 1:
+            raise NotImplementedError('_compress_via_mask only accepts singleton object_type')
+        source_type = source_type.pop()
+    no_obj_type_return = (source_type in {'galaxy', 'snana'})
+    time_filter = ('start_mjd' in tbl) and ('end_mjd' in tbl) and mjd is not None
+
     if region is not None:
         if isinstance(region, PolygonalRegion):        # special case
             # Find bounding box
@@ -94,9 +109,9 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             dec_min = min([v[1] for v in vertices])
             bnd_box = Box(ra_min, ra_max, dec_min, dec_max)
             # Compute mask for that box
-            mask = _compute_mask(bnd_box, tbl['ra'], tbl['dec'])
+            mask = _compute_region_mask(bnd_box, tbl['ra'], tbl['dec'])
             if all(mask): # even bounding box doesn't intersect table rows
-                if galaxy:
+                if no_obj_type_return:
                     return None, None, None, None
                 else:
                     return None, None, None, None, None
@@ -104,7 +119,7 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             # Get compressed ra, dec
             ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
             dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
-            poly_mask = _compute_mask(region, ra_compress, dec_compress)
+            poly_mask = _compute_region_mask(region, ra_compress, dec_compress)
 
             # Get indices of unmasked
             ixes = np.where(~mask)
@@ -112,10 +127,15 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             # Update bounding box mask with polygonal mask
             mask[ixes] |= poly_mask
         else:
-            mask = _compute_mask(region, tbl['ra'], tbl['dec'])
+            mask = _compute_region_mask(region, tbl['ra'], tbl['dec'])
+
+        if time_filter:
+            time_mask = _compute_time_mask(mjd, tbl['start_mjd'],
+                                           tbl['end_mjd'])
+            mask = np.logical_or(mask, time_mask)
 
         if all(mask):
-            if galaxy:
+            if no_obj_type_return:
                 return None, None, None, None
             else:
                 return None, None, None, None, None
@@ -123,19 +143,29 @@ def _compress_via_mask(tbl, id_column, region, galaxy=True):
             ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
             dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
             id_compress = ma.array(tbl[id_column], mask=mask).compressed()
-            if galaxy:
+            if no_obj_type_return:
                 return ra_compress, dec_compress, id_compress, mask
             else:
+
                 object_type_compress = ma.array(tbl['object_type'],
                                                 mask=mask).compressed()
                 return ra_compress, dec_compress, id_compress, object_type_compress, mask
     else:
-        if galaxy:
-            return tbl['ra'], tbl['dec'], tbl[id_column],None
+        if no_obj_type_return:
+            if time_filter:
+                time_mask = _compute_time_mask(mjd, tbl['start_mjd'],
+                                               tbl['end_mjd'])
+                ra_compress = ma.array(tbl['ra'], mask=time_mask).compressed()
+                dec_compress = ma.array(tbl['dec'], mask=time_mask).compressed()
+                id_compress = ma.array(tbl[id_column],
+                                       mask=time_mask).compressed()
+                return ra_compress, dec_compress, id_compress, time_mask
+            else:
+                return tbl['ra'], tbl['dec'], tbl[id_column],None
         else:
             return tbl['ra'], tbl['dec'], tbl[id_column],tbl['object_type'],None
 
-def _compute_mask(region, ra, dec):
+def _compute_region_mask(region, ra, dec):
     '''
     Compute mask according to region for provided data
     Parameters
@@ -174,6 +204,25 @@ def _compute_mask(region, ra, dec):
         mask = obj_chord_sq > rad_chord_sq
     if isinstance(region, PolygonalRegion):
         mask = region.get_containment_mask(ra, dec, included=False)
+    return mask
+
+def _compute_time_mask(current_mjd, start_mjd, end_mjd):
+    '''
+    Starting with an existing mask of excluded objects, exclude additional
+    objects not visible at time current_mjd
+    Parameters
+    ----------
+    current_mjd    Float  Time for which mask will be computed
+    start_mjd      Array of float. Bound on when object starts being
+                   detectable
+    end_mjd        Array of float. Bound on when object ceases being
+                   visible
+    Returns
+    -------
+    mask of objects detectable at specified time
+    '''
+    mask = np.logical_or((current_mjd > end_mjd), (current_mjd < start_mjd))
+
     return mask
 
 class SkyCatalog(object):
@@ -253,7 +302,8 @@ class SkyCatalog(object):
         if 'gaia_star' in config['object_types']:
             self.cat_cxt.register_source_type('gaia_star',
                                               object_class=GaiaObject,
-                                              collection_class=GaiaCollection)
+                                              collection_class=GaiaCollection,
+                                              custom_load=True)
         if 'sncosmo' in config['object_types']:
             self.cat_cxt.register_source_type('sncosmo',
                                               object_class=SncosmoObject)
@@ -263,6 +313,10 @@ class SkyCatalog(object):
         if 'galaxy' in config['object_types']:
             self.cat_cxt.register_source_type('galaxy',
                                               object_class=GalaxyObject)
+        if 'snana' in config['object_types']:
+            self.cat_cxt.register_source_type('snana',
+                                              object_class=SnanaObject,
+                                              collection_class=SnanaCollection)
 
     @property
     def observed_sed_factory(self):
@@ -439,9 +493,11 @@ class SkyCatalog(object):
 
         coll_type = self.cat_cxt.lookup_collection_type(object_type)
         if coll_type is not None:
-            out_list.append_collection(coll_type.load_collection(region, self,
-                                                                 mjd=mjd))
-            return out_list
+            if self.cat_cxt.use_custom_load(object_type):
+                out_list.append_collection(coll_type.load_collection(region,
+                                                                     self,
+                                                                     mjd=mjd))
+                return out_list
 
         if partition != 'None':
             if partition['type'] == 'healpix':
@@ -462,14 +518,19 @@ class SkyCatalog(object):
             print(f'WARNING: In SkyCatalog.get_object_type_by_hp healpixel {hp} intersects region but has no catalog file')
             return object_list
 
-        if object_type == 'galaxy':
+        if object_type in ['galaxy']:
             COLUMNS = ['galaxy_id', 'ra', 'dec']
             id_name = 'galaxy_id'
+        elif object_type in ['snana']:
+            COLUMNS = ['id', 'ra', 'dec', 'start_mjd', 'end_mjd']
+            id_name = 'id'
         elif object_type in ['star', 'sncosmo']:
             COLUMNS = ['object_type', 'id', 'ra', 'dec']
             id_name = 'id'
         else:
             raise NotImplementedError(f'Unsupported object type {object_type}')
+
+        coll_class = self.cat_cxt.lookup_collection_type(object_type)
 
         if self.verbose:
             print('Working on healpix pixel ', hp)
@@ -509,32 +570,41 @@ class SkyCatalog(object):
             # Make a collection for each row group
             for rg in range(rdr.n_row_groups):
                 arrow_t = rdr.read_columns(COLUMNS, None, rg)
-                if object_type == 'galaxy':
-                    ra_c, dec_c, id_c, mask = _compress_via_mask(arrow_t,
-                                                                 id_name,
-                                                                 region)
+                if object_type in {'galaxy', 'snana'}:
+                    ra_c, dec_c, id_c, mask =\
+                        _compress_via_mask(arrow_t,
+                                           id_name,
+                                           region,
+                                           source_type={object_type},
+                                           mjd=mjd)
                     if ra_c is not None:
-                        new_collection = ObjectCollection(ra_c, dec_c, id_c,
-                                                          'galaxy', hp, self,
-                                                          region=region,
-                                                          mjd=mjd,
-                                                          mask=mask,
-                                                          readers=the_readers,
-                                                          row_group=rg)
+                        ## new_collection = ObjectCollection(ra_c, dec_c, id_c,
+                        new_collection = coll_class(ra_c, dec_c, id_c,
+                                                    object_type, hp, self,
+                                                    region=region,
+                                                    mjd=mjd,
+                                                    mask=mask,
+                                                    readers=the_readers,
+                                                    row_group=rg)
+                        if object_type == 'snana':
+                            # file pattern really should come from cfg
+                            base = f'snana_{hp}.hdf5'
+                            SED_file = os.path.join(self._cat_dir, base)
+                            new_collection.set_SED_file(SED_file)
                         object_list.append_collection(new_collection)
 
                 else:
                     ra_c, dec_c, id_c, object_type_c, mask =\
                         _compress_via_mask(arrow_t, id_name, region,
-                                           galaxy=False)
+                                           source_type={object_type})
                     if ra_c is not None and object_type_c[0] == object_type:
-                        new_collection = ObjectCollection(ra_c, dec_c, id_c,
-                                                          object_type_c[0], hp,
-                                                          self, region=region,
-                                                          mjd=mjd,
-                                                          mask=mask,
-                                                          readers=the_readers,
-                                                          row_group=rg)
+                        new_collection = coll_class(ra_c, dec_c, id_c,
+                                                    object_type_c[0], hp,
+                                                    self, region=region,
+                                                    mjd=mjd,
+                                                    mask=mask,
+                                                    readers=the_readers,
+                                                    row_group=rg)
                         object_list.append_collection(new_collection)
 
         return object_list
@@ -638,9 +708,9 @@ if __name__ == '__main__':
 
     at_slac = os.getenv('HOME').startswith('/sdf/home/')
     if not at_slac:
-        obj_types = {'star', 'galaxy', 'sncosmo'}
+        obj_types = {'star', 'galaxy', 'sncosmo', 'snana'}
     else:
-        obj_types = {'star', 'galaxy', 'sncosmo', 'gaia_star'}
+        obj_types = {'star', 'galaxy', 'sncosmo', 'snana', 'gaia_star'}
 
     print('Invoke get_objects_by_region with box region, no gaia')
     t0 = time.time()
