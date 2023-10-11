@@ -60,12 +60,12 @@ class SnanaObject(BaseObject):
         with h5py.File(self._belongs_to._SED_file, 'r') as f:
             cors = f[self._id][f'magcor_{band}']
 
-        # interpolate corrections
-        if mjd_ix_l == mjd_ix_u:
-            mag_cor = cors[mjd_ix_l]
-        else:
-            mag_cor = cors[mjd_ix_l] + mjd_fraction *\
-                (cors[mjd_ix_u] - cors[mjd_ix_l])
+            # interpolate corrections
+            if mjd_ix_l == mjd_ix_u:
+                mag_cor = cors[mjd_ix_l]
+            else:
+                mag_cor = cors[mjd_ix_l] + mjd_fraction *\
+                    (cors[mjd_ix_u] - cors[mjd_ix_l])
 
         #dbg = True
         dbg = False
@@ -146,17 +146,17 @@ class SnanaObject(BaseObject):
                 self._mjds = np.array(f[self._id]['mjd'])
                 self._lambda = np.array(f[self._id]['lambda'])
 
-        if mjd_ix_l == mjd_ix_u:
-            flambda = f[self._id]['flamba'][mjd_ix_l]
-        else:
-            mjd_ix = mjd_ix_u
-            below = f[self._id]['flambda'][mjd_ix - 1]
-            above = f[self._id]['flambda'][mjd_ix]
-            flambda = below + mjd_fraction * (above - below)
+            if mjd_ix_l == mjd_ix_u:
+                flambda = f[self._id]['flamba'][mjd_ix_l]
+            else:
+                mjd_ix = mjd_ix_u
+                below = f[self._id]['flambda'][mjd_ix - 1]
+                above = f[self._id]['flambda'][mjd_ix]
+                flambda = below + mjd_fraction * (above - below)
 
-        lut = galsim.LookupTable(f[self._id]['lambda'],
-                                 flambda,
-                                 interpolant='linear')
+            lut = galsim.LookupTable(f[self._id]['lambda'],
+                                     flambda,
+                                     interpolant='linear')
         return galsim.SED(lut, wave_type='A', flux_type='flambda')
 
 
