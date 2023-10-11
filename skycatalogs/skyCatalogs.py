@@ -81,7 +81,7 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
 
     Returns
     -------
-    4 values for galaxies: ra, dec, id, mask
+    4 values for galaxies and snana: ra, dec, id, mask
     5 values for pointsources: ra, dec, id, object_type, mask
     If objects are in the region, ra, dec, id correspond to those objects.
     mask will mask off unused objects

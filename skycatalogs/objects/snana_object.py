@@ -1,3 +1,4 @@
+import bisect
 import galsim
 import h5py
 import numpy as np
@@ -43,7 +44,7 @@ class SnanaObject(BaseObject):
 
     def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
         def _flux_ratio(mag):
-            # -0.9210340371976184 = -np.log(10)/2.5. 
+            # -0.9210340371976184 = -np.log(10)/2.5.
             return np.exp(-0.921034037196184 * mag)
 
         flux = super().get_LSST_flux(band, sed, mjd)
@@ -105,25 +106,24 @@ class SnanaObject(BaseObject):
             store = (mjd == self._belongs_to._mjd)
 
         if store:
-            if self._mjd_ix_l is not None
+            if self._mjd_ix_l is not None:
                 # just return previously-computed values
                 return self._mjd_ix_l, self._mjd_ix_u, self._mjd_fraction
 
         if  self._mjds is None:
             with h5py.File(self._belongs_to._SED_file, 'r') as f:
                 self._mjds = np.array(f[self._id]['mjd'])
+        mjds = self._mjds
 
-        last_ix = len(self._mjds) - 1
         mjd_fraction = None
-        if mjd <= self._mjds[0]:
+        index = bisect.bisect(mjds, mjd)
+        if index == 0:
             mjd_ix_l =  mjd_ix_u = 0
-        elif mjd >= self._mjds[last_ix]:
+        elif index == len(mjds):
             mjd_ix_l = mjd_ix_u = last_ix
         else:
-            mjd_ix_u = np.argmin((mjd - self._mjds ) > 0)
-            mjd_ix_l = mjd_ix_u - 1
-            mjds = self._mjds
-            # Where is mjd relative to mjds on either side in the array?
+            mjd_ix_l = index - 1
+            mjd_ix_u = index
             mjd_fraction = (mjd - mjds[mjd_ix_l]) /\
                 (mjds[mjd_ix_u] - mjds[mjd_ix_l])
         if store:
@@ -139,14 +139,7 @@ class SnanaObject(BaseObject):
         Return galsim SED obtained by interpolating between SEDs
         for nearest mjds among the templates
         '''
-
-        mjd_ix_l,mjd_ix_u,mjd_fraction = self._find_mjd_interval(mjd)        
-        # if self._mjd_ix_l is None:
-        #     mjd_ix_l,mjd_ix_u,mjd_fraction = self._find_mjd_interval(mjd)
-        # else:
-        #     mjd_ix_l = self._mjd_ix_l
-        #     mjd_ix_u = self._mjd_ix_u
-        #     mjd_fraction = self._mjd_fraction
+        mjd_ix_l,mjd_ix_u,mjd_fraction = self._find_mjd_interval(mjd)
 
         with h5py.File(self._belongs_to._SED_file, 'r') as f:
             if self._mjds is None or self._lambda is None:

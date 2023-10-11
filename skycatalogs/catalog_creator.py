@@ -830,8 +830,7 @@ class CatalogCreator:
             sn_df['object_type'] = np.full((nobj,), self._sn_object_type)
 
             sn_df['MW_rv'] = make_MW_extinction_rv(sn_df['ra'], sn_df['dec'])
-            sn_df['MW_av'] = make_MW_extinction_av(np.array(sn_df['ra']),
-                                                   np.array(sn_df['dec']))
+            sn_df['MW_av'] = make_MW_extinction_av(sn_df['ra'], sn_df['dec'])
 
             # Add fillers for columns not relevant for sn
             sn_df['sed_filepath'] = np.full((nobj),'')
