@@ -48,7 +48,7 @@ class SnanaObject(BaseObject):
             # -0.9210340371976184 = -np.log(10)/2.5.
             return np.exp(-0.921034037196184 * mag)
 
-        flux = super().get_LSST_flux(band, sed, mjd)
+        flux = super().get_LSST_flux(band, sed=sed, cache=cache, mjd=mjd)
 
         if flux < 0:
             raise SkyCatalogsRuntimeError('Negative flux')
