@@ -1,7 +1,7 @@
 from collections import namedtuple
 import numpy as np
 from astropy import units as u
-
+from lsst.sphgeom import ConvexPolygon, UnitVector3d, LonLat
 
 __all__ = ['Box', 'Disk', 'PolygonalRegion']
 
@@ -10,7 +10,7 @@ Box = namedtuple('Box', ['ra_min', 'ra_max', 'dec_min', 'dec_max'])
 # radius is measured in arcseconds
 Disk = namedtuple('Disk', ['ra', 'dec', 'radius_as'])
 
-from lsst.sphgeom import ConvexPolygon, UnitVector3d, LonLat
+
 class PolygonalRegion:
 
     def __init__(self, vertices_radec=None, convex_polygon=None):

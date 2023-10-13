@@ -1,11 +1,10 @@
 from collections import OrderedDict
-import pyarrow as pa
 import pyarrow.parquet as pq
 import numpy as np
 import numpy.ma as ma
-import warnings
 
 __all__ = ['ParquetReader']
+
 
 class ParquetReader:
     '''

@@ -2,10 +2,11 @@ import bisect
 import galsim
 import h5py
 import numpy as np
-from .base_object import BaseObject,ObjectCollection
+from .base_object import BaseObject, ObjectCollection
 from skycatalogs.utils.exceptions import SkyCatalogsRuntimeError
 
 __all__ = ['SnanaObject', 'SnanaCollection']
+
 
 class SnanaObject(BaseObject):
     _type_name = 'snana'
@@ -67,7 +68,7 @@ class SnanaObject(BaseObject):
                 mag_cor = cors[mjd_ix_l] + mjd_fraction *\
                     (cors[mjd_ix_u] - cors[mjd_ix_l])
 
-        #dbg = True
+        # dbg = True
         dbg = False
 
         # Do everything in flux units
@@ -110,7 +111,7 @@ class SnanaObject(BaseObject):
                 # just return previously-computed values
                 return self._mjd_ix_l, self._mjd_ix_u, self._mjd_fraction
 
-        if  self._mjds is None:
+        if self._mjds is None:
             with h5py.File(self._belongs_to._SED_file, 'r') as f:
                 self._mjds = np.array(f[self._id]['mjd'])
         mjds = self._mjds
@@ -118,7 +119,7 @@ class SnanaObject(BaseObject):
         mjd_fraction = None
         index = bisect.bisect(mjds, mjd)
         if index == 0:
-            mjd_ix_l =  mjd_ix_u = 0
+            mjd_ix_l = mjd_ix_u = 0
         elif index == len(mjds):
             mjd_ix_l = mjd_ix_u = index - 1
         else:
@@ -133,13 +134,12 @@ class SnanaObject(BaseObject):
 
         return mjd_ix_l, mjd_ix_u, mjd_fraction
 
-
     def _linear_interp_SED(self, mjd=None):
         '''
         Return galsim SED obtained by interpolating between SEDs
         for nearest mjds among the templates
         '''
-        mjd_ix_l,mjd_ix_u,mjd_fraction = self._find_mjd_interval(mjd)
+        mjd_ix_l, mjd_ix_u, mjd_fraction = self._find_mjd_interval(mjd)
 
         with h5py.File(self._belongs_to._SED_file, 'r') as f:
             if self._mjds is None or self._lambda is None:

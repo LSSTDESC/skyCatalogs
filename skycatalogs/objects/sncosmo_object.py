@@ -5,8 +5,10 @@ from .base_object import BaseObject
 
 __all__ = ['SncosmoObject']
 
+
 class SncosmoObject(BaseObject):
     _type_name = 'sncosmo'
+
     def _get_sed(self, mjd=None):
         params = self.get_native_attribute('salt2_params')
         sn = SncosmoModel(params=params)
@@ -27,7 +29,8 @@ class SncosmoObject(BaseObject):
         return sed
 
     def get_LSST_flux(self, band, sed=None, mjd=None):
-        if not band in LSST_BANDS:
-            return None
+        # if band not in BaseObject.LSST_BANDS:
+        #     return None
 
-        return self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
+        # return self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
+        return super().get_LSST_flux(band, sed=sed, cache=False, mjd=mjd)

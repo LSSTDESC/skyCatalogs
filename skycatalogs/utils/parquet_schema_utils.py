@@ -4,14 +4,15 @@ import logging
 __all__ = ['make_galaxy_schema', 'make_galaxy_flux_schema',
            'make_pointsource_schema', 'make_star_flux_schema']
 
+
 # This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
 def make_galaxy_schema(logname, sed_subdir=False, knots=True):
     fields = [pa.field('galaxy_id', pa.int64()),
-              pa.field('ra', pa.float64() , True),
-##                       metadata={"units" : "radians"}),
-              pa.field('dec', pa.float64() , True),
-##                       metadata={"units" : "radians"}),
+              pa.field('ra', pa.float64(), True),
+              # metadata={"units" : "radians"}),
+              pa.field('dec', pa.float64(), True),
+              # metadata={"units" : "radians"}),
               pa.field('redshift', pa.float64(), True),
               pa.field('redshift_hubble', pa.float64(), True),
               pa.field('peculiar_velocity', pa.float64(), True),
@@ -24,7 +25,7 @@ def make_galaxy_schema(logname, sed_subdir=False, knots=True):
               pa.field('size_disk_true', pa.float32(), True),
               pa.field('size_minor_disk_true', pa.float32(), True),
               pa.field('sersic_disk', pa.float32(), True),
-##              pa.field('position_angle_unlensed', pa.float64(), True),
+
               # Depending on value of --dc2-like option, value for
               # ellipticity_2_true column will differ
               pa.field('ellipticity_1_disk_true', pa.float64(), True),
@@ -44,9 +45,9 @@ def make_galaxy_schema(logname, sed_subdir=False, knots=True):
         logger.debug("knots requested")
         fields.append(pa.field('sed_val_knots',
                                pa.list_(pa.float64()), True))
-        ### For sizes API can alias to disk sizes
-        ###  position angle, shears and convergence are all
-        ###  galaxy-wide quantities.
+        # For sizes API can alias to disk sizes
+        # position angle, shears and convergence are all
+        # galaxy-wide quantities.
         fields.append(pa.field('n_knots', pa.float32(), True))
         fields.append(pa.field('knots_magnorm', pa.float64(), True))
 
@@ -60,6 +61,7 @@ def make_galaxy_schema(logname, sed_subdir=False, knots=True):
     logger.debug(debug_out)
     return pa.schema(fields)
 
+
 def make_galaxy_flux_schema(logname):
     '''
     Will make a separate parquet file with lsst flux for each band
@@ -69,13 +71,14 @@ def make_galaxy_flux_schema(logname):
     logger.debug('Creating galaxy flux schema')
     fields = [pa.field('galaxy_id', pa.int64()),
               # should flux fields be named e.g. lsst_cmodel_flux_u?
-              pa.field('lsst_flux_u', pa.float32() , True),
-              pa.field('lsst_flux_g', pa.float32() , True),
-              pa.field('lsst_flux_r', pa.float32() , True),
-              pa.field('lsst_flux_i', pa.float32() , True),
-              pa.field('lsst_flux_z', pa.float32() , True),
-              pa.field('lsst_flux_y', pa.float32() , True)]
+              pa.field('lsst_flux_u', pa.float32(), True),
+              pa.field('lsst_flux_g', pa.float32(), True),
+              pa.field('lsst_flux_r', pa.float32(), True),
+              pa.field('lsst_flux_i', pa.float32(), True),
+              pa.field('lsst_flux_z', pa.float32(), True),
+              pa.field('lsst_flux_y', pa.float32(), True)]
     return pa.schema(fields)
+
 
 def make_star_flux_schema(logname):
     '''
@@ -85,13 +88,14 @@ def make_star_flux_schema(logname):
     logger = logging.getLogger(logname)
     logger.debug('Creating star flux schema')
     fields = [pa.field('id', pa.string()),
-              pa.field('lsst_flux_u', pa.float32() , True),
-              pa.field('lsst_flux_g', pa.float32() , True),
-              pa.field('lsst_flux_r', pa.float32() , True),
-              pa.field('lsst_flux_i', pa.float32() , True),
-              pa.field('lsst_flux_z', pa.float32() , True),
-              pa.field('lsst_flux_y', pa.float32() , True)]
+              pa.field('lsst_flux_u', pa.float32(), True),
+              pa.field('lsst_flux_g', pa.float32(), True),
+              pa.field('lsst_flux_r', pa.float32(), True),
+              pa.field('lsst_flux_i', pa.float32(), True),
+              pa.field('lsst_flux_z', pa.float32(), True),
+              pa.field('lsst_flux_y', pa.float32(), True)]
     return pa.schema(fields)
+
 
 def make_pointsource_schema():
     '''
@@ -121,8 +125,9 @@ def make_pointsource_schema():
               pa.field('parallax', pa.float64(), True),
               pa.field('variability_model', pa.string(), True),
               pa.field('salt2_params', pa.struct(salt2_fields), True)
-    ]
+              ]
     return pa.schema(fields)
+
 
 def make_pointsource_flux_schema(logname):
     '''
@@ -134,13 +139,13 @@ def make_pointsource_flux_schema(logname):
     logger = logging.getLogger(logname)
     logger.debug('Creating pointsource flux schema')
     fields = [pa.field('id', pa.string()),
-              pa.field('lsst_flux_u', pa.float32() , True),
-              pa.field('lsst_flux_g', pa.float32() , True),
-              pa.field('lsst_flux_r', pa.float32() , True),
-              pa.field('lsst_flux_i', pa.float32() , True),
-              pa.field('lsst_flux_z', pa.float32() , True),
-              pa.field('lsst_flux_y', pa.float32() , True),
-              pa.field('mjd', pa.float64() , True)]
+              pa.field('lsst_flux_u', pa.float32(), True),
+              pa.field('lsst_flux_g', pa.float32(), True),
+              pa.field('lsst_flux_r', pa.float32(), True),
+              pa.field('lsst_flux_i', pa.float32(), True),
+              pa.field('lsst_flux_z', pa.float32(), True),
+              pa.field('lsst_flux_y', pa.float32(), True),
+              pa.field('mjd', pa.float64(), True)]
     return pa.schema(fields)
 
     return pa.schema(fields)

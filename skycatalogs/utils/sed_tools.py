@@ -3,15 +3,14 @@ import re
 from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
 import astropy.constants
-import h5py
-import pandas as pd
 
 import numpy as np
-import numpy.ma as ma
 from dust_extinction.parameter_averages import F19
 import galsim
 
 __all__ = ['TophatSedFactory', 'MilkyWayExtinction', 'get_star_sed_path']
+
+
 class TophatSedFactory:
     '''
     Used for modeling cosmoDC2 galaxy SEDs, which are represented with
@@ -97,7 +96,7 @@ class TophatSedFactory:
         '''
         # Compute Llambda in units of W/nm
         Llambda = (Lnu*self._to_W_per_Hz*(self.nu[:-1] - self.nu[1:])
-                   /(self.wl[1:] - self.wl[:-1]))
+                   / (self.wl[1:] - self.wl[:-1]))
 
         # Fill the arrays for the galsim.LookupTable.   Prepend
         # zero-valued bins down to mix extinction wl to handle redshifts z > 2.
@@ -119,7 +118,8 @@ class TophatSedFactory:
         if resolution:
             wl_min = min(self.wl_deltas)
             wl_max = max(self.wl_deltas)
-            wl_res = np.linspace(wl_min, wl_max, int((wl_max - wl_min)/resolution))
+            wl_res = np.linspace(wl_min, wl_max,
+                                 int((wl_max - wl_min)/resolution))
             flambda_res = [lut(wl) for wl in wl_res]
             lut = galsim.LookupTable(wl_res, flambda_res, interpolant='linear')
 
@@ -135,6 +135,7 @@ class TophatSedFactory:
         Fnu = Lnu/4/np.pi/self.dl(z_H)**2
         with np.errstate(divide='ignore', invalid='ignore'):
             return -2.5*np.log10(Fnu/one_Jy) + 8.90
+
 
 class MilkyWayExtinction:
     '''
@@ -171,9 +172,10 @@ class MilkyWayExtinction:
         return sed
 
 
-_standard_dict = {'lte' : 'starSED/phoSimMLT',
-                  'bergeron' : 'starSED/wDs',
-                  'km|kp' : 'starSED/kurucz'}
+_standard_dict = {'lte': 'starSED/phoSimMLT',
+                  'bergeron': 'starSED/wDs',
+                  'km|kp': 'starSED/kurucz'}
+
 
 def get_star_sed_path(filename, name_to_folder=_standard_dict):
     '''
@@ -182,7 +184,8 @@ def get_star_sed_path(filename, name_to_folder=_standard_dict):
 
     Parameters
     ----------
-    filename       list of strings. Usually full filename but may be missing final ".gz"
+    filename       list of strings. Usually full filename but may be
+                   missing final ".gz"
     name_to_folder dict mapping regular expression (to be matched with
                    filename) to relative path for containing directory
 
@@ -191,13 +194,13 @@ def get_star_sed_path(filename, name_to_folder=_standard_dict):
     Full path for file, relative to SIMS_SED_LIBRARY_DIR
     '''
 
-    compiled = { re.compile(k) : v for (k, v) in name_to_folder.items()}
+    compiled = {re.compile(k): v for (k, v) in name_to_folder.items()}
 
     path_list = []
     for f in filename:
         m = None
         matched = False
-        for k,v in compiled.items():
+        for k, v in compiled.items():
             f = f.strip()
             m = k.match(f)
             if m:

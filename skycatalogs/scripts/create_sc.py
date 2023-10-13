@@ -25,17 +25,26 @@ parser.add_argument('--no-galaxies', '--no-gal', action='store_true',
 parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
                     help='healpix pixels for which catalogs will be created')
 parser.add_argument('--skycatalog-root',
-                    help='Root directory for sky catalogs, typically site-dependent. If not specified, use value of environment variable SKYCATALOG_ROOT')
-parser.add_argument('--catalog-dir', '--cat-dir', help='directory for output files relative to skycatalog_root',
+                    help='''Root directory for sky catalogs, typically
+                    site-dependent. If not specified, use value of
+                    environment variable SKYCATALOG_ROOT''')
+parser.add_argument('--catalog-dir', '--cat-dir',
+                    help='output file directory relative to skycatalog_root',
                     default='.')
-parser.add_argument('--sed-subdir', help='subdirectory to prepend to paths of galaxy SEDs as written to the sky catalog', default='galaxyTopHatSED')
+parser.add_argument('--sed-subdir',
+                    help='''subdirectory to prepend to paths of galaxy SEDs
+                    as written to the sky catalog''',
+                    default='galaxyTopHatSED')
 parser.add_argument('--log-level', help='controls logging output',
-                    default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'])
-parser.add_argument('--galaxy-magnitude-cut', '--gal-mag-cut', default=29.0, type=float,
+                    default='INFO', choices=['DEBUG', 'INFO', 'WARNING',
+                                             'ERROR'])
+parser.add_argument('--galaxy-magnitude-cut', '--gal-mag-cut',
+                    default=29.0, type=float,
                     help='Exclude galaxies with r-magnitude above this value')
 parser.add_argument('--knots-magnitude-cut', default=27.0, type=float,
                     help='Galaxies with i-magnitude above this cut get no knots')
-parser.add_argument('--no-knots', action='store_true', help='If supplied omit knots component. Default is False')
+parser.add_argument('--no-knots', action='store_true',
+                    help='If supplied omit knots component. Default is False')
 
 parser.add_argument('--config-path', default=None, help='''
                     Output path for config file. If no value,
@@ -102,7 +111,7 @@ parts = args.pixels
 if args.provenance:
     provenance = args.provenance
 else:
-    provenance=None
+    provenance = None
 
 creator = CatalogCreator(parts, area_partition=None,
                          skycatalog_root=skycatalog_root,

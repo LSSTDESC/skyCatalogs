@@ -3,6 +3,8 @@ from dustmaps.sfd import SFDQuery
 
 _Av_adjustment = 2.742
 _MW_rv_constant = 3.1
+
+
 def make_MW_extinction_av(ra, dec):
     '''
     Given arrays of ra & dec, create a MW Av column corresponding to V-band
@@ -10,7 +12,8 @@ def make_MW_extinction_av(ra, dec):
     See "Plotting Dust Maps" example in
     https://dustmaps.readthedocs.io/en/latest/examples.html
 
-    The coefficient _Av_adjustment comes Table 6 in Schlafly & Finkbeiner (2011)
+    The coefficient _Av_adjustment comes from Table 6 in
+    Schlafly & Finkbeiner (2011)
     See http://iopscience.iop.org/0004-637X/737/2/103/article#apj398709t6
 
     Parameters
@@ -24,6 +27,7 @@ def make_MW_extinction_av(ra, dec):
     ebv_raw = np.array(sfd.query_equ(ra, dec))
 
     return _Av_adjustment * ebv_raw
+
 
 def make_MW_extinction_rv(ra, dec):
     return np.full_like(np.array(ra), _MW_rv_constant)

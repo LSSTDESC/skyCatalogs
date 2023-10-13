@@ -2,11 +2,14 @@ import numpy as np
 import galsim
 
 from .base_object import BaseObject
+from skycatalogs.utils.translate_utils import form_object_string
 
 __all__ = ['GalaxyObject']
 
+
 class GalaxyObject(BaseObject):
     _type_name = 'galaxy'
+
     def _get_sed(self, component=None, resolution=None):
         '''
         Return sed and mag_norm for a galaxy component or for a star
@@ -25,7 +28,7 @@ class GalaxyObject(BaseObject):
             raise ValueError(f'Cannot fetch SED for component type {component}')
 
         th_val = self.get_native_attribute(f'sed_val_{component}')
-        if  th_val is None:   #  values for this component are not in the file
+        if th_val is None:   # values for this component are not in the file
             raise ValueError(f'{component} not part of this catalog')
 
         # if values are all zeros or nearly no point in trying to convert
@@ -46,11 +49,11 @@ class GalaxyObject(BaseObject):
         """Return the weak lensing parameters, g1, g2, mu."""
         gamma1 = self.get_native_attribute('shear_1')
         gamma2 = self.get_native_attribute('shear_2')
-        kappa =  self.get_native_attribute('convergence')
+        kappa = self.get_native_attribute('convergence')
         # Compute reduced shears and magnification.
         g1 = gamma1/(1. - kappa)    # real part of reduced shear
         g2 = gamma2/(1. - kappa)    # imaginary part of reduced shear
-        mu = 1./((1. - kappa)**2 - (gamma1**2 + gamma2**2)) # magnification
+        mu = 1./((1. - kappa)**2 - (gamma1**2 + gamma2**2))  # magnification
         return g1, g2, mu
 
     def get_total_observer_sed(self, mjd=None):
@@ -66,7 +69,6 @@ class GalaxyObject(BaseObject):
         _, _, mu = self.get_wl_params()
         sed *= mu
         return sed
-
 
     def get_gsobject_components(self, gsparams=None, rng=None):
 
@@ -123,7 +125,7 @@ class GalaxyObject(BaseObject):
 
         return sed
 
-    def get_instcat_entry(self, band = 'r', component=None):
+    def get_instcat_entry(self, band='r', component=None):
         '''
         Return the string corresponding to instance catalog line
         Parameters:
