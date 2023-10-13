@@ -24,7 +24,7 @@ def make_MW_extinction_av(ra, dec):
     '''
 
     sfd = SFDQuery()
-    ebv_raw = np.array(sfd.query_equ(ra, dec))
+    ebv_raw = np.array(sfd.query_equ(np.array(ra), np.array(dec)))
 
     return _Av_adjustment * ebv_raw
 
