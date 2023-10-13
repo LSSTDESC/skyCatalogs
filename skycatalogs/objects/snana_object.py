@@ -59,7 +59,11 @@ class SnanaObject(BaseObject):
         mjd_ix_l, mjd_ix_u, mjd_fraction = self._find_mjd_interval(mjd)
 
         with h5py.File(self._belongs_to._SED_file, 'r') as f:
-            cors = f[self._id][f'magcor_{band}']
+            try:
+                cors = f[self._id][f'magcor_{band}']
+            except KeyError:
+                # nothing else to do
+                return flux
 
             # interpolate corrections
             if mjd_ix_l == mjd_ix_u:
@@ -80,9 +84,6 @@ class SnanaObject(BaseObject):
             print(f'                mag correction: {mag_cor}')
             print(f' multiplicative flux correction: {flux_cor}')
 
-        if cache:
-            att = f'lsst_flux_{band}'
-            setattr(self, att, corrected_flux)
         return corrected_flux
 
     def _find_mjd_interval(self, mjd=None):
