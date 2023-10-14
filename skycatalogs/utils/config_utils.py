@@ -2,18 +2,19 @@ import os
 import yaml
 import git
 import logging
-from jsonschema import validate
-
-from .exceptions import NoSchemaVersionError, ConfigDuplicateKeyError
+from .exceptions import ConfigDuplicateKeyError
+# import jsonschema
 
 from collections import namedtuple
 
 __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
            'assemble_SED_models', 'assemble_MW_extinction',
-           'assemble_cosmology', 'assemble_object_types', 'assemble_provenance',
-           'assemble_variability_models', 'write_yaml', 'CURRENT_SCHEMA_VERSION']
+           'assemble_cosmology', 'assemble_object_types',
+           'assemble_provenance', 'assemble_variability_models', 'write_yaml',
+           'CURRENT_SCHEMA_VERSION']
 
-CURRENT_SCHEMA_VERSION='1.2.0'
+CURRENT_SCHEMA_VERSION = '1.2.0'
+
 
 def open_config_file(config_file):
     '''
@@ -21,6 +22,7 @@ def open_config_file(config_file):
     '''
     with open(config_file) as f:
         return Config(yaml.safe_load(f))
+
 
 Tophat = namedtuple('Tophat', ['start', 'width'])
 
@@ -46,15 +48,18 @@ class DelegatorBase:
     def _delegate(self):
         pub = [o for o in dir(self.default) if not o.startswith('_')]
         return pub
+
     def __getattr__(self, k):
         if k in self._delegate:
             return getattr(self.default, k)
         raise AttributeError(k)
+
     def __dir__(self):
         return _custom_dir(self, self._delegate)
 
     def __init__(self):
         pass
+
 
 class Config(DelegatorBase):
     '''
@@ -119,7 +124,7 @@ class Config(DelegatorBase):
             return None
         raw_bins = self._cfg['SED_models']['tophat']['bins']
 
-        return [ Tophat(b[0], b[1]) for b in raw_bins]
+        return [Tophat(b[0], b[1]) for b in raw_bins]
 
     def get_config_value(self, key_path, silent=False):
         '''
@@ -138,7 +143,7 @@ class Config(DelegatorBase):
         path_items = key_path.split('/')
         d = self._cfg
         for i in path_items[:-1]:
-            if not i in d.keys():
+            if i not in d.keys():
                 if silent:
                     return None
                 raise ValueError(f'Item {i} not found')
@@ -146,46 +151,6 @@ class Config(DelegatorBase):
             if not isinstance(d, dict):
                 raise ValueError(f'intermediate {d} is not a dict')
         return d[path_items[-1]]
-
-    def validate(self, schema=None):
-        '''
-        Parameters
-        ----------
-        schema    Identifies schema to validate against.
-                  If string, open file with this file path
-                  If dict, use "as is"
-                  If None, attempt to deduce schema version (and hence
-                  file path) from schema_version keyword
-        Returns:  None
-                  Raise exception if validation fails for any reason:
-                  skycatalogs.exception.NoSchema if schema specification
-                  can't be found
-                  OSError if schema file can't be read
-                  yaml.YAMLerror if schema can't be loaded
-                  jsonschema.exceptions.SchemaError if schema is invalid
-                  jsonschema.exceptions.ValidationError otherwise
-        '''
-        fpath = None
-        if schema is None:
-            if 'schema_version' not in self._cfg:
-                raise NoSchemaVersionError
-            fpath = _find_schema_path(self._cfg["schema_version"])
-            if not fpath:
-                raise NoSchemaVersionError('Schema file not found')
-        elif isinstance(schema, string):
-            fpath = schema
-        if fpath:
-            try:
-                f = open(fpath)
-                sch = yaml.safe_load(f)
-            except OSError as e:
-                raise NoSchemaVersionError('Schema file not found or unreadable')
-            except yaml.YAMLError as ye:
-                raise ye
-        if isinstance(schema, dict):
-            sch = schema
-
-        jsonschema.validate(self._cfg, schema.dict)
 
     def add_key(self, k, v):
         '''
@@ -214,7 +179,7 @@ class Config(DelegatorBase):
         ------
         Full path of output config
         '''
-        ###self.validate()   skip for now
+        # ##self.validate()   skip for now
 
         if not filename:
             filename = self._cfg['catalog_name'] + '.yaml'
@@ -224,49 +189,43 @@ class Config(DelegatorBase):
 
 
 def write_yaml(input_dict, outpath, overwrite=False, logname=None):
-        if not overwrite:
-            try:
-                with open(outpath, mode='x') as f:
-                    yaml.dump(input_dict, f)
-            except FileExistsError:
-                if logname:
-                    logger = logging.getLogger(logname)
-                    logger.warning('Config.write_yaml: Will not overwrite pre-existing config file ' + outpath)
-                else:
-                    print('Config.write_yaml: Will not overwrite pre-existing config file ' + outpath)
-                return
-
-        else:
-            with open(outpath, mode='w') as f:
+    if not overwrite:
+        try:
+            with open(outpath, mode='x') as f:
                 yaml.dump(input_dict, f)
+        except FileExistsError:
+            txt = 'Config.write_yaml: Will not overwrite pre-existing config '
+            if logname:
+                logger = logging.getLogger(logname)
+                logger.warning(txt + outpath)
+            else:
+                print(txt + outpath)
+            return
+    else:
+        with open(outpath, mode='w') as f:
+            yaml.dump(input_dict, f)
 
-        return outpath
+    return outpath
 
-
-def _find_schema_path(schema_spec):
-    '''
-    Given a schema version specification, return the file path
-    where the file describing it belongs
-    '''
-    fname = f'skycatalogs_schema_{self._cfg["schema_spec"]}'
-    here = os.path.dirname(__file__)
-    return os.path.join(here, '../../cfg', fname)
 
 def create_config(catalog_name, logname=None):
-    return Config({'catalog_name' : catalog_name}, logname)
-#                  'schema_version' : schema_version,
-#                  'code_version' : desc.skycatalogs.__version__}, logname)
+    return Config({'catalog_name': catalog_name}, logname)
+#                  'schema_version': schema_version,
+#                  'code_version': desc.skycatalogs.__version__}, logname)
+
 
 def assemble_cosmology(cosmology):
-    d = {k : cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
-                                                     'n_s')}
+    d = {k: cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
+                                                    'n_s')}
     d['H0'] = float(cosmology.H0.value)
     return d
 
+
 def assemble_MW_extinction():
-    av = {'mode' : 'data'}
-    rv = {'mode' : 'constant', 'value' : 3.1}
-    return {'r_v' : rv, 'a_v' : av}
+    av = {'mode': 'data'}
+    rv = {'mode': 'constant', 'value': 3.1}
+    return {'r_v': rv, 'a_v': av}
+
 
 def assemble_object_types(pkg_root, galaxy_nside=32):
     '''
@@ -279,18 +238,20 @@ def assemble_object_types(pkg_root, galaxy_nside=32):
         d['object_types']['galaxy']['area_partition']['nside'] = galaxy_nside
         return d['object_types']
 
+
 def assemble_SED_models(bins):
-    tophat_d = { 'units' : 'angstrom', 'bin_parameters' : ['start', 'width']}
+    tophat_d = {'units': 'angstrom', 'bin_parameters': ['start', 'width']}
     tophat_d['bins'] = bins
-    file_nm_d = {'units' : 'nm'}
-    return {'tophat' : tophat_d, 'file_nm' : file_nm_d}
+    file_nm_d = {'units': 'nm'}
+    return {'tophat': tophat_d, 'file_nm': file_nm_d}
+
 
 def assemble_provenance(pkg_root, inputs={}, schema_version=None):
 
     if not schema_version:
         schema_version = CURRENT_SCHEMA_VERSION
     import skycatalogs
-    version_d = {'schema_version' : schema_version}
+    version_d = {'schema_version': schema_version}
     if '__version__' in dir(skycatalogs):
         code_version = skycatalogs.__version__
     else:
@@ -300,7 +261,6 @@ def assemble_provenance(pkg_root, inputs={}, schema_version=None):
     repo = git.Repo(pkg_root)
     has_uncommited = repo.is_dirty()
     has_untracked = (len(repo.untracked_files) > 0)
-
 
     git_d = {}
     git_d['git_hash'] = repo.commit().hexsha
@@ -315,15 +275,17 @@ def assemble_provenance(pkg_root, inputs={}, schema_version=None):
     git_d['git_status'] = status
 
     if inputs:
-        return {'versioning' : version_d,'skyCatalogs_repo' : git_d,
-                'inputs' : inputs}
+        return {'versioning': version_d, 'skyCatalogs_repo': git_d,
+                'inputs': inputs}
     else:
-        return{'versioning' : version_d, 'skyCatalogs_repo' : git_d}
+        return{'versioning': version_d, 'skyCatalogs_repo': git_d}
+
 
 # In config just keep track of models by object type. Information
 # about the parameters they require is internal to the code.
 _AGN_MODELS = ['agn_random_walk']
 _SNCOSMO_MODELS = ['sn_salt2_extended']
+
 
 def assemble_variability_models(object_types):
     '''

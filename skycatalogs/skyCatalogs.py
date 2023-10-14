@@ -6,11 +6,10 @@ import logging
 import healpy
 import numpy as np
 import numpy.ma as ma
-import pyarrow.parquet as pq
 from astropy import units as u
 from skycatalogs.objects.base_object import load_lsst_bandpasses
 from skycatalogs.utils.catalog_utils import CatalogContext
-from skycatalogs.objects.base_object import ObjectList, ObjectCollection
+from skycatalogs.objects.base_object import ObjectList
 from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from skycatalogs.readers import ParquetReader
 from skycatalogs.utils.sed_tools import TophatSedFactory
@@ -23,6 +22,7 @@ from skycatalogs.objects.galaxy_object import GalaxyObject
 from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
 
 __all__ = ['SkyCatalog', 'open_catalog']
+
 
 # This function should maybe be moved to utils
 def _get_intersecting_hps(hp_ordering, nside, region):
@@ -43,7 +43,7 @@ def _get_intersecting_hps(hp_ordering, nside, region):
                                         region.dec_max, region.dec_max],
                                        lonlat=True)
 
-        pixels =  healpy.query_polygon(nside, vec, inclusive=True, nest=False)
+        pixels = healpy.query_polygon(nside, vec, inclusive=True, nest=False)
     elif isinstance(region, Disk):
         # Convert inputs to the types query_disk expects
         center = healpy.pixelfunc.ang2vec(region.ra, region.dec,
@@ -63,6 +63,7 @@ def _get_intersecting_hps(hp_ordering, nside, region):
     pixels = list(pixels)
     pixels.sort()
     return pixels
+
 
 def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
                        mjd=None):
@@ -110,7 +111,7 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
             bnd_box = Box(ra_min, ra_max, dec_min, dec_max)
             # Compute mask for that box
             mask = _compute_region_mask(bnd_box, tbl['ra'], tbl['dec'])
-            if all(mask): # even bounding box doesn't intersect table rows
+            if all(mask):    # even bounding box doesn't intersect table rows
                 if no_obj_type_return:
                     return None, None, None, None
                 else:
@@ -156,14 +157,16 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
                 time_mask = _compute_time_mask(mjd, tbl['start_mjd'],
                                                tbl['end_mjd'])
                 ra_compress = ma.array(tbl['ra'], mask=time_mask).compressed()
-                dec_compress = ma.array(tbl['dec'], mask=time_mask).compressed()
+                dec_compress = ma.array(tbl['dec'],
+                                        mask=time_mask).compressed()
                 id_compress = ma.array(tbl[id_column],
                                        mask=time_mask).compressed()
                 return ra_compress, dec_compress, id_compress, time_mask
             else:
-                return tbl['ra'], tbl['dec'], tbl[id_column],None
+                return tbl['ra'], tbl['dec'], tbl[id_column], None
         else:
-            return tbl['ra'], tbl['dec'], tbl[id_column],tbl['object_type'],None
+            return tbl['ra'], tbl['dec'], tbl[id_column], tbl['object_type'], None
+
 
 def _compute_region_mask(region, ra, dec):
     '''
@@ -192,19 +195,18 @@ def _compute_region_mask(region, ra, dec):
                                          lonlat=True)
         radius_rad = (region.radius_as * u.arcsec).to_value('radian')
 
-
         # Rather than comparing arcs, it is equivalent to compare chords
         # (or square of chord length)
-        diff = p_vec - c_vec
-        obj_chord_sq = np.sum(np.square(p_vec - c_vec),axis=1)
+        obj_chord_sq = np.sum(np.square(p_vec - c_vec), axis=1)
 
         # This is to be compared to square of chord for angle a corresponding
         # to disk radius.  That's 4(sin(a/2)^2)
-        rad_chord_sq = 4 * np.square(np.sin(0.5 * radius_rad) )
+        rad_chord_sq = 4 * np.square(np.sin(0.5 * radius_rad))
         mask = obj_chord_sq > rad_chord_sq
     if isinstance(region, PolygonalRegion):
         mask = region.get_containment_mask(ra, dec, included=False)
     return mask
+
 
 def _compute_time_mask(current_mjd, start_mjd, end_mjd):
     '''
@@ -224,6 +226,7 @@ def _compute_time_mask(current_mjd, start_mjd, end_mjd):
     mask = np.logical_or((current_mjd > end_mjd), (current_mjd < start_mjd))
 
     return mask
+
 
 class SkyCatalog(object):
     '''
@@ -277,19 +280,18 @@ class SkyCatalog(object):
         self.verbose = verbose
         self._validate_config()
 
-
         # Outer dict: hpid for key. Value is another dict
         #    with keys 'files', 'object_types', each with value another dict
         #       for 'files', map filepath to handle (initially None)
         #       for 'object_types', map object type to filepath
         self._hp_info = dict()
-        hps = self._find_all_hps()
+        _ = self._find_all_hps()
 
         # NOTE: the use of TophatSedFactory is appropriate *only* for an
         # input galaxy catalog with format like cosmoDC2, which includes
         # definitions of tophat SEDs. A different implementation will
         # be needed for newer galaxy catalogs
-        th_parameters = self._config.get_tophat_parameters();
+        th_parameters = self._config.get_tophat_parameters()
         self._observed_sed_factory =\
             TophatSedFactory(th_parameters, config['Cosmology'])
 
@@ -363,20 +365,20 @@ class SkyCatalog(object):
         for f in files:
             for ot in o_types:
                 # find all keys containing the string 'file_template'
-                template_keys = [k for k in o_types[ot] if 'file_template' in k]
-                for k in template_keys:
+                tmplt_keys = [k for k in o_types[ot] if 'file_template' in k]
+                for k in tmplt_keys:
                     m = re.fullmatch(o_types[ot][k], f)
                     if m:
                         hp = int(m['healpix'])
                         hp_set.add(hp)
 
                         if hp not in self._hp_info:
-                            self._hp_info[hp] = {'files' : {f : None},
-                                                 'object_types' : {ot : [f]}}
+                            self._hp_info[hp] = {'files': {f: None},
+                                                 'object_types': {ot: [f]}}
                         else:
                             this_hp = self._hp_info[hp]
                             # Value of 'object_types' is now a list
-                            if f not in this_hp['files'] :
+                            if f not in this_hp['files']:
                                 this_hp['files'][f] = None
                             if ot in this_hp['object_types']:
                                 this_hp['object_types'][ot].append(f)
@@ -503,7 +505,8 @@ class SkyCatalog(object):
             if partition['type'] == 'healpix':
                 hps = self.get_hps_by_region(region, object_type)
                 for hp in hps:
-                    c = self.get_object_type_by_hp(hp, object_type, region, mjd)
+                    c = self.get_object_type_by_hp(hp, object_type,
+                                                   region, mjd)
                     if len(c) > 0:
                         out_list.append_object_list(c)
                 return out_list
@@ -539,10 +542,11 @@ class SkyCatalog(object):
         if 'file_template' in self._config['object_types'][object_type]:
             f_list = self._hp_info[hp]['object_types'][object_type]
         elif 'parent' in self._config['object_types'][object_type]:
-            f_list = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
+            # ##f_list = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
+            f_list = self._hp_info[hp]['object_types'][self._config['object_types'][object_type]['parent']]
 
         for f in f_list:
-            if self._hp_info[hp]['files'][f] is None:            # no reader yet
+            if self._hp_info[hp]['files'][f] is None:        # no reader yet
                 full_path = os.path.join(self._cat_dir, f)
                 the_reader = ParquetReader(full_path, mask=None)
                 self._hp_info[hp]['files'][f] = the_reader
@@ -578,7 +582,6 @@ class SkyCatalog(object):
                                            source_type={object_type},
                                            mjd=mjd)
                     if ra_c is not None:
-                        ## new_collection = ObjectCollection(ra_c, dec_c, id_c,
                         new_collection = coll_class(ra_c, dec_c, id_c,
                                                     object_type, hp, self,
                                                     region=region,
@@ -609,10 +612,10 @@ class SkyCatalog(object):
 
         return object_list
 
-
     # For generator version, do this a row group at a time
     #    but if region cut leaves too small a list, read more rowgroups
     #    to achieve a reasonable size list (or exhaust the file)
+
     def get_object_iterator_by_hp(self, hp, obj_type_set=None,
                                   max_chunk=None, mjd=None):
         '''
@@ -648,10 +651,11 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     SkyCatalog
     '''
     # Get LSST bandpasses in case we need to compute fluxes
-    band_passes = load_lsst_bandpasses()
+    _ = load_lsst_bandpasses()
     with open(config_file) as f:
         return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
                           mp=mp, verbose=verbose)
+
 
 if __name__ == '__main__':
     import time
@@ -673,18 +677,17 @@ if __name__ == '__main__':
     #   55.73604 < ra < 57.563452
     #  -37.19001 < dec < -35.702481
 
-
     cat = open_catalog(cfg_file, skycatalog_root=skycatalog_root)
     hps = cat._find_all_hps()
     print('Found {} healpix pixels '.format(len(hps)))
-    for h in hps: print(h)
-
+    for h in hps:
+        print(h)
     ra_min_tract = 55.736
     ra_max_tract = 57.564
     dec_min_tract = -37.190
     dec_max_tract = -35.702
-    ##ra_min_small = 56.0
-    ##ra_max_small = 56.2
+    # ra_min_small = 56.0
+    # ra_max_small = 56.2
     ra_min_small = 55.9
     ra_max_small = 56.1
     dec_min_small = -36.2
@@ -715,16 +718,17 @@ if __name__ == '__main__':
     print('Invoke get_objects_by_region with box region, no gaia')
     t0 = time.time()
     object_list = cat.get_objects_by_region(rgn,
-                                            obj_type_set={'star','galaxy',
+                                            obj_type_set={'star', 'galaxy',
                                                           'sncosmo'})
     t_done = time.time()
     print('Took ', t_done - t0)
-                                            ##### temporary obj_type_set={'galaxy', 'star'} )
+    # #### temporary obj_type_set={'galaxy', 'star'} )
     #                                        obj_type_set=set(['galaxy']) )
     # Try out get_objects_by_hp with no region
-    #colls = cat.get_objects_by_hp(9812, None, set(['galaxy']) )
+    # colls = cat.get_objects_by_hp(9812, None, set(['galaxy']) )
 
-    print('Number of collections returned for box:  ', object_list.collection_count)
+    print('Number of collections returned for box:  ',
+          object_list.collection_count)
     print('Object count for box: ', len(object_list))
 
     print('Invoke get_objects_by_region with polygonal region')
@@ -765,9 +769,8 @@ if __name__ == '__main__':
           object_list_diamond.collection_count)
     print('Object count for diamond: ', len(object_list_diamond))
 
-
-    #### TEMP FOR DEBUGGING
-    ### exit(0)
+    # ### TEMP FOR DEBUGGING
+    # ## exit(0)
 
     # For now SIMS_SED_LIBRARY_DIR is undefined at SLAC, making it impossible
     # to get SEDs for stars. So (crudely) determine whether or not
@@ -783,14 +786,14 @@ if __name__ == '__main__':
         print("First object: ")
         print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
               ' belongs_index=', c[0]._belongs_index,
-              ' object_type: ', c[0].object_type )
+              ' object_type: ', c[0].object_type)
 
         if (n_obj < 3):
             continue
         print("Slice [1:3]")
         slice13 = c[1:3]
         for o in slice13:
-            print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
+            print('id=', o.id, ' ra=', o.ra, ' dec=', o.dec, ' belongs_index=',
                   o._belongs_index,  ' object_type: ', o.object_type)
             print(o.object_type)
             if o.object_type == 'star':
@@ -807,7 +810,7 @@ if __name__ == '__main__':
                     print(cmp)
                     if cmp in o.subcomponents:
                         # broken for galaxies currently
-                        ###print(o.get_instcat_entry(component=cmp))
+                        # print(o.get_instcat_entry(component=cmp))
                         sed, _ = o._get_sed(cmp)
                         if sed:
                             print('Length of sed table: ', len(sed.wave_list))
@@ -821,12 +824,15 @@ if __name__ == '__main__':
                                 print('Simple sed values:')
                                 print([sed(w) for w in sed.wave_list])
                                 if write_sed:
-                                    o.write_sed('simple_sed.txt', component=cmp)
+                                    o.write_sed('simple_sed.txt',
+                                                component=cmp)
                                 sed_fine, _ = o._get_sed(component=cmp,
-                                                        resolution=1.0)
+                                                         resolution=1.0)
                                 print('Bin width = 1 nm')
-                                print('Initial wl values', sed_fine.wave_list[:20])
-                                print('Start at bin 100', sed_fine.wave_list[100:120])
+                                print('Initial wl values',
+                                      sed_fine.wave_list[:20])
+                                print('Start at bin 100',
+                                      sed_fine.wave_list[100:120])
                                 print('Initial values')
                                 print([sed_fine(w) for w in sed_fine.wave_list[:20]])
                                 print('Start at bin 100')
@@ -851,7 +857,7 @@ if __name__ == '__main__':
                 f = o.get_LSST_flux('i')
                 print(f'Flux for i bandpass: {f}')
                 fluxes = o.get_LSST_fluxes()
-                for k,v in fluxes.items():
+                for k, v in fluxes.items():
                     print(f'Bandpass {k} has flux {v}')
 
         if n_obj > 200:
@@ -863,8 +869,8 @@ if __name__ == '__main__':
             slice_late = c[163994:163997]
             print('\nobjects indexed 163994 through 163996')
             for o in slice_late:
-                print('id=',o.id, ' ra=',o.ra, ' dec=',o.dec, ' belongs_index=',
-                      o._belongs_index)
+                print('id=', o.id, ' ra=', o.ra, ' dec=', o.dec,
+                      ' belongs_index=', o._belongs_index)
 
     print('Total object count: ', len(object_list))
 
@@ -878,7 +884,6 @@ if __name__ == '__main__':
     if object_list[0].object_type == 'galaxy':
         redshift0 = object_list[0].get_native_attribute('redshift')
         print('First redshift: ', redshift0)
-
 
     sum = 0
     for obj in object_list:
@@ -909,15 +914,15 @@ if __name__ == '__main__':
     for o in segment:
         print(f'object {o.id} of type {o.object_type} belongs to collection {o._belongs_to}')
 
-    #ixes = ([3,5,8],)
-    ixes = (np.array([3,5,8, 300, 303]),)
+    # ixes = ([3,5,8],)
+    ixes = (np.array([3, 5, 8, 300, 303]),)
     print(f'\nObjects with indexes {ixes[0]}')
     for o in object_list[ixes]:
         print(o.id)
-    print(f'\nObjects in slice [3:9]')
+    print('\nObjects in slice [3:9]')
     for o in object_list[3:9]:
         print(o.id)
-    print(f'\nObjects in slice [300:304]')
+    print('\nObjects in slice [300:304]')
     for o in object_list[300:304]:
         print(o.id)
 

@@ -10,11 +10,13 @@ parser = argparse.ArgumentParser(description='''
 Make a new skyCatalogs parquet file from an old, adding columns for MW_av, MW_rv
 ''')
 
-parser.add_argument('indir', help='Directory containing input file(s). Required')
+parser.add_argument('indir',
+                    help='Directory containing input file(s). Required')
 parser.add_argument('outdir', help='Directory for output. Required')
 parser.add_argument('--pixels', type=int, nargs='*', default=[],
                     help='healpix pixels for which new files will be created. Required')
-parser.add_argument('--starts-with', help='That part of the filename preceding healpixel',
+parser.add_argument('--starts-with',
+                    help='That part of the filename preceding healpixel',
                     default='snana_')
 
 args = parser.parse_args()

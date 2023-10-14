@@ -1,8 +1,8 @@
 import os
-import sys
 import warnings
 from functools import wraps
 import itertools
+from collections.abc import Iterable
 from pathlib import PurePath
 import numpy as np
 import erfa
@@ -60,6 +60,7 @@ class GaiaObject(BaseObject):
     _stellar_temperature = _TEMP_FUNC
     _gaia_bp_bandpass = _GAIA_BP
     _wavelengths = np.arange(250, 1250, 5, dtype=float)
+
     def __init__(self, obj_pars, parent_collection, index):
         """
         Parameters
@@ -92,9 +93,9 @@ class GaiaObject(BaseObject):
                 # Convert from flux units of nJy to AB mag for the bp passband,
                 # which we will use to normalize the SED.
                 self.bp_mag = -2.5*np.log10(bp_flux*1e-9) + 8.90
-            except galsim.errors.GalSimRangeError as ex:
+            except galsim.errors.GalSimRangeError:
                 self.stellar_temp = None
-            except RuntimeError as rex:
+            except RuntimeError:
                 self.stellar_temp = None
 
     def blambda(self, wl):
@@ -126,16 +127,21 @@ class GaiaObject(BaseObject):
     def set_use_lut(self, use_lut):
         self.use_lut = use_lut
 
+
 class GaiaCollection(ObjectCollection):
     # Class methods
     _gaia_config = None
-    def set_config(config):
+
+    @classmethod
+    def set_config(cls, config):
         GaiaCollection._gaia_config = config
 
-    def get_config():
+    @classmethod
+    def get_config(cls):
         return GaiaCollection._gaia_config
 
     @ignore_erfa_warnings
+    @staticmethod
     def load_collection(region, skycatalog, mjd=None):
         if isinstance(region, Disk):
             ra = lsst.geom.Angle(region.ra, lsst.geom.degrees)
@@ -229,13 +235,14 @@ class GaiaCollection(ObjectCollection):
             return GaiaObject(self.df.iloc[key], self, key)
 
         elif type(key) == slice:
-            ixdata = [i for i in range(min(key.stop,len(self._id)))]
+            ixdata = [i for i in range(min(key.stop, len(self._id)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
             return [self._object_class(self.df.iloc[i], self, i) for i in ixes]
 
         elif type(key) == tuple and isinstance(key[0], Iterable):
             #  check it's a list of int-like?
-            return [self._object_class(self.df.iloc[i], self, i) for i in key[0]]
+            return [self._object_class(self.df.iloc[i], self,
+                                       i) for i in key[0]]
 
     def __len__(self):
         return len(self.df)

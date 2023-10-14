@@ -5,16 +5,17 @@ from .base_object import BaseObject
 
 __all__ = ['StarObject']
 
+
 class StarObject(BaseObject):
+
     _type_name = 'star'
+
     def _get_sed(self, mjd=None, redshift=0):
         '''
         We'll need mjd when/if variable stars are supported. For now
         it's ignored.
         '''
         mag_norm = self.get_native_attribute('magnorm')
-        rel_path = self.get_native_attribute('sed_filepath')
-
         fpath = os.path.join(os.getenv('SIMS_SED_LIBRARY_DIR'),
                              self.get_native_attribute('sed_filepath'))
 

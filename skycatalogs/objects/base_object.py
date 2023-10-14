@@ -1,15 +1,9 @@
 from collections.abc import Sequence, Iterable
 from collections import namedtuple
 import os
-import gzip
 import itertools
 import numpy as np
-import astropy.units as u
-import warnings
-from dust_extinction.parameter_averages import F19
 import galsim
-import logging
-from galsim.errors import GalSimRangeError
 
 from skycatalogs.utils.translate_utils import form_object_string
 from skycatalogs.utils.config_utils import Config
@@ -26,6 +20,8 @@ __all__ = ['BaseObject', 'ObjectCollection', 'ObjectList',
 LSST_BANDS = ('ugrizy')
 
 # global for easy access for code run within mp
+
+
 def load_lsst_bandpasses():
     '''
     Read in lsst bandpasses from standard place, trim, and store in global dict
@@ -40,17 +36,17 @@ def load_lsst_bandpasses():
 
         if os.path.exists(bp_dir):
             BaseObject._bp_path = bp_dir
-            #logger.info(f'Using rubin sim dir {rubin_sim_dir}')
+            # logger.info(f'Using rubin sim dir {rubin_sim_dir}')
         else:
             bp_dir = os.path.join(os.getenv('HOME'), 'rubin_sim_data',
-                                   'throughputs', 'baseline')
-            #logger.info(f'Using rubin sim dir rubin_sim_data under HOME')
+                                  'throughputs', 'baseline')
+            # logger.info(f'Using rubin sim dir rubin_sim_data under HOME')
             if os.path.exists(bp_dir):
                 BaseObject._bp_path = bp_dir
             else:
-                #logger.info('Using galsim built-in bandpasses')
+                # logger.info('Using galsim built-in bandpasses')
                 bp_dir = None
-                fname_fmt = 'LSST_{band}.dat'
+
     for band in LSST_BANDS:
         if bp_dir:
             bp_full_path = os.path.join(bp_dir, f'total_{band}.dat')
@@ -60,14 +56,17 @@ def load_lsst_bandpasses():
 
         # Mirror behavior in imsim.RubinBandpass:
         # https://github.com/LSSTDESC/imSim/blob/main/imsim/bandpass.py#L9
-        # Trim the edges to avoid 1.e-4 values out to very high and low wavelengths.
+        # Trim the edges to avoid 1.e-4 values out to very high and low
+        # wavelengths.
         bp = bp.truncate(relative_throughput=1.e-3)
-        # Remove wavelength values selectively for improved speed but preserve flux integrals.
+        # Remove wavelength values selectively for improved speed but
+        # preserve flux integrals.
         bp = bp.thin()
         bp = bp.withZeropoint('AB')
         lsst_bandpasses[band] = bp
 
     return lsst_bandpasses
+
 
 class BaseObject(object):
     '''
@@ -75,7 +74,7 @@ class BaseObject(object):
     Likely need a variant for SSO.
     '''
 
-    _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501],[0, 1, 0]),
+    _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501], [0, 1, 0]),
                              wave_type='nm').withZeropoint('AB')
 
     def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index,
@@ -103,7 +102,6 @@ class BaseObject(object):
         # All objects also include redshift information. Also MW extinction,
         # but extinction is by subcomponent for galaxies
 
-
     @property
     def ra(self):
         return self._ra
@@ -122,7 +120,8 @@ class BaseObject(object):
 
     @property
     def redshift(self):
-        if self._redshift:        return self._redshift
+        if self._redshift:
+            return self._redshift
         if self._belongs_to:
             self._redshift = self.get_native_attribute('redshift')
         return self._redshift
@@ -173,7 +172,7 @@ class BaseObject(object):
         '''
         raise NotImplementedError
 
-    def get_instcat_entry(self, band = 'r', component=None):
+    def get_instcat_entry(self, band='r', component=None):
         '''
         Return the string corresponding to instance catalog line
         Parameters:
@@ -203,7 +202,6 @@ class BaseObject(object):
         '''
 
         raise NotImplementedError('Must be implemented by BaseObject subclass if needed')
-
 
     def write_sed(self, sed_file_path, component=None, resolution=None,
                   mjd=None):
@@ -284,11 +282,11 @@ class BaseObject(object):
         components.
         """
         sed = None
-        for sed_component in self.get_observer_sed_components(mjd=mjd).values():
+        for sed_cmp in self.get_observer_sed_components(mjd=mjd).values():
             if sed is None:
-                sed = sed_component
+                sed = sed_cmp
             else:
-                sed += sed_component
+                sed += sed_cmp
 
         return sed
 
@@ -318,7 +316,7 @@ class BaseObject(object):
         return [sed.calculateFlux(b) for b in bandpasses]
 
     def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
-        if not band in LSST_BANDS:
+        if band not in LSST_BANDS:
             return None
         att = f'lsst_flux_{band}'
 
@@ -463,7 +461,8 @@ class ObjectCollection(Sequence):
         exists.
         '''
         val = getattr(self, attribute_name, None)
-        if val is not None: return val
+        if val is not None:
+            return val
 
         for r in self._rdrs:
             if attribute_name in r.columns:
@@ -510,7 +509,7 @@ class ObjectCollection(Sequence):
         -------
         iterator which returns df for a chunk of values of the attributes
         '''
-        pass        #    for now
+        pass        # for now
 
     # implement Sequence methods
     def __contains__(self, obj):
@@ -519,7 +518,7 @@ class ObjectCollection(Sequence):
         ----------
         obj can be an (object id) or of type BaseObject
         '''
-        if type(obj) == type(10):
+        if isinstance(obj, int):
             id = obj
         else:
             if isinstance(obj, BaseObject):
@@ -531,8 +530,8 @@ class ObjectCollection(Sequence):
     def __len__(self):
         return len(self._id)
 
-    #def __iter__(self):   Standard impl based on __getitem__ should be ok
-    #def __reversed__(self):   Default implementation ok
+    # def __iter__(self):   Standard impl based on __getitem__ should be ok
+    # def __reversed__(self):   Default implementation ok
 
     def __getitem__(self, key):
         '''
@@ -556,7 +555,7 @@ class ObjectCollection(Sequence):
         elif type(key) == slice:
             if key.start is None:
                 key.start = 0
-            ixdata = [i for i in range(min(key.stop,len(self._ra)))]
+            ixdata = [i for i in range(min(key.stop, len(self._ra)))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
             return [self._object_class(self._ra[i], self._dec[i], self._id[i],
                                        object_type, self, i)
@@ -568,7 +567,6 @@ class ObjectCollection(Sequence):
                                        object_type, self, i)
                     for i in key[0]]
 
-
     def get_partition_id(self):
         return self._partition_id
 
@@ -576,7 +574,8 @@ class ObjectCollection(Sequence):
         '''
         returns # of occurrences of obj.  It can only be 0 or 1
         '''
-        if self.__contains__(obj): return 1
+        if self.__contains__(obj):
+            return 1
         return 0
 
     def index(self, obj):
@@ -584,6 +583,7 @@ class ObjectCollection(Sequence):
         Use object id to find the index
         '''
         return self._id.index(obj.id)
+
 
 LocatedCollection = namedtuple('LocatedCollection',
                                ['collection', 'first_index', 'upper_bound'])
@@ -594,6 +594,7 @@ Describes collection included in a list of collections to be concatenated
    upper_bound: index + 1 in concatenated list of last elt in this collection
       so upper_bound for one collection = first_index in the next
 '''
+
 
 class ObjectList(Sequence):
     '''
@@ -642,13 +643,13 @@ class ObjectList(Sequence):
         return constituent ObjectCollection objects in a list
         '''
         collections = []
-        for  e in self._located:
+        for e in self._located:
             collections.append(e.collection)
 
         return collections
 
-
     # implement Sequence methods
+
     def __contains__(self, obj):
         '''
         Parameters
@@ -665,8 +666,8 @@ class ObjectList(Sequence):
     def __len__(self):
         return self._total_len
 
-    #def __iter__(self):   Standard impl based on __getitem__ should be ok??
-    #def __reversed__(self):   Default implementation ok??
+    # def __iter__(self):   Standard impl based on __getitem__ should be ok??
+    # def __reversed__(self):   Default implementation ok??
 
     def __getitem__(self, key):
         '''
@@ -709,7 +710,7 @@ class ObjectList(Sequence):
                     sub = [elem - e.first_index for elem in key_list if elem >= e.first_index and elem < e.upper_bound]
                     to_return += e.collection[(sub,)]
 
-                    start_ix +=len(sub)
+                    start_ix += len(sub)
                     if start_ix >= len(key_list):
                         break
                     start = key_list[start_ix]
