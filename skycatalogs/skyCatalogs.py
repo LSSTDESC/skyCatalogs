@@ -719,7 +719,8 @@ if __name__ == '__main__':
     t0 = time.time()
     object_list = cat.get_objects_by_region(rgn,
                                             obj_type_set={'star', 'galaxy',
-                                                          'sncosmo'})
+                                                          'sncosmo'},
+                                            mjd=63200.0)
     t_done = time.time()
     print('Took ', t_done - t0)
     # #### temporary obj_type_set={'galaxy', 'star'} )
@@ -805,6 +806,8 @@ if __name__ == '__main__':
                         print('Length of sed: ', len(sed.wave_list))
             elif o.object_type == 'sncosmo':
                 print(o.get_instcat_entry())
+                for b in {'u', 'g', 'r', 'i', 'z', 'y'}:
+                    print(o.get_LSST_flux(b))
             elif o.object_type == 'galaxy':
                 for cmp in ['disk', 'bulge', 'knots']:
                     print(cmp)

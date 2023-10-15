@@ -12,6 +12,13 @@ class SncosmoObject(BaseObject):
     def _get_sed(self, mjd=None):
         params = self.get_native_attribute('salt2_params')
         sn = SncosmoModel(params=params)
+        if mjd is None:
+            mjd = self._belongs_to._mjd
+        if mjd is None:
+            txt = 'SncosmoObject._get_sed: no mjd specified for this call\n'
+            txt += 'nor when generating object list'
+            raise ValueError(txt)
+
         if mjd < sn.mintime() or mjd > sn.maxtime():
             return None, 0.0
         # Already normalized so magnorm is zero
@@ -28,9 +35,7 @@ class SncosmoObject(BaseObject):
             sed = self._apply_component_extinction(sed)
         return sed
 
-    def get_LSST_flux(self, band, sed=None, mjd=None):
-        # if band not in BaseObject.LSST_BANDS:
-        #     return None
-
-        # return self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
-        return super().get_LSST_flux(band, sed=sed, cache=False, mjd=mjd)
+    def get_LSST_flux(self, band, sed=None, cache=False, mjd=None):
+        # There is usually no reason to cache flux for SNe, in fact it could
+        # cause problems
+        return super().get_LSST_flux(band, sed=sed, cache=cache, mjd=mjd)

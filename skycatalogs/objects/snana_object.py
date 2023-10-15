@@ -25,6 +25,10 @@ class SnanaObject(BaseObject):
     def _get_sed(self, mjd=None):
         if mjd is None:
             mjd = self._belongs_to._mjd
+        if mjd is None:
+            txt = 'SnananObject._get_sed: no mjd specified for this call\n'
+            txt += 'nor when generating object list'
+            raise ValueError(txt)
         mjd_start = self.get_native_attribute('start_mjd')
         mjd_end = self.get_native_attribute('end_mjd')
         if mjd < mjd_start or mjd > mjd_end:
@@ -43,7 +47,9 @@ class SnanaObject(BaseObject):
             sed = self._apply_component_extinction(sed)
         return sed
 
-    def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
+    def get_LSST_flux(self, band, sed=None, cache=False, mjd=None):
+        # There is usually no reason to cache flux for SNe, in fact it could
+        # cause problems
         def _flux_ratio(mag):
             # -0.9210340371976184 = -np.log(10)/2.5.
             return np.exp(-0.921034037196184 * mag)
