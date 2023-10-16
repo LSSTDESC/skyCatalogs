@@ -540,7 +540,8 @@ class SkyCatalog(object):
         rdr_ot = dict()   # maps readers to set of object types it reads
 
         if 'file_template' in self._config['object_types'][object_type]:
-            f_list = self._hp_info[hp]['object_types'][object_type]
+            f_list = self._hp_info[hp]['object_types'][object_type] \
+                if object_type in self._hp_info[hp]['object_types'] else []
         elif 'parent' in self._config['object_types'][object_type]:
             # ##f_list = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
             f_list = self._hp_info[hp]['object_types'][self._config['object_types'][object_type]['parent']]
