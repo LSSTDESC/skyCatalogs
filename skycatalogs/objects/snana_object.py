@@ -1,4 +1,5 @@
 import bisect
+from math import isnan
 import galsim
 import h5py
 import numpy as np
@@ -71,7 +72,10 @@ class SnanaObject(BaseObject):
                 # nothing else to do
                 return flux
 
-            # interpolate corrections
+            # interpolate corrections if we can
+            if isnan(cors[mjd_ix_l]) or isnan(cors[mjd_ix_u]):
+                return flux
+
             if mjd_ix_l == mjd_ix_u:
                 mag_cor = cors[mjd_ix_l]
             else:
