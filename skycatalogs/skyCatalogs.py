@@ -402,9 +402,9 @@ class SkyCatalog(object):
 
     def _find_all_hps(self):
         '''
-        For each healpix with files matching pattern in the directory,
-        update _hp_info as needed to keep track of all files for that healpix
-        and the object types included in those files.
+        For each healpix with files matching pattern in or under the
+        containing the config file, update _hp_info as needed to keep
+        track of all files for that healpix and the object types included in those files.
 
         Returns
         -------
@@ -425,6 +425,28 @@ class SkyCatalog(object):
         hp_list = list(hp_set)
         hp_list.sort()
         return hp_list
+
+    def hps_by_type(self, object_type):
+        '''
+        Parameters
+        ----------
+        object_type   string
+
+        Returns
+        -------
+        list of healpixels (int) having data for object type object_type
+        (or its parent type if it has one)
+        '''
+        if not self._hp_info:
+            return []
+        hps = []
+        if 'parent' in self._config['object_types'][object_type]:
+            object_type = self._config['object_types'][object_type]['parent']
+        for hp, val in self._hp_info.items():
+            if object_type in val['object_types']:
+                hps.append(hp)
+        hps.sort()
+        return hps
 
     def get_hps_by_region(self, region, object_type='galaxy'):
         '''
@@ -453,7 +475,10 @@ class SkyCatalog(object):
         -------
         All object type names in the catalog's config
         '''
-        return set(self._config['object_types'].keys())
+
+        names = list(set(self._config['object_types'].keys()))
+        names.sort()
+        return names
 
     # Add more functions to return parts of config of possible interest
     # to user
@@ -500,7 +525,7 @@ class SkyCatalog(object):
         if obj_type_set is None:
             obj_types = self.get_object_type_names()
         else:
-            obj_types = self.get_object_type_names().intersection(obj_type_set)
+            obj_types = set(self.get_object_type_names()).intersection(obj_type_set)
         obj_types = self.toplevel_only(obj_types)
 
         # Ensure they're always ordered the same way
@@ -555,8 +580,11 @@ class SkyCatalog(object):
         object_list = ObjectList()
 
         #  Do we need to check more specifically by object type?
-        if hp not in self._hp_info:
-            print(f'WARNING: In SkyCatalog.get_object_type_by_hp healpixel {hp} intersects region but has no catalog file')
+        # if hp not in self._hp_info:
+        if hp not in self.hps_by_type(object_type):
+            msg = f'In SkyCatalog.get_object_type_by_hp, healpix {hp}  '
+            msg += f'intersects region but has no data file for {object_type}'
+            self._logger.warning(msg)
             return object_list
 
         if object_type in ['galaxy']:
