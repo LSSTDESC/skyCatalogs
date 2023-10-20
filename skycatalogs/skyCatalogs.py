@@ -475,13 +475,15 @@ class SkyCatalog(object):
         -------
         All object type names in the catalog's config
         '''
-
         names = list(set(self._config['object_types'].keys()))
         names.sort()
         return names
 
-    # Add more functions to return parts of config of possible interest
-    # to user
+    def default_object_type_set(self):
+        if 'default_object_types' in self._config.keys():
+            return set(self._config['default_object_types'])
+        else:
+            return self.get_object_type_names()
 
     def toplevel_only(self, object_types):
         '''
@@ -506,7 +508,8 @@ class SkyCatalog(object):
         ----------
         region         region is a named tuple(may be box or circle)
                        or object of type PolygonalRegion
-        obj_type_set   Return only these objects. Defaults to all available
+        obj_type_set   Return only these objects. Defaults to value in config if
+                       specified; else default to all defined in config
         mjd            MJD of observation epoch.
 
         Returns
@@ -523,7 +526,7 @@ class SkyCatalog(object):
 
         object_list = ObjectList()
         if obj_type_set is None:
-            obj_types = self.get_object_type_names()
+            obj_types = self.default_object_type_set()
         else:
             obj_types = set(self.get_object_type_names()).intersection(obj_type_set)
         obj_types = self.toplevel_only(obj_types)
