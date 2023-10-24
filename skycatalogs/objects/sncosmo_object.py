@@ -12,12 +12,6 @@ class SncosmoObject(BaseObject):
     def _get_sed(self, mjd=None):
         params = self.get_native_attribute('salt2_params')
         sn = SncosmoModel(params=params)
-        if mjd is None:
-            mjd = self._belongs_to._mjd
-        if mjd is None:
-            txt = 'SncosmoObject._get_sed: no mjd specified for this call\n'
-            txt += 'nor when generating object list'
-            raise ValueError(txt)
 
         if mjd < sn.mintime() or mjd > sn.maxtime():
             return None, 0.0
@@ -30,6 +24,12 @@ class SncosmoObject(BaseObject):
         return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
 
     def get_observer_sed_component(self, component, mjd=None):
+        if mjd is None:
+            mjd = self._belongs_to._mjd
+        if mjd is None:
+            txt = 'SncosmoObject._get_sed: no mjd specified for this call\n'
+            txt += 'nor when generating object list'
+            raise ValueError(txt)
         sed, _ = self._get_sed(mjd=mjd)
         if sed is not None:
             sed = self._apply_component_extinction(sed)

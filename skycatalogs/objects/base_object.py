@@ -98,6 +98,7 @@ class BaseObject(object):
         self._redshift = redshift
         self._belongs_to = belongs_to
         self._belongs_index = belongs_index
+        self._logger = belongs_to._sky_catalog._logger
 
         # All objects also include redshift information. Also MW extinction,
         # but extinction is by subcomponent for galaxies
