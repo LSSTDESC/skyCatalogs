@@ -141,6 +141,13 @@ class GaiaCollection(ObjectCollection):
     @ignore_erfa_warnings
     @staticmethod
     def load_collection(region, skycatalog, mjd=None):
+        '''
+        region      One of Disk, PolygonalRegion from skyCatalogs.utils.shapes.
+                    Box is not currently supported
+        skycatalog  An instance of the SkyCatalog class
+        mjd         Time at which objects are to be assembled. Ignored for
+                    Gaia stars
+        '''
         if not skycatalog:
             raise ValueError(f'GaiaCollection.load_collection: skycatalog cannot be None')
         if isinstance(region, Disk):

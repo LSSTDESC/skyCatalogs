@@ -37,5 +37,7 @@ class SncosmoObject(BaseObject):
 
     def get_LSST_flux(self, band, sed=None, cache=False, mjd=None):
         # There is usually no reason to cache flux for SNe, in fact it could
-        # cause problems
+        # cause problems. If flux has been cached and then this routine
+        # is called again with a different value of mjd, it would
+        # return the wrong answer.
         return super().get_LSST_flux(band, sed=sed, cache=cache, mjd=mjd)

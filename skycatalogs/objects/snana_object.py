@@ -74,7 +74,7 @@ class SnanaObject(BaseObject):
                 return flux
 
             # interpolate corrections if we can.  Correction array
-            # may include nana.
+            # may include nans.
             if np.isnan(cors[mjd_ix_l]) or np.isnan(cors[mjd_ix_u]):
                 txt = f'Cannot apply flux correction to SN {self._id} due to nan in correction array'
                 self._logger.warn(txt)
@@ -183,3 +183,13 @@ class SnanaCollection(ObjectCollection):
     '''
     def set_SED_file(self, SED_file):
         self._SED_file = SED_file
+
+    def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
+                 region=None, mjd=None, mask=None, readers=None, row_group=0):
+        # Normally mjd should be specified
+        if mjd is None:
+            sky_catalog._logger.warning('Creating SnanaCollection with no mjd value.')
+            sky_catalog._logger.warning('Transient collections normally have non-None mjd')
+        super().__init__(ra, dec, id, object_type, partition_id,
+                         sky_catalog, region=region, mjd=mjd, mask=mask,
+                         readers=readers, row_group=row_group)
