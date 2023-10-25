@@ -31,6 +31,16 @@ def get_gaia_data(butler_params):
 class GaiaObjectTestCase(unittest.TestCase):
     """TestCase class for GaiaObjects"""
     def setUp(self):
+        '''
+        Open the catalog; establish config
+        '''
+        skycatalog_root = os.path.join(Path(__file__).resolve().parents[1],
+                                       'skycatalogs', 'data')
+        self._skycatalog_root = skycatalog_root
+        cfg_path = os.path.join(skycatalog_root, 'ci_sample', 'skyCatalog.yaml')
+        self._cat = skyCatalogs.open_catalog(cfg_path,
+                                             skycatalog_root=skycatalog_root)
+
         self.df = get_gaia_data(CONFIG['butler_parameters'])
         GaiaCollection.set_config(CONFIG)
 
@@ -47,7 +57,8 @@ class GaiaObjectTestCase(unittest.TestCase):
         epoch_a_values = set(self.df['epoch'])
         assert len(epoch_a_values) == 1
         mjd0 = epoch_a_values.pop()
-        object_list = GaiaCollection.load_collection(region, None, mjd=mjd0)
+        object_list = GaiaCollection.load_collection(region, self._cat,
+                                                     mjd=mjd0)
         for index in np.random.choice(range(len(object_list)), size=20):
             obj = object_list[index]
             gaia_id = obj.id.split('_')[-1]
@@ -63,7 +74,7 @@ class GaiaObjectTestCase(unittest.TestCase):
         # calculated proper motion offsets are at least 10% larger
         # than the naive estimates.
         mjd = 60584.  # 2024-10-01 00:00:00
-        object_list = GaiaCollection.load_collection(region, None, mjd=mjd)
+        object_list = GaiaCollection.load_collection(region, self._cat, mjd=mjd)
         for index in np.random.choice(range(len(object_list)), size=20):
             obj = object_list[index]
             gaia_id = obj.id.split('_')[-1]
