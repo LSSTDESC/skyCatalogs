@@ -25,7 +25,7 @@ class APITester(unittest.TestCase):
         skycatalog_root = os.path.join(Path(__file__).resolve().parents[1],
                                        'skycatalogs', 'data')
         self._skycatalog_root = skycatalog_root
-        cfg_path = os.path.join(skycatalog_root, 'ci_sample', 'skyCatalog.yaml')
+        cfg_path = os.path.join(skycatalog_root, 'ci_sample', 'skyCatalog_top.yaml')
         self._cat = open_catalog(cfg_path, skycatalog_root=skycatalog_root)
 
 

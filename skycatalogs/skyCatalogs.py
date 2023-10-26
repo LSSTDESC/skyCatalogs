@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import yaml
+from yamlinclude import YamlIncludeConstructor
 import logging
 import healpy
 import numpy as np
@@ -343,50 +344,110 @@ class SkyCatalog(object):
     def _validate_config(self):
         pass
 
+    def _find_hps_by_type(self, name, type_config):
+        '''
+        Parameters
+        ----------
+        name        string    object type name
+        type_config      dict      config information about name
+
+        Returns
+        -------
+        set of healpixels with data for specified type
+
+        Side-effects: Update self._hp_info
+        '''
+        # Assume flux files, if they exist, are in same dir. as main files
+        if 'file_template' not in type_config:
+            return set()
+        tmpl = type_config['file_template']
+        rel_dir, tmpl = os.path.split(tmpl)
+        tmpl_keys = [tmpl]
+        if 'flux_file_template' in type_config:
+            flux_tmpl = type_config['flux_file_template']
+            flux_dir, flux_tmpl = os.path.split(flux_tmpl)
+            if flux_dir != rel_dir:
+                raise ValueError(f'Flux and main files for {name} in different directories')
+            tmpl_keys.append(flux_tmpl)
+        to_search = self._cat_dir
+        if rel_dir != '':
+            to_search = os.path.join(self._cat_dir, rel_dir)
+
+        files = os.listdir(to_search)
+        hp_set = set()
+        for f in files:
+            if rel_dir == '':
+                fpath = f
+            else:
+                fpath = os.path.join(rel_dir, f)
+            for k in tmpl_keys:
+                m = re.fullmatch(k, f)
+                if m:
+                    hp = int(m['healpix'])
+                    hp_set.add(hp)
+
+                    if hp not in self._hp_info:
+                        self._hp_info[hp] = {'files': {fpath: None},
+                                             'object_types': {name: [fpath]}}
+                    else:
+                        this_hp = self._hp_info[hp]
+                        # Value of 'object_types' is now a list
+                        if fpath not in this_hp['files']:
+                            this_hp['files'][fpath] = None
+                        if name in this_hp['object_types']:
+                            this_hp['object_types'][name].append(fpath)
+                        else:
+                            this_hp['object_types'][name] = [fpath]
+        return hp_set
+
     def _find_all_hps(self):
         '''
-        For each healpix with files matching pattern in the directory,
-        update _hp_info as needed to keep track of all files for that healpix
-        and the object types included in those files.
+        For each healpix with files matching pattern in or under the
+        directory containing the config file, update _hp_info as needed to keep
+        track of all files for that healpix and the object types included in
+        those files.
 
         Returns
         -------
         Sorted list of healpix pixels with at least one file in the directory
 
         '''
-        # If major organization is by healpix, healpix # could be in
-        # subdirectory name.  Otherwise there may be no subdirectories
-        # or data may be organized by component type.
-        # Here only handle case where data files are directly in root dir
-        files = os.listdir(self._cat_dir)
-        o_types = self._config['object_types']
+        if len(self._hp_info) > 0:
+            hp_list = list(self._hp_info.keys())
+            hp_list.sort()
+            return hp_list
 
+        o_types = list(self.toplevel_only((self._config['object_types'])))
         hp_set = set()
-        for f in files:
-            for ot in o_types:
-                # find all keys containing the string 'file_template'
-                tmplt_keys = [k for k in o_types[ot] if 'file_template' in k]
-                for k in tmplt_keys:
-                    m = re.fullmatch(o_types[ot][k], f)
-                    if m:
-                        hp = int(m['healpix'])
-                        hp_set.add(hp)
+        for (k, v) in [(o_t, self._config['object_types'][o_t]) for o_t in o_types]:
+            new_hps = self._find_hps_by_type(k, v)
+            hp_set.update(new_hps)
 
-                        if hp not in self._hp_info:
-                            self._hp_info[hp] = {'files': {f: None},
-                                                 'object_types': {ot: [f]}}
-                        else:
-                            this_hp = self._hp_info[hp]
-                            # Value of 'object_types' is now a list
-                            if f not in this_hp['files']:
-                                this_hp['files'][f] = None
-                            if ot in this_hp['object_types']:
-                                this_hp['object_types'][ot].append(f)
-                            else:
-                                this_hp['object_types'][ot] = [f]
         hp_list = list(hp_set)
         hp_list.sort()
         return hp_list
+
+    def hps_by_type(self, object_type):
+        '''
+        Parameters
+        ----------
+        object_type   string
+
+        Returns
+        -------
+        list of healpixels (int) having data for object type object_type
+        (or its parent type if it has one)
+        '''
+        if not self._hp_info:
+            return []
+        hps = []
+        if 'parent' in self._config['object_types'][object_type]:
+            object_type = self._config['object_types'][object_type]['parent']
+        for hp, val in self._hp_info.items():
+            if object_type in val['object_types']:
+                hps.append(hp)
+        hps.sort()
+        return hps
 
     def get_hps_by_region(self, region, object_type='galaxy'):
         '''
@@ -415,10 +476,15 @@ class SkyCatalog(object):
         -------
         All object type names in the catalog's config
         '''
-        return set(self._config['object_types'].keys())
+        names = list(set(self._config['object_types'].keys()))
+        names.sort()
+        return names
 
-    # Add more functions to return parts of config of possible interest
-    # to user
+    def default_object_type_set(self):
+        if 'default_object_types' in self._config.keys():
+            return set(self._config['default_object_types'])
+        else:
+            return self.get_object_type_names()
 
     def toplevel_only(self, object_types):
         '''
@@ -427,7 +493,7 @@ class SkyCatalog(object):
         object_types     Set of object type names
         Remove object types with a parent.  Add in the parent.
 
-        Return the resulting set
+        Return the resulting types (as list) and their values
         '''
         objs_copy = set(object_types)
         for obj in object_types:
@@ -443,7 +509,8 @@ class SkyCatalog(object):
         ----------
         region         region is a named tuple(may be box or circle)
                        or object of type PolygonalRegion
-        obj_type_set   Return only these objects. Defaults to all available
+        obj_type_set   Return only these objects. Defaults to value in config if
+                       specified; else default to all defined in config
         mjd            MJD of observation epoch.
 
         Returns
@@ -460,9 +527,9 @@ class SkyCatalog(object):
 
         object_list = ObjectList()
         if obj_type_set is None:
-            obj_types = self.get_object_type_names()
+            obj_types = self.default_object_type_set()
         else:
-            obj_types = self.get_object_type_names().intersection(obj_type_set)
+            obj_types = set(self.get_object_type_names()).intersection(obj_type_set)
         obj_types = self.toplevel_only(obj_types)
 
         # Ensure they're always ordered the same way
@@ -517,8 +584,11 @@ class SkyCatalog(object):
         object_list = ObjectList()
 
         #  Do we need to check more specifically by object type?
-        if hp not in self._hp_info:
-            print(f'WARNING: In SkyCatalog.get_object_type_by_hp healpixel {hp} intersects region but has no catalog file')
+        # if hp not in self._hp_info:
+        if hp not in self.hps_by_type(object_type):
+            msg = f'In SkyCatalog.get_object_type_by_hp, healpix {hp}  '
+            msg += f'intersects region but has no data file for {object_type}'
+            self._logger.warning(msg)
             return object_list
 
         if object_type in ['galaxy']:
@@ -653,6 +723,9 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     '''
     # Get LSST bandpasses in case we need to compute fluxes
     _ = load_lsst_bandpasses()
+    base_dir = os.path.dirname(config_file)
+    YamlIncludeConstructor.add_to_loader_class(loader_class=yaml.SafeLoader,
+                                               base_dir=base_dir)
     with open(config_file) as f:
         return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
                           mp=mp, verbose=verbose)

@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import os
 import pyarrow.parquet as pq
 import numpy as np
 import numpy.ma as ma
@@ -14,9 +15,10 @@ class ParquetReader:
     '''
     def __init__(self, filepath, mask=None):
         self._filepath = filepath
+        self._abs = abs = os.path.abspath(filepath)
         # meta data includes num_columns, num_rows, num_row_groups
-        self._meta = pq.read_metadata(filepath)
-        self._schema = pq.read_schema(filepath)
+        self._meta = pq.read_metadata(abs)
+        self._schema = pq.read_schema(abs)
         self._columns = set(self._schema.names)
         #  To support iterator also save # row groups, length of each.
         #  If mask, must be able to get slices corresponding to the different
@@ -24,7 +26,7 @@ class ParquetReader:
         self._open()
 
     def _open(self):
-        self._pqfile = pq.ParquetFile(self._filepath)
+        self._pqfile = pq.ParquetFile(self._abs)
 
     def close(self):
         '''

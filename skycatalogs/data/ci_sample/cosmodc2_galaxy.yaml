@@ -1,0 +1,17 @@
+subtype: cosmodc2_galaxy
+attribute_aliases:
+  size_knots_true: size_disk_true
+  size_minor_knots_true: size_minor_disk_true
+composite:
+  bulge: required
+  disk: required
+  knots: optional
+data_file_type: parquet
+file_template: galaxy_(?P<healpix>\d+).parquet
+flux_file_template: galaxy_flux_(?P<healpix>\d+).parquet
+area_partition:
+  type: healpix
+  ordering: ring
+  nside: 32
+galaxy_truth: cosmodc2_v1.1.4_image_addon_knots
+input_api: GCRCatalogs

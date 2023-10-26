@@ -1,0 +1,105 @@
+Cosmology:
+  H0: 71.0
+  Ob0: 0.0448
+  Om0: 0.2648
+  n_s: 0.963
+  sigma8: 0.8
+MW_extinction_values:
+  a_v:
+    mode: data
+  r_v:
+    mode: constant
+    value: 3.1
+SED_models:
+  file_nm:
+    units: nm
+  tophat:
+    bin_parameters:
+    - start
+    - width
+    bins:
+    - - 1000
+      - 246
+    - - 1246
+      - 306
+    - - 1552
+      - 381
+    - - 1933
+      - 474
+    - - 2407
+      - 591
+    - - 2998
+      - 186
+    - - 3184
+      - 197
+    - - 3381
+      - 209
+    - - 3590
+      - 222
+    - - 3812
+      - 236
+    - - 4048
+      - 251
+    - - 4299
+      - 266
+    - - 4565
+      - 283
+    - - 4848
+      - 300
+    - - 5148
+      - 319
+    - - 5467
+      - 339
+    - - 5806
+      - 360
+    - - 6166
+      - 382
+    - - 6548
+      - 406
+    - - 6954
+      - 431
+    - - 7385
+      - 458
+    - - 7843
+      - 486
+    - - 8329
+      - 517
+    - - 8846
+      - 549
+    - - 9395
+      - 583
+    - - 9978
+      - 1489
+    - - 11467
+      - 1710
+    - - 13177
+      - 1966
+    - - 15143
+      - 2259
+    - - 17402
+      - 2596
+    units: angstrom
+area_partition:
+  nside: 32
+  ordering: ring
+  type: healpix
+catalog_dir: ci_sample
+catalog_name: skyCatalog
+object_types:
+  bulge: !include cosmodc2_bulge.yaml
+  disk: !include cosmodc2_disk.yaml
+  galaxy: !include cosmodc2_galaxy.yaml
+  knots: !include cosmodc2_knots.yaml
+  star: !include dc2_star.yaml
+provenance:
+  inputs:
+    galaxy_truth: cosmodc2_v1.1.4_image_addon_knots
+    sn_truth: /global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db
+    star_truth: /global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db
+  skyCatalogs_repo:
+    git_branch: master
+    git_hash: defa84b868c1067d354b19a8287ace339d286790
+    git_status:
+    - UNTRACKED_FILES
+schema_version: 1.1.0
+skycatalog_root: /global/cscratch1/sd/jrbogart/desc/skycatalogs
