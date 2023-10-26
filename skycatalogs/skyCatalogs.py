@@ -403,8 +403,9 @@ class SkyCatalog(object):
     def _find_all_hps(self):
         '''
         For each healpix with files matching pattern in or under the
-        containing the config file, update _hp_info as needed to keep
-        track of all files for that healpix and the object types included in those files.
+        directory containing the config file, update _hp_info as needed to keep
+        track of all files for that healpix and the object types included in
+        those files.
 
         Returns
         -------
