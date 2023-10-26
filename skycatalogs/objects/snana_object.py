@@ -177,9 +177,11 @@ class SnanaObject(BaseObject):
 
 class SnanaCollection(ObjectCollection):
     '''
-    This class (so far) differs from the vanilla ObjectCollection only
-    in that it keeps track of where the file is which contains a library
-    of SEDs for each sn
+    This class  differs from the vanilla ObjectCollection only
+    in that
+    * it keeps track of where the file is which contains a library
+      of SEDs for each sn
+    * it issues a warning if mjd is None
     '''
     def set_SED_file(self, SED_file):
         self._SED_file = SED_file
