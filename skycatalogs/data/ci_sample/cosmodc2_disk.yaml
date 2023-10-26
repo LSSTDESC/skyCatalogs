@@ -1,0 +1,6 @@
+MW_extinction: F19
+internal_extinction: CCM
+parent: galaxy
+sed_model: tophat
+spatial_model: sersic2D
+subtype: cosmodc2_disk

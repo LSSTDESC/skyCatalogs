@@ -1,0 +1,13 @@
+subtype : dc2_star
+star_truth: /global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db
+MW_extinction: F19
+data_file_type: parquet
+file_template: pointsource_(?P<healpix>\d+).parquet
+flux_file_template: pointsource_flux_(?P<healpix>\d+).parquet
+internal_extinction: None
+sed_file_root_env_var: SIMS_SED_LIBRARY_DIR
+sed_model: file_nm
+area_partition:
+  nside: 32
+  ordering: ring
+  type: healpix
