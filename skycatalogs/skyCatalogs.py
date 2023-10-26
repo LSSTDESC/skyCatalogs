@@ -16,7 +16,7 @@ from skycatalogs.utils.sed_tools import TophatSedFactory
 from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
-from skycatalogs.objects.sncosmo_object import SncosmoObject
+from skycatalogs.objects.sncosmo_object import SncosmoObject, SncosmoCollection
 from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
 from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
@@ -307,8 +307,10 @@ class SkyCatalog(object):
                                               collection_class=GaiaCollection,
                                               custom_load=True)
         if 'sncosmo' in config['object_types']:
-            self.cat_cxt.register_source_type('sncosmo',
-                                              object_class=SncosmoObject)
+            self.cat_cxt.register_source_type(
+                'sncosmo',
+                object_class=SncosmoObject,
+                collection_class=SncosmoCollection)
         if 'star' in config['object_types']:
             self.cat_cxt.register_source_type('star',
                                               object_class=StarObject)

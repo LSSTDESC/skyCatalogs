@@ -1,6 +1,6 @@
 import galsim
 from skycatalogs.utils.sn_tools import SncosmoModel
-from .base_object import BaseObject
+from .base_object import BaseObject,ObjectCollection
 
 
 __all__ = ['SncosmoObject']
@@ -41,3 +41,18 @@ class SncosmoObject(BaseObject):
         # is called again with a different value of mjd, it would
         # return the wrong answer.
         return super().get_LSST_flux(band, sed=sed, cache=cache, mjd=mjd)
+
+
+class SncosmoCollection(ObjectCollection):
+    '''
+    This class only exists in order to issue a warning if mjd is None
+    '''
+    def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
+                 region=None, mjd=None, mask=None, readers=None, row_group=0):
+        # Normally mjd should be specified
+        if mjd is None:
+            sky_catalog._logger.warning('Creating SncosmoCollection with no mjd value.')
+            sky_catalog._logger.warning('Transient collections normally have non-None mjd')
+        super().__init__(ra, dec, id, object_type, partition_id,
+                         sky_catalog, region=region, mjd=mjd, mask=mask,
+                         readers=readers, row_group=row_group)
