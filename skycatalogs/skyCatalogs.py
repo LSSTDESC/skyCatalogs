@@ -17,7 +17,7 @@ from skycatalogs.utils.sed_tools import TophatSedFactory
 from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
-from skycatalogs.objects.sncosmo_object import SncosmoObject
+from skycatalogs.objects.sncosmo_object import SncosmoObject, SncosmoCollection
 from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
 from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
@@ -308,8 +308,10 @@ class SkyCatalog(object):
                                               collection_class=GaiaCollection,
                                               custom_load=True)
         if 'sncosmo' in config['object_types']:
-            self.cat_cxt.register_source_type('sncosmo',
-                                              object_class=SncosmoObject)
+            self.cat_cxt.register_source_type(
+                'sncosmo',
+                object_class=SncosmoObject,
+                collection_class=SncosmoCollection)
         if 'star' in config['object_types']:
             self.cat_cxt.register_source_type('star',
                                               object_class=StarObject)
@@ -793,7 +795,8 @@ if __name__ == '__main__':
     t0 = time.time()
     object_list = cat.get_objects_by_region(rgn,
                                             obj_type_set={'star', 'galaxy',
-                                                          'sncosmo'})
+                                                          'sncosmo'},
+                                            mjd=63200.0)
     t_done = time.time()
     print('Took ', t_done - t0)
     # #### temporary obj_type_set={'galaxy', 'star'} )
@@ -879,6 +882,8 @@ if __name__ == '__main__':
                         print('Length of sed: ', len(sed.wave_list))
             elif o.object_type == 'sncosmo':
                 print(o.get_instcat_entry())
+                for b in {'u', 'g', 'r', 'i', 'z', 'y'}:
+                    print(o.get_LSST_flux(b))
             elif o.object_type == 'galaxy':
                 for cmp in ['disk', 'bulge', 'knots']:
                     print(cmp)

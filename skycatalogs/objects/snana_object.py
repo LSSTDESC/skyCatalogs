@@ -23,8 +23,6 @@ class SnanaObject(BaseObject):
         self._mjd_ix_u = None
 
     def _get_sed(self, mjd=None):
-        if mjd is None:
-            mjd = self._belongs_to._mjd
         mjd_start = self.get_native_attribute('start_mjd')
         mjd_end = self.get_native_attribute('end_mjd')
         if mjd < mjd_start or mjd > mjd_end:
@@ -38,12 +36,22 @@ class SnanaObject(BaseObject):
         return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
 
     def get_observer_sed_component(self, component, mjd=None):
+        if mjd is None:
+            mjd = self._belongs_to._mjd
+        if mjd is None:
+            txt = 'SnananObject._get_sed: no mjd specified for this call\n'
+            txt += 'nor when generating object list'
+            raise ValueError(txt)
         sed, _ = self._get_sed(mjd=mjd)
         if sed is not None:
             sed = self._apply_component_extinction(sed)
         return sed
 
-    def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
+    def get_LSST_flux(self, band, sed=None, cache=False, mjd=None):
+        # There is usually no reason to cache flux for SNe, in fact it could
+        # cause problems. If flux has been cached and then this routine
+        # is called again with a different value of mjd, it would
+        # return the wrong answer.
         def _flux_ratio(mag):
             # -0.9210340371976184 = -np.log(10)/2.5.
             return np.exp(-0.921034037196184 * mag)
@@ -65,7 +73,13 @@ class SnanaObject(BaseObject):
                 # nothing else to do
                 return flux
 
-            # interpolate corrections
+            # interpolate corrections if we can.  Correction array
+            # may include nans.
+            if np.isnan(cors[mjd_ix_l]) or np.isnan(cors[mjd_ix_u]):
+                txt = f'Cannot apply flux correction to SN {self._id} due to nan in correction array'
+                self._logger.warn(txt)
+                return flux
+
             if mjd_ix_l == mjd_ix_u:
                 mag_cor = cors[mjd_ix_l]
             else:
@@ -163,9 +177,21 @@ class SnanaObject(BaseObject):
 
 class SnanaCollection(ObjectCollection):
     '''
-    This class (so far) differs from the vanilla ObjectCollection only
-    in that it keeps track of where the file is which contains a library
-    of SEDs for each sn
+    This class  differs from the vanilla ObjectCollection only
+    in that
+    * it keeps track of where the file is which contains a library
+      of SEDs for each sn
+    * it issues a warning if mjd is None
     '''
     def set_SED_file(self, SED_file):
         self._SED_file = SED_file
+
+    def __init__(self, ra, dec, id, object_type, partition_id, sky_catalog,
+                 region=None, mjd=None, mask=None, readers=None, row_group=0):
+        # Normally mjd should be specified
+        if mjd is None:
+            sky_catalog._logger.warning('Creating SnanaCollection with no mjd value.')
+            sky_catalog._logger.warning('Transient collections normally have non-None mjd')
+        super().__init__(ra, dec, id, object_type, partition_id,
+                         sky_catalog, region=region, mjd=mjd, mask=mask,
+                         readers=readers, row_group=row_group)

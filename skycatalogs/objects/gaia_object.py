@@ -72,8 +72,6 @@ class GaiaObject(BaseObject):
             Parent collection of this object.
         index: int
             Index of this object in the parent collection
-        use_lut: bool [True]
-            Flag to use a galsim LookupTable for representing the SED.
         """
         ra = np.degrees(obj_pars['coord_ra'])
         dec = np.degrees(obj_pars['coord_dec'])
@@ -143,6 +141,15 @@ class GaiaCollection(ObjectCollection):
     @ignore_erfa_warnings
     @staticmethod
     def load_collection(region, skycatalog, mjd=None):
+        '''
+        region      One of Disk, PolygonalRegion from skyCatalogs.utils.shapes.
+                    Box is not currently supported
+        skycatalog  An instance of the SkyCatalog class
+        mjd         Time at which objects are to be assembled. Ignored for
+                    Gaia stars
+        '''
+        if not skycatalog:
+            raise ValueError(f'GaiaCollection.load_collection: skycatalog cannot be None')
         if isinstance(region, Disk):
             ra = lsst.geom.Angle(region.ra, lsst.geom.degrees)
             dec = lsst.geom.Angle(region.dec, lsst.geom.degrees)
