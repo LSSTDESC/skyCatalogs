@@ -45,6 +45,22 @@ class GalaxyObject(BaseObject):
 
         return sed, magnorm
 
+    def _get_knot_size(self,z):
+        """
+        Return the angular knot size. Knots are modelled as the same physical size
+        """
+        # Deceleration paramameter
+        q  = -0.55
+        # Angular diameter scaling approximation in pc
+        dA = (3e9/q**2)*(z*q+(q-1)*(np.sqrt(2*q*z+1)-1))/(1+z)**2*(1.4-0.53*z)
+        # Using typical knot size 250pc, convert to sigma in arcmin
+        if z<0.6:
+            return 206264.8*250/dA/2.355
+        else:
+            # Above z=0.6, fractional contribution to post-convolved size 
+            # is <20% for smallest Roman PSF size, so can treat as point source
+            return 0
+
     def get_wl_params(self):
         """Return the weak lensing parameters, g1, g2, mu."""
         gamma1 = self.get_native_attribute('shear_1')
@@ -94,9 +110,13 @@ class GalaxyObject(BaseObject):
             if component == 'knots':
                 npoints = self.get_native_attribute('n_knots')
                 assert npoints > 0
+                z = self.get_native_attribute('redshift')
+                size = self._get_knot_size(z) # get knot size
                 obj = galsim.RandomKnots(npoints=npoints,
-                                         half_light_radius=hlr, rng=rng,
+                                         profile=obj_dict['disk'], rng=rng,
                                          gsparams=gsparams)
+                obj = galsim.Convolve(obj, galsim.Gaussian(sigma=size))
+
             else:
                 n = self.get_native_attribute(f'sersic_{component}')
                 # Quantize the n values at 0.05 so that galsim can
@@ -113,9 +133,13 @@ class GalaxyObject(BaseObject):
             # position angle in the old code. Newer input galaxy catalogs
             # most likely will not need this adjustment
             shear = galsim.Shear(g1=-e1, g2=-e2)
-            obj = obj._shear(shear)
-            g1, g2, mu = self.get_wl_params()
-            obj_dict[component] = obj._lens(g1, g2, mu)
+            obj_dict[component] = obj._shear(shear)
+
+        # Apply lensing
+        g1, g2, mu = self.get_wl_params()
+        for component in self.subcomponents:
+            obj_dict[component] = obj_dict[component]._lens(g1, g2, mu)
+
         return obj_dict
 
     def get_observer_sed_component(self, component, mjd=None, resolution=None):
