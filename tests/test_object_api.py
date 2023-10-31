@@ -82,7 +82,6 @@ class SkyCatalogsObjecInterfaceTestCase(unittest.TestCase):
                         else:
                             self.assertEqual(gs_obj.obj_list[1].original.npoints, row["n_knots"])
                     else:
-                        try:
                             self.assertEqual(gs_obj.original.npoints, row["n_knots"])
 
     def test_get_sed_components(self):
