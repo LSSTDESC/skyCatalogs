@@ -76,11 +76,11 @@ class SkyCatalogsObjecInterfaceTestCase(unittest.TestCase):
                     self.assertEqual(gs_obj.original.n, row[f"sersic_{component}"])
                 elif component == "knots":
                     # Check number of knots
-                    if type(gs_obj)==Convolution:
-                        if type(gs_obj.obj_list[0].original)==RandomKnots:
-                            self.assertEqual(gs_obj.obj_list[0].original.npoints, row["n_knots"])
+                    if type(gs_obj.original)==Convolution:
+                        if type(gs_obj.original.obj_list[0])==RandomKnots:
+                            self.assertEqual(gs_obj.original.obj_list[0].npoints, row["n_knots"])
                         else:
-                            self.assertEqual(gs_obj.obj_list[1].original.npoints, row["n_knots"])
+                            self.assertEqual(gs_obj.original.obj_list[1].npoints, row["n_knots"])
                     else:
                             self.assertEqual(gs_obj.original.npoints, row["n_knots"])
 
