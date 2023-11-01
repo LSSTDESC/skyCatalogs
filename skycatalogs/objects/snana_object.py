@@ -11,10 +11,8 @@ __all__ = ['SnanaObject', 'SnanaCollection']
 class SnanaObject(BaseObject):
     _type_name = 'snana'
 
-    def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index,
-                 redshift=None):
-        super().__init__(ra, dec, id, object_type, belongs_to, belongs_index,
-                         redshift)
+    def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index):
+        super().__init__(ra, dec, id, object_type, belongs_to, belongs_index)
         self._mjds = None
         self._lambda = None
 
