@@ -77,8 +77,7 @@ class BaseObject(object):
     _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501], [0, 1, 0]),
                              wave_type='nm').withZeropoint('AB')
 
-    def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index,
-                 redshift=None):
+    def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index):
         '''
         Save at least minimum info needed a fixed (not SSO) object to
         determine if it's in a region and discover all its other properties.
@@ -89,19 +88,14 @@ class BaseObject(object):
                                       must appear in catalog config file
         belongs_to      ObjectCollection  collection this object belongs to
         belongs_index   int           index of object within its collection
-        redshift        float
         '''
         self._ra = ra
         self._dec = dec
         self._id = str(id)
         self._object_type = object_type
-        self._redshift = redshift
         self._belongs_to = belongs_to
         self._belongs_index = belongs_index
         self._logger = belongs_to._sky_catalog._logger
-
-        # All objects also include redshift information. Also MW extinction,
-        # but extinction is by subcomponent for galaxies
 
     @property
     def ra(self):
@@ -118,14 +112,6 @@ class BaseObject(object):
     @property
     def object_type(self):
         return self._object_type
-
-    @property
-    def redshift(self):
-        if self._redshift:
-            return self._redshift
-        if self._belongs_to:
-            self._redshift = self.get_native_attribute('redshift')
-        return self._redshift
 
     @property
     def partition_id(self):
@@ -619,9 +605,6 @@ class ObjectList(Sequence):
     def append_object_list(self, object_list):
         for e in object_list._located:
             self.append_collection(e.collection)
-
-    def redshifts(self):
-        return self.get_native_attribute('redshift')
 
     def get_native_attribute(self, attribute_name):
         '''
