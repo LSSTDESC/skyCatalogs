@@ -59,7 +59,7 @@ class GalaxyObject(BaseObject):
         else:
             # Above z=0.6, fractional contribution to post-convolved size 
             # is <20% for smallest Roman PSF size, so can treat as point source
-            return 0
+            return None
 
     def get_knot_n(self,rng=None):
         """
@@ -131,12 +131,13 @@ class GalaxyObject(BaseObject):
                 if npoints is None:
                     npoints = self.get_knot_n()
                 assert npoints > 0
-                z = self.get_native_attribute('redshift')
-                size = self.get_knot_size(z) # get knot size
                 obj = galsim.RandomKnots(npoints=npoints,
                                          profile=obj_dict['disk'], rng=rng,
                                          gsparams=gsparams)
-                obj = galsim.Convolve(obj, galsim.Gaussian(sigma=size))
+                z = self.get_native_attribute('redshift')
+                size = self.get_knot_size(z) # get knot size
+                if size is not None:
+                    obj = galsim.Convolve(obj, galsim.Gaussian(sigma=size))
 
             else:
                 n = self.get_native_attribute(f'sersic_{component}')
