@@ -129,6 +129,7 @@ class GaiaObject(BaseObject):
 class GaiaCollection(ObjectCollection):
     # Class methods
     _gaia_config = None
+    _shared_state = {'dsrefs': None}
 
     @classmethod
     def set_config(cls, config):
@@ -137,6 +138,20 @@ class GaiaCollection(ObjectCollection):
     @classmethod
     def get_config(cls):
         return GaiaCollection._gaia_config
+
+    @classmethod
+    def get_refcat_refs(cls, gaia_config):
+        """
+        Use the butler to query for the refcat dataset refs.  This should
+        be done once per run, independent of any sky region selection,
+        to avoid registry db contention when processing multiple
+        regions in parallel.
+        """
+        butler_params = gaia_config['butler_parameters']
+        butler = daf_butler.Butler(butler_params['repo'],
+                                   collections=butler_params['collections'])
+        cls._shared_state['dsrefs'] \
+            = set(butler.registry.queryDatasets(butler_params['dstype']))
 
     @ignore_erfa_warnings
     @staticmethod
@@ -170,7 +185,7 @@ class GaiaCollection(ObjectCollection):
         butler_params = GaiaCollection.get_config()['butler_parameters']
         butler = daf_butler.Butler(butler_params['repo'],
                                    collections=butler_params['collections'])
-        refs = set(butler.registry.queryDatasets(butler_params['dstype']))
+        refs = GaiaCollection._shared_state['dsrefs']
         refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
                    for _ in refs]
         dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]

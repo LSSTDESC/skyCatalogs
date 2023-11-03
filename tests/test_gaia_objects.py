@@ -42,6 +42,7 @@ class GaiaObjectTestCase(unittest.TestCase):
                                              skycatalog_root=skycatalog_root)
 
         self.df = get_gaia_data(CONFIG['butler_parameters'])
+        GaiaCollection.get_refcat_refs(CONFIG)
         GaiaCollection.set_config(CONFIG)
 
     def tearDown(self):

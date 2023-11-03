@@ -303,6 +303,8 @@ class SkyCatalog(object):
 
         # register object types which are in the config
         if 'gaia_star' in config['object_types']:
+            GaiaCollection.get_refcat_refs(
+                self.raw_config['object_types']['gaia_star'])
             self.cat_cxt.register_source_type('gaia_star',
                                               object_class=GaiaObject,
                                               collection_class=GaiaCollection,
