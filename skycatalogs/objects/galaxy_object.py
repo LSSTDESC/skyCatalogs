@@ -45,7 +45,7 @@ class GalaxyObject(BaseObject):
 
         return sed, magnorm
 
-    def _get_knot_size(self,z):
+    def get_knot_size(self,z):
         """
         Return the angular knot size. Knots are modelled as the same physical size
         """
@@ -60,6 +60,22 @@ class GalaxyObject(BaseObject):
             # Above z=0.6, fractional contribution to post-convolved size 
             # is <20% for smallest Roman PSF size, so can treat as point source
             return 0
+
+    def get_knot_n(self,rng=None):
+        """
+        Return random value for number of knots based on galaxy sm.
+        """
+        if rng is not None:
+            ud = galsim.UniformDeviate(rng)
+        else:
+            ud = galsim.UniformDeviate(int(self.id))
+        sm = np.log10(self.get_native_attribute('um_source_galaxy_obs_sm'))
+        m  = (100-10)/(12-8) # (knot_n range)/(logsm range)
+        n_knot_max = m*(sm-8)+10
+        n_knot = int(ud()*n_knot_max) # random n up to n_knot_max
+        if n_knot==0:
+            n_knot+=1 # need at least 1 knot
+        return n_knot
 
     def get_wl_params(self):
         """Return the weak lensing parameters, g1, g2, mu."""
@@ -91,6 +107,9 @@ class GalaxyObject(BaseObject):
         if gsparams is not None:
             gsparams = galsim.GSParams(**gsparams)
 
+        if rng is None:
+            rng = galsim.BaseDeviate(int(self.id))
+
         obj_dict = {}
         for component in self.subcomponents:
             # knots use the same major/minor axes as the disk component.
@@ -109,9 +128,11 @@ class GalaxyObject(BaseObject):
 
             if component == 'knots':
                 npoints = self.get_native_attribute('n_knots')
+                if npoints is None:
+                    npoints = self.get_knot_n()
                 assert npoints > 0
                 z = self.get_native_attribute('redshift')
-                size = self._get_knot_size(z) # get knot size
+                size = self.get_knot_size(z) # get knot size
                 obj = galsim.RandomKnots(npoints=npoints,
                                          profile=obj_dict['disk'], rng=rng,
                                          gsparams=gsparams)
