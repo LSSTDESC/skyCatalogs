@@ -129,7 +129,7 @@ class GaiaObject(BaseObject):
 class GaiaCollection(ObjectCollection):
     # Class methods
     _gaia_config = None
-    _shared_state = {'dsrefs': None}
+    _shared_state = {}
 
     @classmethod
     def set_config(cls, config):
@@ -147,6 +147,8 @@ class GaiaCollection(ObjectCollection):
         to avoid registry db contention when processing multiple
         regions in parallel.
         """
+        if 'dsrefs' in cls._shared_state:
+            return
         butler_params = gaia_config['butler_parameters']
         butler = daf_butler.Butler(butler_params['repo'],
                                    collections=butler_params['collections'])
