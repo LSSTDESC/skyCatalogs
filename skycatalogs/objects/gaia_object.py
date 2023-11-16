@@ -2,6 +2,7 @@ import os
 import sys
 import warnings
 import itertools
+import pickle
 from pathlib import PurePath
 import numpy as np
 import erfa
@@ -24,12 +25,23 @@ __all__ = ['GaiaObject', 'GaiaCollection']
 #
 _S3DF_GAIA_REFS = None
 try:
-    repo = '/repo/main'
-    collections = ['refcats']
-    dstype = 'gaia_dr2_20200414'
-    butler = daf_butler.Butler(repo, collections=collections)
-    _S3DF_GAIA_REFS = set(butler.registry.queryDatasets(dstype))
-    print("Loading gaia refs at s3df")
+    s3df_gaia_refs_file = os.environ.get('S3DF_GAIA_REFS_FILE', None)
+    if s3df_gaia_refs_file is not None and os.path.isfile(s3df_gaia_refs_file):
+        daf_butler.DimensionUniverse(version=3)
+        print(f"Reading gaia refs at s3df from {s3df_gaia_refs_file}")
+        with open(s3df_gaia_refs_file, 'rb') as fobj:
+            _S3DF_GAIA_REFS = pickle.load(fobj)
+    else:
+        print("Loading gaia refs at s3df from registry")
+        repo = '/repo/main'
+        collections = ['refcats']
+        dstype = 'gaia_dr2_20200414'
+        butler = daf_butler.Butler(repo, collections=collections)
+        _S3DF_GAIA_REFS = set(butler.registry.queryDatasets(dstype))
+        if s3df_gaia_refs_file is not None:
+            with open(s3df_gaia_refs_file, 'wb') as fobj:
+                pickle.dump(_S3DF_GAIA_REFS, fobj)
+
 except Exception:
     pass
 
@@ -164,6 +176,7 @@ class GaiaCollection(ObjectCollection):
         if _S3DF_GAIA_REFS is not None:
             refs = _S3DF_GAIA_REFS
         else:
+            print(f"reading gaia refs from {butler_params['repo']}", flush=True)
             refs = set(butler.registry.queryDatasets(butler_params['dstype']))
         refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
                    for _ in refs]
