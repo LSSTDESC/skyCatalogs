@@ -18,6 +18,22 @@ from skycatalogs.objects.base_object import BaseObject, ObjectCollection
 __all__ = ['GaiaObject', 'GaiaCollection']
 
 
+#
+# Kludge to load gaia refcat references at s3df just once to avoid
+# slamming the /repo/main registry.
+#
+_S3DF_GAIA_REFS = None
+try:
+    repo = '/repo/main'
+    collections = ['refcats']
+    dstype = 'gaia_dr2_20200414'
+    butler = daf_butler.Butler(repo, collections=collections)
+    _S3DF_GAIA_REFS = set(butler.registry.queryDatasets(dstype))
+    print("Loading gaia refs at s3df")
+except Exception:
+    pass
+
+
 _FILE_PATH = str(PurePath(__file__))
 _SKYCATALOGS_DIR = _FILE_PATH[:_FILE_PATH.rindex('/skycatalogs')]
 
@@ -145,7 +161,10 @@ class GaiaCollection(ObjectCollection):
         butler_params = GaiaCollection.get_config()['butler_parameters']
         butler = daf_butler.Butler(butler_params['repo'],
                                    collections=butler_params['collections'])
-        refs = set(butler.registry.queryDatasets(butler_params['dstype']))
+        if _S3DF_GAIA_REFS is not None:
+            refs = _S3DF_GAIA_REFS
+        else:
+            refs = set(butler.registry.queryDatasets(butler_params['dstype']))
         refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
                    for _ in refs]
         dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
