@@ -79,7 +79,13 @@ parser.add_argument('--galaxy-nside', default=32, type=int,
                     help='''Pixel nsides for galaxy output. Must be power of 2''')
 parser.add_argument('--galaxy-stride', default=1_000_000, type=int,
                     help='''max # rows in a galaxy row group; default 1 million''')
-
+parser.add_argument('--galaxy-type', default='cosmodc2',
+                    choices=['cosmodc2', 'diffsky'],
+                    help='''Galaxies may be based on either a cosmodc2 or
+                    diffsky catalog''')
+parser.add_argument('--galaxy-truth', default=None, help='''Truth catalog
+                    on which skyCatalogs galaxies will be based. Default
+                    depends on value of --galaxy-type option''')
 args = parser.parse_args()
 
 if args.options_file:
@@ -128,7 +134,8 @@ creator = CatalogCreator(parts, area_partition=None,
                          galaxy_nside=args.galaxy_nside,
                          galaxy_stride=args.galaxy_stride,
                          provenance=provenance,
-                         dc2=args.dc2)
+                         dc2=args.dc2, galaxy_type=args.galaxy_type,
+                         galaxy_truth=args.galaxy_truth)
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
     logger.info("Creating galaxy catalogs")
