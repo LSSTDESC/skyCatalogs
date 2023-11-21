@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 import pandas as pd
 from skycatalogs import skyCatalogs
-
+from galsim import Convolution,RandomKnots
 
 PACKAGE_DIR = os.path.dirname(os.path.abspath(str(Path(__file__).parent)))
 SKYCATALOG_ROOT = os.path.join(PACKAGE_DIR, "skycatalogs", "data")
@@ -75,7 +75,13 @@ class SkyCatalogsObjecInterfaceTestCase(unittest.TestCase):
                     self.assertEqual(gs_obj.original.n, row[f"sersic_{component}"])
                 elif component == "knots":
                     # Check number of knots
-                    self.assertEqual(gs_obj.original.npoints, row["n_knots"])
+                    if type(gs_obj.original)==Convolution:
+                        if type(gs_obj.original.obj_list[0])==RandomKnots:
+                            self.assertEqual(gs_obj.original.obj_list[0].npoints, row["n_knots"])
+                        else:
+                            self.assertEqual(gs_obj.original.obj_list[1].npoints, row["n_knots"])
+                    else:
+                            self.assertEqual(gs_obj.original.npoints, row["n_knots"])
 
     def test_get_sed_components(self):
         """Check sed components."""
