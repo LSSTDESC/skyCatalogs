@@ -34,6 +34,39 @@ object_types :
       internal_extinction : CCM
       MW_extinction : F19
       spatial_model :  knots
+  diffsky_galaxy :
+      file_template : 'galaxy_(?P<healpix>\d+).parquet'
+      flux_file_template : 'galaxy_flux_(?P<healpix>\d+).parquet'
+      sed_file_template : 'galaxy_sed_(?P<healpix>\d+).hdf5'
+      data_file_type : parquet
+      area_partition :
+        { type: healpix, ordering : ring, nside : 32}
+      composite :
+        bulge : required
+        disk  : required
+        knots : optional
+  diffsky_bulge :
+      subtype : bulge
+      parent : diffsky_galaxy
+      sed_model : TBD
+      internal_extinction : CCM
+      MW_extinction : F19
+      spatial_model : sersic2D
+  diffsky_disk :
+      subtype : disk
+      parent : diffsky_galaxy
+      sed_model : TBD
+      internal_extinction : CCM
+      MW_extinction : F19
+      spatial_model :  sersic2D
+  diffsky_knots :
+      subtype : knots
+      parent : diffsky_galaxy
+      sed_model : TBD
+      internal_extinction : CCM
+      MW_extinction : F19
+      spatial_model :  knots
+      
   star :
       file_template : 'pointsource_(?P<healpix>\d+).parquet'
       flux_file_template : 'pointsource_flux_(?P<healpix>\d+).parquet'
