@@ -3,12 +3,14 @@ import re
 from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
 import astropy.constants
+import h5py
 
 import numpy as np
 from dust_extinction.parameter_averages import F19
 import galsim
 
-__all__ = ['TophatSedFactory', 'MilkyWayExtinction', 'get_star_sed_path']
+__all__ = ['TophatSedFactory', 'diffSkySedFactory', 'MilkyWayExtinction',
+           'get_star_sed_path', 'generate_sed_path']
 
 
 class TophatSedFactory:
@@ -21,8 +23,10 @@ class TophatSedFactory:
     # https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/SCHEMA.md
     _to_W_per_Hz = 4.4659e13
 
-    def __init__(self, th_definition, cosmology, delta_wl=0.001):
+    # def __init__(self, th_definition, cosmology, delta_wl=0.001):
+    def __init__(self, th_definition, cosmology, delta_wl=0.001, knots=True):
         # Get wavelength and frequency bin boundaries.
+
         if th_definition:
             bins = th_definition
             wl0 = [_[0] for _ in bins]
@@ -136,6 +140,68 @@ class TophatSedFactory:
         with np.errstate(divide='ignore', invalid='ignore'):
             return -2.5*np.log10(Fnu/one_Jy) + 8.90
 
+class diffSkySedFactory:
+    '''
+    Used for collecting diffsky galaxy SEDs
+    '''
+
+    def __init__(self,catalog_dir,file_template,cosmology):
+
+        self._files = {}
+        self._catalog_dir = catalog_dir
+        self._file_template = file_template
+
+        # Create a FlatLambdaCDM cosmology from a dictionary of input
+        # parameters.  This code is based on/borrowed from
+        # https://github.com/LSSTDESC/gcr-catalogs/blob/master/GCRCatalogs/cosmodc2.py#L128
+        cosmo_astropy_allowed = FlatLambdaCDM.__init__.__code__.co_varnames[1:]
+        cosmo_astropy = {k: v for k, v in cosmology.items()
+                         if k in cosmo_astropy_allowed}
+        self.cosmology = FlatLambdaCDM(**cosmo_astropy)
+
+    def _load_file(self,pixel):
+
+        if pixel not in self._files:
+            # sed_filename = self._file_template.format(pixel)
+            sed_filename = f'galaxy_sed_{pixel}.hdf5'
+            sed_path = os.path.join(self._catalog_dir, sed_filename)
+            self._files[pixel] = h5py.File(sed_path,'r')
+
+        if not hasattr(self,'_wave_list'):
+            self._wave_list = self._files[pixel]['meta/wave_list'][:]
+
+        return self._files[pixel]
+
+    @property
+    def wave_list(self):
+        return self._wave_list
+
+    def dl(self, z):
+        """
+        Return the luminosity distance in units of meters.
+        """
+        return self.cosmology.luminosity_distance(z).value
+
+    def create(self, pixel, galaxy_id, redshift_hubble, redshift):
+        '''
+        Get stored diffsky SED from disk.
+        Does not apply extinction.
+        '''
+
+        f = self._load_file(pixel)
+
+        sed_array = f['galaxy/'+str(int(galaxy_id)//100000)+'/'+str(galaxy_id)][:].astype('float')
+        sed_array /= (4.0*np.pi*(self.dl(redshift_hubble))**2)
+
+        seds = {}
+        for i,component in enumerate(['bulge','disk','knots']):
+            lut = galsim.LookupTable(x=self._wave_list, f=sed_array[i,:], interpolant='linear')
+            # Create the SED object and apply redshift.
+            sed = galsim.SED(lut, wave_type='angstrom', flux_type='fnu')\
+                        .atRedshift(redshift)
+            seds[component] = sed
+
+        return seds
 
 class MilkyWayExtinction:
     '''
@@ -214,3 +280,22 @@ def get_star_sed_path(filename, name_to_folder=_standard_dict):
         if not matched:
             raise ValueError(f'get_star_sed_path: Filename {f} does not match any known patterns')
     return np.array(path_list)
+
+
+def generate_sed_path(ids, subdir, cmp):
+    '''
+    Generate paths (e.g. relative to SIMS_SED_LIBRARY_DIR) for galaxy component
+    SED files
+    Parameters
+    ----------
+    ids        list of galaxy ids
+    subdir    user-supplied part of path
+    cmp      component for which paths should be generated
+
+    returns
+    -------
+    A list of strings.  The entries in the list have the form
+    <subdir>/<cmp>_<id>.txt
+    '''
+    r = [f'{subdir}/{cmp}_{id}.txt' for id in ids]
+    return r
