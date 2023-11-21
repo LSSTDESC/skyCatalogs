@@ -8,18 +8,19 @@ import healpy
 import numpy as np
 import numpy.ma as ma
 from astropy import units as u
-from skycatalogs.objects.base_object import load_lsst_bandpasses
+from skycatalogs.objects.base_object import load_lsst_bandpasses, load_roman_bandpasses
 from skycatalogs.utils.catalog_utils import CatalogContext
 from skycatalogs.objects.base_object import ObjectList
 from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from skycatalogs.readers import ParquetReader
-from skycatalogs.utils.sed_tools import TophatSedFactory
+from skycatalogs.utils.sed_tools import TophatSedFactory, diffSkySedFactory
 from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
 from skycatalogs.objects.sncosmo_object import SncosmoObject, SncosmoCollection
 from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
+from skycatalogs.objects.diffsky_object import DiffskyObject
 from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
 
 __all__ = ['SkyCatalog', 'open_catalog']
@@ -98,7 +99,7 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
         if len(source_type) != 1:
             raise NotImplementedError('_compress_via_mask only accepts singleton object_type')
         source_type = source_type.pop()
-    no_obj_type_return = (source_type in {'galaxy', 'snana'})
+    no_obj_type_return = (source_type in {'galaxy', 'diffsky_galaxy', 'snana'})
     time_filter = ('start_mjd' in tbl) and ('end_mjd' in tbl) and mjd is not None
 
     if region is not None:
@@ -293,8 +294,16 @@ class SkyCatalog(object):
         # definitions of tophat SEDs. A different implementation will
         # be needed for newer galaxy catalogs
         th_parameters = self._config.get_tophat_parameters()
-        self._observed_sed_factory =\
-            TophatSedFactory(th_parameters, config['Cosmology'])
+        if th_parameters:
+            self._observed_sed_factory =\
+                TophatSedFactory(th_parameters, config['Cosmology'])
+        elif 'diffsky_galaxy' in config['object_types']:
+            self._observed_sed_factory =\
+                diffSkySedFactory(self._cat_dir,
+                                  config['object_types']['diffsky_galaxy']
+                                  ['sed_file_template'],
+                                  config['Cosmology'])
+
 
         self._extinguisher = MilkyWayExtinction()
 
@@ -322,6 +331,9 @@ class SkyCatalog(object):
             self.cat_cxt.register_source_type('snana',
                                               object_class=SnanaObject,
                                               collection_class=SnanaCollection)
+        if 'diffsky_galaxy' in config['object_types']:
+            self.cat_cxt.register_source_type('diffsky_galaxy',
+                                              object_class=DiffskyObject)
 
     @property
     def observed_sed_factory(self):
@@ -593,7 +605,7 @@ class SkyCatalog(object):
             self._logger.warning(msg)
             return object_list
 
-        if object_type in ['galaxy']:
+        if object_type in ['galaxy', 'diffsky_galaxy']:
             COLUMNS = ['galaxy_id', 'ra', 'dec']
             id_name = 'galaxy_id'
         elif object_type in ['snana']:
@@ -647,7 +659,7 @@ class SkyCatalog(object):
             # Make a collection for each row group
             for rg in range(rdr.n_row_groups):
                 arrow_t = rdr.read_columns(COLUMNS, None, rg)
-                if object_type in {'galaxy', 'snana'}:
+                if object_type in {'galaxy', 'diffsky_galaxy', 'snana'}:
                     ra_c, dec_c, id_c, mask =\
                         _compress_via_mask(arrow_t,
                                            id_name,
@@ -723,8 +735,9 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     -------
     SkyCatalog
     '''
-    # Get LSST bandpasses in case we need to compute fluxes
+    # Get bandpasses in case we need to compute fluxes
     _ = load_lsst_bandpasses()
+    _ = load_roman_bandpasses()
     base_dir = os.path.dirname(config_file)
     YamlIncludeConstructor.add_to_loader_class(loader_class=yaml.SafeLoader,
                                                base_dir=base_dir)
