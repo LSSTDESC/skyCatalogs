@@ -11,6 +11,7 @@ import pyarrow.parquet as pq
 from multiprocessing import Process, Pipe
 import sqlite3
 from .utils.sed_tools import TophatSedFactory, get_star_sed_path
+from .utils.sed_tools import generate_sed_path
 from .utils.config_utils import create_config, assemble_SED_models
 from .utils.config_utils import assemble_MW_extinction, assemble_cosmology
 from .utils.config_utils import assemble_object_types, assemble_provenance
@@ -21,6 +22,7 @@ from .utils.parquet_schema_utils import make_star_flux_schema
 from .utils.parquet_schema_utils import make_pointsource_schema
 from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.base_object import LSST_BANDS
+from .objects.base_object import ROMAN_BANDS
 
 """
 Code to create a sky catalog for particular object types
@@ -29,26 +31,7 @@ Code to create a sky catalog for particular object types
 __all__ = ['CatalogCreator']
 
 _MW_rv_constant = 3.1
-
-
-def _generate_sed_path(ids, subdir, cmp):
-    '''
-    Generate paths (e.g. relative to SIMS_SED_LIBRARY_DIR) for galaxy component
-    SED files
-    Parameters
-    ----------
-    ids        list of galaxy ids
-    subdir    user-supplied part of path
-    cmp      component for which paths should be generated
-
-    returns
-    -------
-    A list of strings.  The entries in the list have the form
-    <subdir>/<cmp>_<id>.txt
-    '''
-    r = [f'{subdir}/{cmp}_{id}.txt' for id in ids]
-    return r
-
+_nside_allowed = 2**np.arange(15)
 
 def _get_tophat_info(columns):
     '''
@@ -91,9 +74,6 @@ def _get_tophat_info(columns):
     sed_disk_names.sort(key=_sed_disk_key)
 
     return sed_bins, sed_bulge_names, sed_disk_names
-
-
-_nside_allowed = 2**np.arange(15)
 
 
 def _find_subpixels(pixel, subpixel_nside, pixel_nside=32, nest=False):
@@ -169,10 +149,11 @@ def _generate_subpixel_masks(ra, dec, subpixels, nside=32):
 # Collection of galaxy objects for current row group, current pixel
 # Used while doing flux computation
 
-def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
+def _do_galaxy_flux_chunk(send_conn, galaxy_collection, instrument_needed, l_bnd, u_bnd):
     '''
     output connection
     l_bnd, u_bnd     demarcates slice to process
+    instrument_needed List of which calculations should be done
 
     returns
                     dict with keys id, lsst_flux_u, ... lsst_flux_y
@@ -181,11 +162,19 @@ def _do_galaxy_flux_chunk(send_conn, galaxy_collection, l_bnd, u_bnd):
 
     o_list = galaxy_collection[l_bnd: u_bnd]
     out_dict['galaxy_id'] = [o.get_native_attribute('galaxy_id') for o in o_list]
-    all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in o_list]
-    all_fluxes_transpose = zip(*all_fluxes)
-    for i, band in enumerate(LSST_BANDS):
-        v = all_fluxes_transpose.__next__()
-        out_dict[f'lsst_flux_{band}'] = v
+    if 'lsst' in instrument_needed:
+        all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        for i, band in enumerate(LSST_BANDS):
+            v = all_fluxes_transpose.__next__()
+            out_dict[f'lsst_flux_{band}'] = v
+
+    if 'roman' in instrument_needed:
+        all_fluxes = [o.get_roman_fluxes(as_dict=False) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        for i, band in enumerate(ROMAN_BANDS):
+            v = all_fluxes_transpose.__next__()
+            out_dict[f'roman_flux_{band}'] = v
 
     if send_conn:
         send_conn.send(out_dict)
@@ -204,7 +193,8 @@ class CatalogCreator:
                  pkg_root=None, skip_done=False, flux_only=False,
                  main_only=False, flux_parallel=16, galaxy_nside=32,
                  galaxy_stride=1000000, provenance=None,
-                 dc2=False, sn_object_type='sncosmo'):
+                 dc2=False, sn_object_type='sncosmo', galaxy_type='cosmodc2',
+                 include_nonLSST_flux=False):
         """
         Store context for catalog creation
 
@@ -221,7 +211,9 @@ class CatalogCreator:
                         to current directory
         catalog_dir     Directory relative to skycatalog_root where catalog
                         will be written.  Defaults to '.'
-        galaxy_truth    GCRCatalogs name for galaxy truth (e.g. cosmoDC2)
+        galaxy_truth    GCRCatalogs name or abs. path for galaxy truth
+                        (e.g. cosmoDC2). Each known galaxy type
+                        has a corresponding default value.
         config_path     Where to write config file. Default is data
                         directory.
         catalog_name    If a config file is written this value is saved
@@ -246,12 +238,15 @@ class CatalogCreator:
         dc2             Whether to adjust values to provide input comparable
                         to that for the DC2 run
         sn_object_type  Which object type to use for SNe.
+        galaxy_type     Currently allowed values are cosmodc2 and diffsky
+        include_nonLSST_flux Calculate and write non-LSST flux values
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
         """
 
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
+        _diffsky_cat = 'roman_rubin_2023_v1.1.1_elais'
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
         _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
 
@@ -269,10 +264,13 @@ class CatalogCreator:
 
         if output_type != 'parquet':
             raise NotImplementedError(f'CatalogCreator: Output type {output_type} not supported')
-
+        self._galaxy_type = galaxy_type
         self._galaxy_truth = galaxy_truth
         if galaxy_truth is None:
-            self._galaxy_truth = _cosmo_cat
+            if galaxy_type == 'cosmodc2':
+                self._galaxy_truth = _cosmo_cat
+            else:
+                self._galaxy_truth = _diffsky_cat
 
         self._sn_truth = sn_truth
         if self._sn_truth is None:
@@ -316,6 +314,7 @@ class CatalogCreator:
         self._galaxy_nside = galaxy_nside
         self._provenance = provenance
         self._dc2 = dc2
+        self._include_nonLSST_flux = include_nonLSST_flux
 
         self._obs_sed_factory = None
 
@@ -378,17 +377,27 @@ class CatalogCreator:
         None
 
         """
+        # ####### Temporary #######
+        if self._galaxy_type == 'diffsky':
+            import sys
+            # sys.path.insert(0, '/hpc/group/cosmology/repos/roman_imsim/gcr-catalogs_diffsky_v0.1')
+            # for NERSC use
+            sys.path.insert(0, '/global/homes/k/kovacs/gcr-catalogs_diffsky_v0.1')
+        # #######  end Temporary #######
         import GCRCatalogs
 
         self._cat = None
 
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)
-
+        self._gal_cat = gal_cat
+        
         # Save cosmology in case we need to write parameters out later
         self._cosmology = gal_cat.cosmology
 
-        arrow_schema = make_galaxy_schema(self._logname, self._sed_subdir,
-                                          self._knots)
+        arrow_schema = make_galaxy_schema(self._logname,
+                                          sed_subdir=self._sed_subdir,
+                                          knots=self._knots,
+                                          galaxy_type=self._galaxy_type)
 
         for p in self._parts:
             self._logger.info(f'Starting on pixel {p}')
@@ -487,36 +496,46 @@ class CatalogCreator:
             r_mag_name = 'mag_r_lsst'
             mag_cut_filter = [f'{r_mag_name} < {self._mag_cut}']
 
-        # to_fetch = all columns of interest in gal_cat
-        non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'redshiftHubble',
-                   'peculiarVelocity', 'shear_1', 'shear_2',
-                   'convergence',
-                   'size_bulge_true', 'size_minor_bulge_true', 'sersic_bulge',
-                   'size_disk_true', 'size_minor_disk_true', 'sersic_disk']
-        if self._dc2:
-            non_sed += ['ellipticity_1_disk_true_dc2',
-                        'ellipticity_2_disk_true_dc2',
-                        'ellipticity_1_bulge_true_dc2',
-                        'ellipticity_2_bulge_true_dc2']
-        else:
-            non_sed += ['ellipticity_1_disk_true',
-                        'ellipticity_2_disk_true',
-                        'ellipticity_1_bulge_true',
-                        'ellipticity_2_bulge_true']
+        if self._galaxy_type == 'cosmodc2':
 
-        if self._knots:
-            non_sed += ['knots_flux_ratio', 'n_knots', 'mag_i_lsst']
+            # to_fetch = all columns of interest in gal_cat
+            non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'redshiftHubble',
+                       'peculiarVelocity', 'shear_1', 'shear_2',
+                       'convergence',
+                       'size_bulge_true', 'size_minor_bulge_true', 'sersic_bulge',
+                       'size_disk_true', 'size_minor_disk_true', 'sersic_disk']
+            if self._dc2:
+                non_sed += ['ellipticity_1_disk_true_dc2',
+                            'ellipticity_2_disk_true_dc2',
+                            'ellipticity_1_bulge_true_dc2',
+                            'ellipticity_2_bulge_true_dc2']
+            else:
+                non_sed += ['ellipticity_1_disk_true',
+                            'ellipticity_2_disk_true',
+                            'ellipticity_1_bulge_true',
+                            'ellipticity_2_bulge_true']
 
-        # Find sed bin definition and all the tophat quantities needed
-        q = gal_cat.list_all_quantities()
+            if self._knots:
+                non_sed += ['knots_flux_ratio', 'n_knots', 'mag_i_lsst']
 
-        sed_bins, sed_bulge_names, sed_disk_names = _get_tophat_info(q)
-        self._sed_bins = sed_bins
-        self._obs_sed_factory = TophatSedFactory(self._sed_bins,
-                                                 assemble_cosmology(self._cosmology))
+            # Find sed bin definition and all the tophat quantities needed
+            all_q = gal_cat.list_all_quantities()
+            sed_bins, sed_bulge_names, sed_disk_names = _get_tophat_info(all_q)
+            self._sed_bins = sed_bins
 
-        # Fetch the data
-        to_fetch = non_sed + sed_bulge_names + sed_disk_names
+            th_fact = TophatSedFactory(sed_bins,
+                                       assemble_cosmology(self._cosmology))
+            self._obs_sed_factory = th_fact
+
+            to_fetch = non_sed + sed_bulge_names + sed_disk_names
+
+        elif self._galaxy_type == 'diffsky':
+            to_fetch = ['galaxy_id', 'ra', 'dec', 'redshift', 'redshiftHubble',
+                        'peculiarVelocity', 'shear1', 'shear2',
+                        'convergence', 'diskEllipticity1', 'diskEllipticity2',
+                        'spheroidEllipticity1', 'spheroidEllipticity2',
+                        'spheroidHalfLightRadiusArcsec',
+                        'diskHalfLightRadiusArcsec','um_source_galaxy_obs_sm']
 
         # df is not a dataframe!  It's just a dict
         if not self._mag_cut:
@@ -530,36 +549,39 @@ class CatalogCreator:
         df['MW_av'] = make_MW_extinction_av(df['ra'], df['dec'])
         self._logger.debug('Made extinction')
 
-        # Some columns need to be renamed
-        to_rename = {'redshiftHubble': 'redshift_hubble',
-                     'peculiarVelocity': 'peculiar_velocity'}
-        if self._dc2:
-            to_rename['ellipticity_1_disk_true_dc2'] = 'ellipticity_1_disk_true'
-            to_rename['ellipticity_2_disk_true_dc2'] = 'ellipticity_2_disk_true'
-            to_rename['ellipticity_1_bulge_true_dc2'] = 'ellipticity_1_bulge_true'
-            to_rename['ellipticity_2_bulge_true_dc2'] = 'ellipticity_2_bulge_true'
+        # For cosmodc2 input some columns need to be renamed and there is
+        # special handling for knots
+        to_rename = dict()
+        if self._galaxy_type == 'cosmodc2':
+            to_rename = {'redshiftHubble': 'redshift_hubble',
+                         'peculiarVelocity': 'peculiar_velocity'}
+            if self._dc2:
+                to_rename['ellipticity_1_disk_true_dc2'] = 'ellipticity_1_disk_true'
+                to_rename['ellipticity_2_disk_true_dc2'] = 'ellipticity_2_disk_true'
+                to_rename['ellipticity_1_bulge_true_dc2'] = 'ellipticity_1_bulge_true'
+                to_rename['ellipticity_2_bulge_true_dc2'] = 'ellipticity_2_bulge_true'
 
-        if self._sed_subdir:
-            #  Generate full paths for disk and bulge SED files, even though
-            #  we don't actually write the files here
-            df['bulge_sed_file_path'] =\
-                _generate_sed_path(df['galaxy_id'], self._sed_subdir, 'bulge')
-            df['disk_sed_file_path'] =\
-                _generate_sed_path(df['galaxy_id'], self._sed_subdir, 'disk')
+            if self._sed_subdir:
+                #  Generate full paths for disk and bulge SED files, even though
+                #  we don't actually write the files here
+                df['bulge_sed_file_path'] =\
+                    generate_sed_path(df['galaxy_id'], self._sed_subdir, 'bulge')
+                df['disk_sed_file_path'] =\
+                    generate_sed_path(df['galaxy_id'], self._sed_subdir, 'disk')
 
-        if self._knots:
-            # adjust disk sed; create knots sed
-            sed_knot_names = [i.replace('disk', 'knots') for i in sed_disk_names]
-            eps = np.finfo(np.float32).eps
-            mag_mask = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 0, 1)
-            self._logger.debug(f'Count of mags <=  cut (so adjustment performed: {np.count_nonzero(mag_mask)}')
+            if self._knots:
+                # adjust disk sed; create knots sed
+                sed_knot_names = [i.replace('disk', 'knots') for i in sed_disk_names]
+                eps = np.finfo(np.float32).eps
+                mag_mask = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 0, 1)
+                self._logger.debug(f'Count of mags <=  cut (so adjustment performed: {np.count_nonzero(mag_mask)}')
 
-            for d_name, k_name in zip(sed_disk_names, sed_knot_names):
-                df[k_name] = mag_mask * np.clip(df['knots_flux_ratio'],
-                                                None, 1-eps) * df[d_name]
-                df[d_name] = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 1,
-                                      np.clip(1 - df['knots_flux_ratio'],
-                                              eps, None)) * df[d_name]
+                for d_name, k_name in zip(sed_disk_names, sed_knot_names):
+                    df[k_name] = mag_mask * np.clip(df['knots_flux_ratio'],
+                                                    None, 1-eps) * df[d_name]
+                    df[d_name] = np.where(np.array(df['mag_i_lsst']) > self._knots_mag_cut, 1,
+                                          np.clip(1 - df['knots_flux_ratio'],
+                                                  eps, None)) * df[d_name]
 
         if len(self._out_pixels) > 1:
             subpixel_masks = _generate_subpixel_masks(df['ra'], df['dec'],
@@ -581,23 +603,27 @@ class CatalogCreator:
                 for k in df:
                     compressed[k] = ma.array(df[k], mask=val).compressed()
 
-                compressed = self._make_tophat_columns(compressed,
-                                                       sed_disk_names, 'disk')
-                compressed = self._make_tophat_columns(compressed,
-                                                       sed_bulge_names, 'bulge')
-                if self._knots:
+                if self._galaxy_type == 'cosmodc2':
                     compressed = self._make_tophat_columns(compressed,
-                                                           sed_knot_names,
-                                                           'knots')
+                                                           sed_disk_names, 'disk')
+                    compressed = self._make_tophat_columns(compressed,
+                                                           sed_bulge_names,
+                                                           'bulge')
+                    if self._knots:
+                        compressed = self._make_tophat_columns(compressed,
+                                                               sed_knot_names,
+                                                               'knots')
 
                 self._write_subpixel(dat=compressed, output_path=output_path,
                                      arrow_schema=arrow_schema,
                                      stride=stride, to_rename=to_rename)
             else:
-                df = self._make_tophat_columns(df, sed_disk_names, 'disk')
-                df = self._make_tophat_columns(df, sed_bulge_names, 'bulge')
-                if self._knots:
-                    df = self._make_tophat_columns(df, sed_knot_names, 'knots')
+                if self._galaxy_type == 'cosmodc2':
+                    df = self._make_tophat_columns(df, sed_disk_names, 'disk')
+                    df = self._make_tophat_columns(df, sed_bulge_names, 'bulge')
+                    if self._knots:
+                        df = self._make_tophat_columns(df, sed_knot_names,
+                                                       'knots')
                 self._write_subpixel(dat=df, output_path=output_path,
                                      arrow_schema=arrow_schema,
                                      stride=stride, to_rename=to_rename)
@@ -622,7 +648,10 @@ class CatalogCreator:
 
         from .skyCatalogs import open_catalog
 
-        self._gal_flux_schema = make_galaxy_flux_schema(self._logname)
+        self._gal_flux_schema = make_galaxy_flux_schema(self._logname,
+                                                        self._galaxy_type,
+                                                        include_nonLSST_flux=self._include_nonLSST_flux)
+        self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
 
         if not config_file:
             config_file = self.write_config(path_only=True)
@@ -634,14 +663,25 @@ class CatalogCreator:
         # the value for stride is correct.
         # Especially need to do this if we want to support making flux
         # files in a separate job activation.
-
-        self._flux_template = self._cat.raw_config['object_types']['galaxy']['flux_file_template']
+        self.object_type = 'galaxy'
+        if self._galaxy_type == 'diffsky':
+            self.object_type = 'diffsky_galaxy'
+        self._flux_template = self._cat.raw_config['object_types'][self.object_type]['flux_file_template']
 
         self._logger.info('Creating galaxy flux files')
         for p in self._parts:
             self._logger.info(f'Starting on pixel {p}')
             self._create_galaxy_flux_pixel(p)
             self._logger.info(f'Completed pixel {p}')
+
+    def _get_needed_flux_attrs(self):
+        if self._galaxy_type == 'diffsky':
+            return ['galaxy_id', 'shear1', 'shear2', 'convergence',
+                    'redshiftHubble', 'MW_av', 'MW_rv']
+        else:
+            return ['galaxy_id', 'shear_1', 'shear_2', 'convergence',
+                    'redshift_hubble', 'MW_av', 'MW_rv', 'sed_val_bulge',
+                    'sed_val_disk', 'sed_val_knots']
 
     def _create_galaxy_flux_pixel(self, pixel):
         '''
@@ -669,16 +709,21 @@ class CatalogCreator:
 
         # If there are multiple row groups, each is stored in a separate
         # object collection. Need to loop over them
-        object_list = self._cat.get_object_type_by_hp(pixel, 'galaxy')
+        object_list = self._cat.get_object_type_by_hp(pixel, self.object_type)
         writer = None
         global _galaxy_collection
+        global _instrument_needed
+        _instrument_needed = []
+        for field in self._gal_flux_needed:
+            if 'lsst' in field and 'lsst' not in _instrument_needed:
+                _instrument_needed.append('lsst')
+            if 'roman' in field and 'roman' not in _instrument_needed:
+                _instrument_needed.append('roman')
 
         for object_coll in object_list.get_collections():
             _galaxy_collection = object_coll
             # prefetch everything we need.
-            for att in ['galaxy_id', 'shear_1', 'shear_2', 'convergence',
-                        'redshift_hubble', 'MW_av', 'MW_rv', 'sed_val_bulge',
-                        'sed_val_disk', 'sed_val_knots']:
+            for att in self._get_needed_flux_attrs():
                 _ = object_coll.get_native_attribute(att)
             l_bnd = 0
             u_bnd = len(object_coll)
@@ -686,10 +731,9 @@ class CatalogCreator:
 
             self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
 
-            out_dict = {'galaxy_id': [], 'lsst_flux_u': [],
-                        'lsst_flux_g': [], 'lsst_flux_r': [],
-                        'lsst_flux_i': [], 'lsst_flux_z': [],
-                        'lsst_flux_y': []}
+            out_dict = {}
+            for field in self._gal_flux_needed:
+                out_dict[field] = []
 
             n_parallel = self._flux_parallel
 
@@ -703,7 +747,7 @@ class CatalogCreator:
 
             if n_parallel == 1:
                 out_dict = _do_galaxy_flux_chunk(None, _galaxy_collection,
-                                                 lb, u)
+                                                 _instrument_needed, lb, u)
             else:
                 # Expect to be able to do about 1500/minute/process
                 tm = max(int((n_per*60)/500), 5)  # Give ourselves a cushion
@@ -716,7 +760,7 @@ class CatalogCreator:
                     # For debugging call directly
                     proc = Process(target=_do_galaxy_flux_chunk,
                                    name=f'proc_{i}',
-                                   args=(conn_wrt, _galaxy_collection, lb, u))
+                                   args=(conn_wrt, _galaxy_collection, _instrument_needed, lb, u))
                     proc.start()
                     p_list.append(proc)
                     lb = u
@@ -729,10 +773,8 @@ class CatalogCreator:
                         self._logger.error(f'Process {i} timed out after {tm} sec')
                         sys.exit(1)
                     dat = readers[i].recv()
-                    for k in ['galaxy_id', 'lsst_flux_u', 'lsst_flux_g',
-                              'lsst_flux_r', 'lsst_flux_i', 'lsst_flux_z',
-                              'lsst_flux_y']:
-                        out_dict[k] += dat[k]
+                    for field in self._gal_flux_needed:
+                        out_dict[field] += dat[field]
                 for p in p_list:
                     p.join()
 
@@ -991,8 +1033,9 @@ class CatalogCreator:
         config.add_key('skycatalog_root', self._skycatalog_root)
         config.add_key('catalog_dir', self._catalog_dir)
 
-        config.add_key('SED_models',
-                       assemble_SED_models(self._sed_bins))
+        if self._galaxy_type == 'cosmodc2':
+            config.add_key('SED_models',
+                           assemble_SED_models(self._sed_bins))
         config.add_key('MW_extinction_values', assemble_MW_extinction())
         config.add_key('Cosmology', assemble_cosmology(self._cosmology))
         config.add_key('object_types',
