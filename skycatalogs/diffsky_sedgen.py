@@ -14,13 +14,13 @@ all_diffskypop_params = read_diffskypop_params("roman_rubin_2023")
 from .catalog_creator import CatalogCreator
 from .skyCatalogs import open_catalog
 
-__all__ = ['diffSkySedGenerator']
+__all__ = ['DiffskySedGenerator']
 
 def _calculate_sed_multi(send_conn,_redshift,_mah_params,_ms_params,_q_params,
                             _fbulge_params,_fknot,_ssp_data,galaxy_id,n_per):
     def _calc_seds(_redshift,_mah_params,_ms_params,_q_params,
                     _fbulge_params,_fknot,_ssp_data,l_bnd,u_bnd,n_per):
-        # Documentation for calculation available here: 
+        # Documentation for calculation available here:
         # https://lsstdesc-diffsky.readthedocs.io/en/latest/demo_roman_rubin_2023_seds_singlemet.html
         args = (_redshift[l_bnd:u_bnd],
                 _mah_params[l_bnd:u_bnd],
@@ -40,7 +40,7 @@ def _calculate_sed_multi(send_conn,_redshift,_mah_params,_ms_params,_q_params,
     # flux_factor = (1 * _flux_type).to(galsim.SED._fnu).value
     flux_factor = 4.0204145742268754e-16
 
-    # Iterate over chunks of n_per 
+    # Iterate over chunks of n_per
     l_bnd=0
     u_bnd=len(galaxy_id)
     out_list = []
@@ -65,7 +65,7 @@ def _calculate_sed_multi(send_conn,_redshift,_mah_params,_ms_params,_q_params,
         return out_list
 
 
-class diffSkySedGenerator(CatalogCreator):
+class DiffskySedGenerator(CatalogCreator):
     '''
     Used for evaluating and storing diffsky galaxy SEDs, which are represented with
     an adaptively thinned spectrum and stored in an hdf5 file.
@@ -122,7 +122,7 @@ class diffSkySedGenerator(CatalogCreator):
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)
         self._hdf5_root_dir = gal_cat.get_catalog_info()['catalog_root_dir']
         self._hdf5_name_template = gal_cat.get_catalog_info()['catalog_filename_template']
-        
+
         self.pix_iter = 0
         if auto_loop:
             # Loop over necessary pixels
@@ -163,7 +163,7 @@ class diffSkySedGenerator(CatalogCreator):
 
         Side-effects
         ------------
-        Saves thinned SSP data structure        
+        Saves thinned SSP data structure
         """
 
         # Read default SSP templates
@@ -177,7 +177,7 @@ class diffSkySedGenerator(CatalogCreator):
         sed_lut = galsim.LookupTable(
             x=ssp_wave_nm[mask], f=np.sum(ssp_data.ssp_flux[:, mask], axis=0)
         )
-        sed = galsim.SED(sed_lut, wave_type="nm", 
+        sed = galsim.SED(sed_lut, wave_type="nm",
                         flux_type="flambda", redshift=0.0)
 
         # Thin template sum to target tolerance.
@@ -188,7 +188,7 @@ class diffSkySedGenerator(CatalogCreator):
         # Reconstruct thinned SSP templates and save.
         thin_ssp_wave_ang = ssp_data.ssp_wave[mask][mask2]
         thin_ssp_flux = ssp_data.ssp_flux[:, mask][:, mask2]
-        self.ssp_data = SSPDataSingleMet(ssp_data.ssp_lg_age_gyr, 
+        self.ssp_data = SSPDataSingleMet(ssp_data.ssp_lg_age_gyr,
                                         thin_ssp_wave_ang, thin_ssp_flux)
 
     def _combine_col(self,cnt,col1,col2,col3):
@@ -206,15 +206,15 @@ class diffSkySedGenerator(CatalogCreator):
 
     def _load_diffsky_data(self,pixel):
 
-        hdf5_file_path = os.path.join(self._hdf5_root_dir, 
+        hdf5_file_path = os.path.join(self._hdf5_root_dir,
             self._hdf5_name_template.format(0,1,pixel))
         mock1, metadata = load_healpixel(hdf5_file_path)
         diffsky_param_data1 = load_diffsky_params(mock1)
-        hdf5_file_path = os.path.join(self._hdf5_root_dir, 
+        hdf5_file_path = os.path.join(self._hdf5_root_dir,
             self._hdf5_name_template.format(1,2,pixel))
         mock2, metadata = load_healpixel(hdf5_file_path)
         diffsky_param_data2 = load_diffsky_params(mock2)
-        hdf5_file_path = os.path.join(self._hdf5_root_dir, 
+        hdf5_file_path = os.path.join(self._hdf5_root_dir,
             self._hdf5_name_template.format(2,3,pixel))
         mock3, metadata = load_healpixel(hdf5_file_path)
         diffsky_param_data3 = load_diffsky_params(mock3)
@@ -259,7 +259,7 @@ class diffSkySedGenerator(CatalogCreator):
             output_path = os.path.join(self._output_dir, output_filename)
 
         if os.path.exists(output_path):
-            if not self._skip_done: 
+            if not self._skip_done:
                 self._logger.info(f'Overwriting file {output_path}')
             else:
                 self._logger.info(f'Skipping regeneration of {output_path}')
@@ -267,11 +267,11 @@ class diffSkySedGenerator(CatalogCreator):
 
         # Set up h5 file and metadata on wavelengths
         f = h5py.File(output_path,'w',libver='latest')
-        _ = f.create_dataset('meta/wave_list', 
-                            maxshape=(len(self.ssp_data.ssp_wave),), 
-                            shape=(len(self.ssp_data.ssp_wave),), 
-                            dtype='f4', #compression="gzip", 
-                            #compression_opts=9, 
+        _ = f.create_dataset('meta/wave_list',
+                            maxshape=(len(self.ssp_data.ssp_wave),),
+                            shape=(len(self.ssp_data.ssp_wave),),
+                            dtype='f4', #compression="gzip",
+                            #compression_opts=9,
                             data=self.ssp_data.ssp_wave)
         # Set up hdf5 groups
         h5_groups={}
@@ -298,7 +298,7 @@ class diffSkySedGenerator(CatalogCreator):
 
             self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
 
-            # I couldn't get multiprocessing to work with the jit compilation 
+            # I couldn't get multiprocessing to work with the jit compilation
             # in diffsky, but code is setup to use it
             n_parallel = 1 # self._sed_parallel
             if n_parallel == 1:
@@ -315,7 +315,7 @@ class diffSkySedGenerator(CatalogCreator):
             # Build output SED data chunks
             out_dict = []
             if n_parallel == 1:
-                out_list = _calculate_sed_multi(None, 
+                out_list = _calculate_sed_multi(None,
                                                 redshift[mask],
                                                 mah_params[mask],
                                                 ms_params[mask],
@@ -333,11 +333,11 @@ class diffSkySedGenerator(CatalogCreator):
                         tmp_store[0,:] = chunk['bulge'][igid,:]
                         tmp_store[1,:] = chunk['disk'][igid,:]
                         tmp_store[2,:] = chunk['knots'][igid,:]
-                        _ = h5_groups[gid//100000].create_dataset(str(gid), 
-                                            maxshape=(3,len(self.ssp_data.ssp_wave),), 
-                                            shape=(3,len(self.ssp_data.ssp_wave),), 
-                                            dtype='f4', #compression="gzip", 
-                                            #compression_opts=9, 
+                        _ = h5_groups[gid//100000].create_dataset(str(gid),
+                                            maxshape=(3,len(self.ssp_data.ssp_wave),),
+                                            shape=(3,len(self.ssp_data.ssp_wave),),
+                                            dtype='f4', #compression="gzip",
+                                            #compression_opts=9,
                                             data=tmp_store)
             else:
                 tm = max(int(n_per), 5)  # Give ourselves a cushion
@@ -350,7 +350,7 @@ class diffSkySedGenerator(CatalogCreator):
                     # For debugging call directly
                     proc = Process(target=_calculate_sed_multi,
                                    name=f'proc_{i}',
-                                   args=(conn_wrt, 
+                                   args=(conn_wrt,
                                         redshift[mask][lb:u],
                                         mah_params[mask][lb:u],
                                         ms_params[mask][lb:u],
@@ -377,11 +377,11 @@ class diffSkySedGenerator(CatalogCreator):
                             tmp_store[0,:] = chunk['bulge'][igid,:]
                             tmp_store[1,:] = chunk['disk'][igid,:]
                             tmp_store[2,:] = chunk['knots'][igid,:]
-                            _ = h5_groups[gid//100000].create_dataset(str(gid), 
-                                                maxshape=(3,len(self.ssp_data.ssp_wave),), 
-                                                shape=(3,len(self.ssp_data.ssp_wave),), 
-                                                dtype='f4',# compression="gzip", 
-                                                #compression_opts=9, 
+                            _ = h5_groups[gid//100000].create_dataset(str(gid),
+                                                maxshape=(3,len(self.ssp_data.ssp_wave),),
+                                                shape=(3,len(self.ssp_data.ssp_wave),),
+                                                dtype='f4',# compression="gzip",
+                                                #compression_opts=9,
                                                 data=tmp_store)
                 for p in p_list:
                     p.join()
@@ -393,5 +393,5 @@ class diffSkySedGenerator(CatalogCreator):
         #     output_path_final = os.path.join(self._output_dir, output_filename)
         #     os.rename(output_path, output_path_final)
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
-        # if self._provenance == 'yaml': 
+        # if self._provenance == 'yaml':
         #     self.write_provenance_file(output_path)

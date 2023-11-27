@@ -9,7 +9,7 @@ import numpy as np
 from dust_extinction.parameter_averages import F19
 import galsim
 
-__all__ = ['TophatSedFactory', 'diffSkySedFactory', 'MilkyWayExtinction',
+__all__ = ['TophatSedFactory', 'DiffskySedFactory', 'MilkyWayExtinction',
            'get_star_sed_path', 'generate_sed_path']
 
 
@@ -140,12 +140,13 @@ class TophatSedFactory:
         with np.errstate(divide='ignore', invalid='ignore'):
             return -2.5*np.log10(Fnu/one_Jy) + 8.90
 
-class diffSkySedFactory:
+
+class DiffskySedFactory:
     '''
     Used for collecting diffsky galaxy SEDs
     '''
 
-    def __init__(self,catalog_dir,file_template,cosmology):
+    def __init__(self, catalog_dir, file_template, cosmology):
 
         self._files = {}
         self._catalog_dir = catalog_dir
@@ -159,15 +160,15 @@ class diffSkySedFactory:
                          if k in cosmo_astropy_allowed}
         self.cosmology = FlatLambdaCDM(**cosmo_astropy)
 
-    def _load_file(self,pixel):
+    def _load_file(self, pixel):
 
         if pixel not in self._files:
             # sed_filename = self._file_template.format(pixel)
             sed_filename = f'galaxy_sed_{pixel}.hdf5'
             sed_path = os.path.join(self._catalog_dir, sed_filename)
-            self._files[pixel] = h5py.File(sed_path,'r')
+            self._files[pixel] = h5py.File(sed_path, 'r')
 
-        if not hasattr(self,'_wave_list'):
+        if not hasattr(self, '_wave_list'):
             self._wave_list = self._files[pixel]['meta/wave_list'][:]
 
         return self._files[pixel]
@@ -194,14 +195,16 @@ class diffSkySedFactory:
         sed_array /= (4.0*np.pi*(self.dl(redshift_hubble))**2)
 
         seds = {}
-        for i,component in enumerate(['bulge','disk','knots']):
-            lut = galsim.LookupTable(x=self._wave_list, f=sed_array[i,:], interpolant='linear')
+        for i, component in enumerate(['bulge', 'disk', 'knots']):
+            lut = galsim.LookupTable(x=self._wave_list, f=sed_array[i,:],
+                                     interpolant='linear')
             # Create the SED object and apply redshift.
             sed = galsim.SED(lut, wave_type='angstrom', flux_type='fnu')\
                         .atRedshift(redshift)
             seds[component] = sed
 
         return seds
+
 
 class MilkyWayExtinction:
     '''
