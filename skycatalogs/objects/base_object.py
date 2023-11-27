@@ -18,7 +18,8 @@ form of their associated SEDs
 '''
 
 __all__ = ['BaseObject', 'ObjectCollection', 'ObjectList',
-           'LSST_BANDS', 'load_lsst_bandpasses']
+           'LSST_BANDS', 'ROMAN_BANDS',
+           'load_lsst_bandpasses', 'load_roman_bandpasses']
 
 LSST_BANDS = ('ugrizy')
 ROMAN_BANDS = roman_shortwave_bands+roman_longwave_bands
@@ -70,6 +71,7 @@ def load_lsst_bandpasses():
         lsst_bandpasses[band] = bp
 
     return lsst_bandpasses
+
 
 def load_roman_bandpasses():
     '''
@@ -200,7 +202,6 @@ class BaseObject(object):
 
         Must be implemented by subclass
         '''
-
         raise NotImplementedError('Must be implemented by BaseObject subclass if needed')
 
     def write_sed(self, sed_file_path, component=None, resolution=None,
@@ -353,7 +354,6 @@ class BaseObject(object):
         else:
             return list(fluxes.values())
 
-
     def get_roman_flux(self, band, sed=None, cache=True, mjd=None):
         if band not in ROMAN_BANDS:
             return None
@@ -375,8 +375,8 @@ class BaseObject(object):
 
     def get_roman_fluxes(self, cache=True, as_dict=True, mjd=None):
         '''
-        Return a dict of fluxes for LSST bandpasses or, if as_dict is False,
-        just a list in the same order as LSST_BANDS
+        Return a dict of fluxes for Roman bandpasses or, if as_dict is False,
+        just a list in the same order as ROMAN_BANDS
         '''
         fluxes = dict()
         sed = self.get_total_observer_sed(mjd=mjd)
@@ -392,7 +392,8 @@ class BaseObject(object):
             return fluxes
         else:
             return list(fluxes.values())
-            
+
+
 class ObjectCollection(Sequence):
     '''
     Class for collection of fixed (not SSO) objects coming from the same
