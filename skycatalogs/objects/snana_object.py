@@ -36,6 +36,53 @@ class SnanaObject(BaseObject):
 
         return self._linear_interp_SED(mjd), 0.0
 
+    def _apply_flux_correction(self, flux, snana_band, mjd):
+        def _flux_ratio(mag):
+            # -0.9210340371976184 = -np.log(10)/2.5.
+            return np.exp(-0.921034037196184 * mag)
+
+        if flux < 0:
+            raise SkyCatalogsRuntimeError('Negative flux')
+
+        if flux == 0.0:
+            return flux
+
+        mjd_ix_l, mjd_ix_u, mjd_fraction = self._find_mjd_interval(mjd)
+
+        with h5py.File(self._belongs_to._SED_file, 'r') as f:
+            try:
+                cors = f[self._id][snana_band]
+            except KeyError:
+                # nothing else to do
+                return flux
+
+            # interpolate corrections if we can.  Correction array
+            # may include nans.
+            if np.isnan(cors[mjd_ix_l]) or np.isnan(cors[mjd_ix_u]):
+                txt = f'Cannot apply flux correction to SN {self._id} due to nan in correction array'
+                self._logger.warn(txt)
+                return flux
+
+            if mjd_ix_l == mjd_ix_u:
+                mag_cor = cors[mjd_ix_l]
+            else:
+                mag_cor = cors[mjd_ix_l] + mjd_fraction *\
+                    (cors[mjd_ix_u] - cors[mjd_ix_l])
+
+        # dbg = True
+        dbg = False
+
+        # Do everything in flux units
+        flux_cor = _flux_ratio(mag_cor)
+        corrected_flux = flux * flux_cor
+
+        if dbg:
+            print(f'Band {band} uncorrected flux: {flux}')
+            print(f'                mag correction: {mag_cor}')
+            print(f' multiplicative flux correction: {flux_cor}')
+
+        return corrected_flux
+
     def get_gsobject_components(self, gsparams=None, rng=None):
         if gsparams is not None:
             gsparams = galsim.GSParams(**gsparams)
@@ -58,106 +105,20 @@ class SnanaObject(BaseObject):
         # cause problems. If flux has been cached and then this routine
         # is called again with a different value of mjd, it would
         # return the wrong answer.
-        def _flux_ratio(mag):
-            # -0.9210340371976184 = -np.log(10)/2.5.
-            return np.exp(-0.921034037196184 * mag)
 
         flux = super().get_LSST_flux(band, sed=sed, cache=cache, mjd=mjd)
-
-        if flux < 0:
-            raise SkyCatalogsRuntimeError('Negative flux')
-
-        if flux == 0.0:
-            return flux
-
-        mjd_ix_l, mjd_ix_u, mjd_fraction = self._find_mjd_interval(mjd)
-
-        with h5py.File(self._belongs_to._SED_file, 'r') as f:
-            try:
-                cors = f[self._id][f'magcor_{band}']
-            except KeyError:
-                # nothing else to do
-                return flux
-
-            # interpolate corrections if we can.  Correction array
-            # may include nans.
-            if np.isnan(cors[mjd_ix_l]) or np.isnan(cors[mjd_ix_u]):
-                txt = f'Cannot apply flux correction to SN {self._id} due to nan in correction array'
-                self._logger.warn(txt)
-                return flux
-
-            if mjd_ix_l == mjd_ix_u:
-                mag_cor = cors[mjd_ix_l]
-            else:
-                mag_cor = cors[mjd_ix_l] + mjd_fraction *\
-                    (cors[mjd_ix_u] - cors[mjd_ix_l])
-
-        # dbg = True
-        dbg = False
-
-        # Do everything in flux units
-        flux_cor = _flux_ratio(mag_cor)
-        corrected_flux = flux * flux_cor
-
-        if dbg:
-            print(f'Band {band} uncorrected flux: {flux}')
-            print(f'                mag correction: {mag_cor}')
-            print(f' multiplicative flux correction: {flux_cor}')
-
-        return corrected_flux
+        return self._apply_flux_correction(flux, f'magcor_{band}', mjd)
 
     def get_roman_flux(self, band, sed=None, cache=False, mjd=None):
         # There is usually no reason to cache flux for SNe, in fact it could
         # cause problems. If flux has been cached and then this routine
         # is called again with a different value of mjd, it would
         # return the wrong answer.
-        def _flux_ratio(mag):
-            # -0.9210340371976184 = -np.log(10)/2.5.
-            return np.exp(-0.921034037196184 * mag)
 
         flux = super().get_roman_flux(band, sed=sed, cache=cache, mjd=mjd)
-
-        if flux < 0:
-            raise SkyCatalogsRuntimeError('Negative flux')
-
-        if flux == 0.0:
-            return flux
-
-        mjd_ix_l, mjd_ix_u, mjd_fraction = self._find_mjd_interval(mjd)
-
-        with h5py.File(self._belongs_to._SED_file, 'r') as f:
-            try:
-                cors = f[self._id][f'magcor_{_map_SNANA_bands[band]}']
-            except KeyError:
-                # nothing else to do
-                return flux
-
-            # interpolate corrections if we can.  Correction array
-            # may include nans.
-            if np.isnan(cors[mjd_ix_l]) or np.isnan(cors[mjd_ix_u]):
-                txt = f'Cannot apply flux correction to SN {self._id} due to nan in correction array'
-                self._logger.warn(txt)
-                return flux
-
-            if mjd_ix_l == mjd_ix_u:
-                mag_cor = cors[mjd_ix_l]
-            else:
-                mag_cor = cors[mjd_ix_l] + mjd_fraction *\
-                    (cors[mjd_ix_u] - cors[mjd_ix_l])
-
-        # dbg = True
-        dbg = False
-
-        # Do everything in flux units
-        flux_cor = _flux_ratio(mag_cor)
-        corrected_flux = flux * flux_cor
-
-        if dbg:
-            print(f'Band {band} uncorrected flux: {flux}')
-            print(f'                mag correction: {mag_cor}')
-            print(f' multiplicative flux correction: {flux_cor}')
-
-        return corrected_flux
+        return self._apply_flux_correction(flux,
+                                           f'magcor_{_map_SNANA_bands[band]}',
+                                           mjd)
 
     def _find_mjd_interval(self, mjd=None):
         '''
