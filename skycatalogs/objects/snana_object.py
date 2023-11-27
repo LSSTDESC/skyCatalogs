@@ -8,13 +8,13 @@ from skycatalogs.utils.exceptions import SkyCatalogsRuntimeError
 __all__ = ['SnanaObject', 'SnanaCollection']
 
 _map_SNANA_bands = {'R062': 'R',
-                   'Z087': 'Z',
-                   'Y106': 'Y',
-                   'J129': 'J',
-                   'H158': 'H',
-                   'F184': 'F',
-                   'K213': 'K',
-                   'W146': 'W'}
+                    'Z087': 'Z',
+                    'Y106': 'Y',
+                    'J129': 'J',
+                    'H158': 'H',
+                    'F184': 'F',
+                    'K213': 'K',
+                    'W146': 'W'}
 
 class SnanaObject(BaseObject):
     _type_name = 'snana'
@@ -77,8 +77,8 @@ class SnanaObject(BaseObject):
         corrected_flux = flux * flux_cor
 
         if dbg:
-            print(f'Band {band} uncorrected flux: {flux}')
-            print(f'                mag correction: {mag_cor}')
+            print(f'Band {snana_band} uncorrected flux: {flux}')
+            print(f'                  mag correction: {mag_cor}')
             print(f' multiplicative flux correction: {flux_cor}')
 
         return corrected_flux
