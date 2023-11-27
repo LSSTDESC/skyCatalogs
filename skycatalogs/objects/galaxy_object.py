@@ -127,7 +127,7 @@ class GalaxyObject(BaseObject):
                 size = self.get_knot_size(z) # get knot size
                 if size is not None:
                     obj = galsim.Convolve(obj, galsim.Gaussian(sigma=size))
-
+                obj_dict[component] = obj
             else:
                 n = self.get_native_attribute(f'sersic_{component}')
                 # Quantize the n values at 0.05 so that galsim can
