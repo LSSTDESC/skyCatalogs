@@ -44,7 +44,6 @@ jobs:
                 conda list
                 conda install -y --file etc/conda_requirements.txt
                 conda info
-                mamba list
 
             - name: Install rubin_sim_data
               run: |
