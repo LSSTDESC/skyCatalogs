@@ -7,6 +7,14 @@ from skycatalogs.utils.exceptions import SkyCatalogsRuntimeError
 
 __all__ = ['SnanaObject', 'SnanaCollection']
 
+_map_SNANA_bands = {'R062': 'R',
+                    'Z087': 'Z',
+                    'Y106': 'Y',
+                    'J129': 'J',
+                    'H158': 'H',
+                    'F184': 'F',
+                    'K213': 'K',
+                    'W146': 'W'}
 
 class SnanaObject(BaseObject):
     _type_name = 'snana'
@@ -28,33 +36,10 @@ class SnanaObject(BaseObject):
 
         return self._linear_interp_SED(mjd), 0.0
 
-    def get_gsobject_components(self, gsparams=None, rng=None):
-        if gsparams is not None:
-            gsparams = galsim.GSParams(**gsparams)
-        return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
-
-    def get_observer_sed_component(self, component, mjd=None):
-        if mjd is None:
-            mjd = self._belongs_to._mjd
-        if mjd is None:
-            txt = 'SnananObject._get_sed: no mjd specified for this call\n'
-            txt += 'nor when generating object list'
-            raise ValueError(txt)
-        sed, _ = self._get_sed(mjd=mjd)
-        if sed is not None:
-            sed = self._apply_component_extinction(sed)
-        return sed
-
-    def get_LSST_flux(self, band, sed=None, cache=False, mjd=None):
-        # There is usually no reason to cache flux for SNe, in fact it could
-        # cause problems. If flux has been cached and then this routine
-        # is called again with a different value of mjd, it would
-        # return the wrong answer.
+    def _apply_flux_correction(self, flux, snana_band, mjd):
         def _flux_ratio(mag):
             # -0.9210340371976184 = -np.log(10)/2.5.
             return np.exp(-0.921034037196184 * mag)
-
-        flux = super().get_LSST_flux(band, sed=sed, cache=cache, mjd=mjd)
 
         if flux < 0:
             raise SkyCatalogsRuntimeError('Negative flux')
@@ -66,7 +51,7 @@ class SnanaObject(BaseObject):
 
         with h5py.File(self._belongs_to._SED_file, 'r') as f:
             try:
-                cors = f[self._id][f'magcor_{band}']
+                cors = f[self._id][snana_band]
             except KeyError:
                 # nothing else to do
                 return flux
@@ -92,11 +77,48 @@ class SnanaObject(BaseObject):
         corrected_flux = flux * flux_cor
 
         if dbg:
-            print(f'Band {band} uncorrected flux: {flux}')
-            print(f'                mag correction: {mag_cor}')
+            print(f'Band {snana_band} uncorrected flux: {flux}')
+            print(f'                  mag correction: {mag_cor}')
             print(f' multiplicative flux correction: {flux_cor}')
 
         return corrected_flux
+
+    def get_gsobject_components(self, gsparams=None, rng=None):
+        if gsparams is not None:
+            gsparams = galsim.GSParams(**gsparams)
+        return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
+
+    def get_observer_sed_component(self, component, mjd=None):
+        if mjd is None:
+            mjd = self._belongs_to._mjd
+        if mjd is None:
+            txt = 'SnananObject._get_sed: no mjd specified for this call\n'
+            txt += 'nor when generating object list'
+            raise ValueError(txt)
+        sed, _ = self._get_sed(mjd=mjd)
+        if sed is not None:
+            sed = self._apply_component_extinction(sed)
+        return sed
+
+    def get_LSST_flux(self, band, sed=None, cache=False, mjd=None):
+        # There is usually no reason to cache flux for SNe, in fact it could
+        # cause problems. If flux has been cached and then this routine
+        # is called again with a different value of mjd, it would
+        # return the wrong answer.
+
+        flux = super().get_LSST_flux(band, sed=sed, cache=cache, mjd=mjd)
+        return self._apply_flux_correction(flux, f'magcor_{band}', mjd)
+
+    def get_roman_flux(self, band, sed=None, cache=False, mjd=None):
+        # There is usually no reason to cache flux for SNe, in fact it could
+        # cause problems. If flux has been cached and then this routine
+        # is called again with a different value of mjd, it would
+        # return the wrong answer.
+
+        flux = super().get_roman_flux(band, sed=sed, cache=cache, mjd=mjd)
+        return self._apply_flux_correction(flux,
+                                           f'magcor_{_map_SNANA_bands[band]}',
+                                           mjd)
 
     def _find_mjd_interval(self, mjd=None):
         '''

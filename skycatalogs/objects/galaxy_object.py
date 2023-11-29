@@ -45,6 +45,22 @@ class GalaxyObject(BaseObject):
 
         return sed, magnorm
 
+    def get_knot_size(self,z):
+        """
+        Return the angular knot size. Knots are modelled as the same physical size
+        """
+        # Deceleration paramameter
+        q  = -0.55
+        # Angular diameter scaling approximation in pc
+        dA = (3e9/q**2)*(z*q+(q-1)*(np.sqrt(2*q*z+1)-1))/(1+z)**2*(1.4-0.53*z)
+        # Using typical knot size 250pc, convert to sigma in arcmin
+        if z<0.6:
+            return 206264.8*250/dA/2.355
+        else:
+            # Above z=0.6, fractional contribution to post-convolved size 
+            # is <20% for smallest Roman PSF size, so can treat as point source
+            return None
+
     def get_wl_params(self):
         """Return the weak lensing parameters, g1, g2, mu."""
         gamma1 = self.get_native_attribute('shear_1')
@@ -75,6 +91,9 @@ class GalaxyObject(BaseObject):
         if gsparams is not None:
             gsparams = galsim.GSParams(**gsparams)
 
+        if rng is None:
+            rng = galsim.BaseDeviate(int(self.id))
+
         obj_dict = {}
         for component in self.subcomponents:
             # knots use the same major/minor axes as the disk component.
@@ -90,13 +109,25 @@ class GalaxyObject(BaseObject):
                 f'ellipticity_1_{my_component}_true')
             e2 = self.get_native_attribute(
                 f'ellipticity_2_{my_component}_true')
+            # NOTE: The minus signs in the next executable line are
+            # needed specifically for generating DC2-like from galaxy
+            # catalogs in the cosmoDC2 format. They are included here in
+            # order to reproduce the effect of adding 90 degrees to
+            # position angle in the old code. Newer input galaxy catalogs
+            # most likely will not need this adjustment
+            shear = galsim.Shear(g1=-e1, g2=-e2)
 
             if component == 'knots':
                 npoints = self.get_native_attribute('n_knots')
                 assert npoints > 0
                 obj = galsim.RandomKnots(npoints=npoints,
-                                         half_light_radius=hlr, rng=rng,
+                                         profile=obj_dict['disk'], rng=rng,
                                          gsparams=gsparams)
+                z = self.get_native_attribute('redshift')
+                size = self.get_knot_size(z) # get knot size
+                if size is not None:
+                    obj = galsim.Convolve(obj, galsim.Gaussian(sigma=size))
+                obj_dict[component] = obj
             else:
                 n = self.get_native_attribute(f'sersic_{component}')
                 # Quantize the n values at 0.05 so that galsim can
@@ -105,18 +136,14 @@ class GalaxyObject(BaseObject):
                 n = round(n*20.)/20.
                 obj = galsim.Sersic(n=n, half_light_radius=hlr,
                                     gsparams=gsparams)
+                obj_dict[component] = obj._shear(shear)
 
-            # NOTE: The minus signs in the next executable line are
-            # needed specifically for generating DC2-like from galaxy
-            # catalogs in the cosmoDC2 format. They are included here in
-            # order to reproduce the effect of adding 90 degrees to
-            # position angle in the old code. Newer input galaxy catalogs
-            # most likely will not need this adjustment
-            shear = galsim.Shear(g1=-e1, g2=-e2)
-            obj = obj._shear(shear)
-            g1, g2, mu = self.get_wl_params()
-            obj_dict[component] = obj._lens(g1, g2, mu)
+        # Apply lensing
+        g1, g2, mu = self.get_wl_params()
+        for component in self.subcomponents:
+            obj_dict[component] = obj_dict[component]._lens(g1, g2, mu)
         return obj_dict
+
 
     def get_observer_sed_component(self, component, mjd=None, resolution=None):
         sed, _ = self._get_sed(component=component, resolution=resolution)
