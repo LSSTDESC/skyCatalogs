@@ -194,7 +194,7 @@ class CatalogCreator:
                  main_only=False, flux_parallel=16, galaxy_nside=32,
                  galaxy_stride=1000000, provenance=None,
                  dc2=False, sn_object_type='sncosmo', galaxy_type='cosmodc2',
-                 include_nonLSST_flux=False):
+                 include_roman_flux=False):
         """
         Store context for catalog creation
 
@@ -239,7 +239,7 @@ class CatalogCreator:
                         to that for the DC2 run
         sn_object_type  Which object type to use for SNe.
         galaxy_type     Currently allowed values are cosmodc2 and diffsky
-        include_nonLSST_flux Calculate and write non-LSST flux values
+        include_roman_flux Calculate and write Roman flux values
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -314,7 +314,7 @@ class CatalogCreator:
         self._galaxy_nside = galaxy_nside
         self._provenance = provenance
         self._dc2 = dc2
-        self._include_nonLSST_flux = include_nonLSST_flux
+        self._include_roman_flux = include_roman_flux
 
         self._obs_sed_factory = None
 
@@ -377,20 +377,13 @@ class CatalogCreator:
         None
 
         """
-        # ####### Temporary #######
-        if self._galaxy_type == 'diffsky':
-            import sys
-            # sys.path.insert(0, '/hpc/group/cosmology/repos/roman_imsim/gcr-catalogs_diffsky_v0.1')
-            # for NERSC use
-            sys.path.insert(0, '/global/homes/k/kovacs/gcr-catalogs_diffsky_v0.1')
-        # #######  end Temporary #######
         import GCRCatalogs
 
         self._cat = None
 
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)
         self._gal_cat = gal_cat
-        
+
         # Save cosmology in case we need to write parameters out later
         self._cosmology = gal_cat.cosmology
 
@@ -650,7 +643,7 @@ class CatalogCreator:
 
         self._gal_flux_schema = make_galaxy_flux_schema(self._logname,
                                                         self._galaxy_type,
-                                                        include_nonLSST_flux=self._include_nonLSST_flux)
+                                                        include_roman_flux=self._include_roman_flux)
         self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
 
         if not config_file:

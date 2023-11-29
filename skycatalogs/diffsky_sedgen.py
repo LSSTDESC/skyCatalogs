@@ -111,12 +111,15 @@ class DiffskySedGenerator(CatalogCreator):
         self._n_per = n_per
         self._sed_out = sed_out
         # Setup thinned SSP templates for evaluating SED over
-        self._get_thinned_ssp_data(rel_err,wave_ang_min,wave_ang_max)
+        # ############### Temporary ############
+        from pathlib import Path
+        PACKAGE_SRC_DIR = os.path.dirname(os.path.abspath(str(Path(__file__))))
+        SKYCATALOGDATA_ROOT = os.path.join(PACKAGE_SRC_DIR, "data")
+        SINGLE_MET = os.path.join(SKYCATALOGDATA_ROOT, "dsps_ssp_data_singlemet.h5")
+        # ##############
 
-        # ####### Temporary #######
-        import sys
-        sys.path.insert(0, '/hpc/group/cosmology/repos/roman_imsim/gcr-catalogs_diffsky_v0.1')
-        # #######  end Temporary #######
+        self._get_thinned_ssp_data(rel_err,wave_ang_min,wave_ang_max,
+                                   SSP_file_name=SINGLE_MET)            # this arg. also temporary
         import GCRCatalogs
 
         gal_cat = GCRCatalogs.load_catalog(self._galaxy_truth)

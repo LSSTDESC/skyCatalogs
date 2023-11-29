@@ -86,6 +86,9 @@ parser.add_argument('--galaxy-type', default='cosmodc2',
 parser.add_argument('--galaxy-truth', default=None, help='''Truth catalog
                     on which skyCatalogs galaxies will be based. Default
                     depends on value of --galaxy-type option''')
+parser.add_argument('--include-roman-flux', action='store_true',
+                    help='If supplied calculate & store Roman as well as LSST  fluxes')
+
 args = parser.parse_args()
 
 if args.options_file:
@@ -135,7 +138,8 @@ creator = CatalogCreator(parts, area_partition=None,
                          galaxy_stride=args.galaxy_stride,
                          provenance=provenance,
                          dc2=args.dc2, galaxy_type=args.galaxy_type,
-                         galaxy_truth=args.galaxy_truth)
+                         galaxy_truth=args.galaxy_truth,
+                         include_roman_flux=args.include_roman_flux)
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
     logger.info("Creating galaxy catalogs")

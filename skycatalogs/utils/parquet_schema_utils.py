@@ -101,7 +101,7 @@ def make_galaxy_schema(logname, sed_subdir=False, knots=True,
 
 
 def make_galaxy_flux_schema(logname, galaxy_type='cosmodc2',
-                            include_nonLSST_flux=False):
+                            include_roman_flux=False):
     '''
     Will make a separate parquet file with lsst flux for each band
     and galaxy id for joining with the main galaxy file
@@ -116,20 +116,12 @@ def make_galaxy_flux_schema(logname, galaxy_type='cosmodc2',
               pa.field('lsst_flux_i', pa.float32(), True),
               pa.field('lsst_flux_z', pa.float32(), True),
               pa.field('lsst_flux_y', pa.float32(), True)]
-    if include_nonLSST_flux:
+    if include_roman_flux:
         fields = _add_roman_fluxes(fields)
-        # fields+=[pa.field('roman_flux_W146', pa.float32(), True),
-        #          pa.field('roman_flux_R062', pa.float32(), True),
-        #          pa.field('roman_flux_Z087', pa.float32(), True),
-        #          pa.field('roman_flux_Y106', pa.float32(), True),
-        #          pa.field('roman_flux_J129', pa.float32(), True),
-        #          pa.field('roman_flux_H158', pa.float32(), True),
-        #          pa.field('roman_flux_F184', pa.float32(), True),
-        #          pa.field('roman_flux_K213', pa.float32(), True)]
     return pa.schema(fields)
 
 
-def make_star_flux_schema(logname, include_nonLSST_flux=False):
+def make_star_flux_schema(logname, include_roman_flux=False):
     '''
     Will make a separate parquet file with lsst flux for each band
     and id for joining with the main star file
@@ -143,7 +135,7 @@ def make_star_flux_schema(logname, include_nonLSST_flux=False):
               pa.field('lsst_flux_i', pa.float32(), True),
               pa.field('lsst_flux_z', pa.float32(), True),
               pa.field('lsst_flux_y', pa.float32(), True)]
-    if include_nonLSST_flux:
+    if include_roman_flux:
         fields = _add_roman_fluxes(fields)
     return pa.schema(fields)
 
@@ -180,7 +172,7 @@ def make_pointsource_schema():
     return pa.schema(fields)
 
 
-def make_pointsource_flux_schema(logname, include_nonLSST_flux=False):
+def make_pointsource_flux_schema(logname, include_roman_flux=False):
     '''
     Will make a separate parquet file with lsst flux for each band
     and id for joining with the main star file.
@@ -197,6 +189,6 @@ def make_pointsource_flux_schema(logname, include_nonLSST_flux=False):
               pa.field('lsst_flux_z', pa.float32(), True),
               pa.field('lsst_flux_y', pa.float32(), True),
               pa.field('mjd', pa.float64(), True)]
-    if include_nonLSST_flux:
+    if include_roman_flux:
         fields = _add_roman_fluxes(fields)
     return pa.schema(fields)
