@@ -89,7 +89,7 @@ parser.add_argument('--galaxy-truth', default=None, help='''Truth catalog
 parser.add_argument('--include-roman-flux', action='store_true',
                     help='If supplied calculate & store Roman as well as LSST  fluxes')
 parser.add_argument('--star-input-fmt', default='sqlite',
-                    choice=['sqlite', 'parquet'], help='''
+                    choices=['sqlite', 'parquet'], help='''
                     star truth may come from either sqlite db or collection
                     of parquet files''')
 

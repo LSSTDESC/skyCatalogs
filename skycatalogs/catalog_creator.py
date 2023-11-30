@@ -283,6 +283,7 @@ class CatalogCreator:
         self._sn_object_type = sn_object_type
 
         self._star_truth = star_truth
+        self._star_input_fmt = star_input_fmt
         if self._star_truth is None:
             if self._star_input_fmt == 'sqlite':
                 self._star_truth = _star_db
@@ -322,7 +323,6 @@ class CatalogCreator:
         self._provenance = provenance
         self._dc2 = dc2
         self._include_roman_flux = include_roman_flux
-
         self._obs_sed_factory = None
 
     def _make_tophat_columns(self, dat, names, cmp):
