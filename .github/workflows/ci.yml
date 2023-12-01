@@ -49,8 +49,7 @@ jobs:
               run: |
                 mkdir rubin_sim_data
                 mkdir rubin_sim_data/sims_sed_library
-                # Just get the skybrightness, throughputs, and SED data for now.
-                curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/rubin_sim_data/skybrightness_may_2021.tgz | tar -C rubin_sim_data -xz
+                # Just get the throughputs and SED data for now.
                 curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/rubin_sim_data/throughputs_2023_09_07.tgz | tar -C rubin_sim_data -xz
                 curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/sed_library/seds_170124.tar.gz  | tar -C rubin_sim_data/sims_sed_library -xz
 

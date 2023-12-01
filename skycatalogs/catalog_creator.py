@@ -16,6 +16,7 @@ from .utils.config_utils import create_config, assemble_SED_models
 from .utils.config_utils import assemble_MW_extinction, assemble_cosmology
 from .utils.config_utils import assemble_object_types, assemble_provenance
 from .utils.config_utils import write_yaml
+from .utils.star_parquet_input import _star_parquet_reader
 from .utils.parquet_schema_utils import make_galaxy_schema
 from .utils.parquet_schema_utils import make_galaxy_flux_schema
 from .utils.parquet_schema_utils import make_star_flux_schema
@@ -194,7 +195,7 @@ class CatalogCreator:
                  main_only=False, flux_parallel=16, galaxy_nside=32,
                  galaxy_stride=1000000, provenance=None,
                  dc2=False, sn_object_type='sncosmo', galaxy_type='cosmodc2',
-                 include_roman_flux=False):
+                 include_roman_flux=False, star_input_fmt='sqlite'):
         """
         Store context for catalog creation
 
@@ -240,6 +241,7 @@ class CatalogCreator:
         sn_object_type  Which object type to use for SNe.
         galaxy_type     Currently allowed values are cosmodc2 and diffsky
         include_roman_flux Calculate and write Roman flux values
+        star_input_fmt  May be either 'sqlite' or 'parquet'
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -249,6 +251,8 @@ class CatalogCreator:
         _diffsky_cat = 'roman_rubin_2023_v1.1.1_elais'
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
         _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
+
+        _star_parquet = '/global/cfs/cdirs/descssim/postDC2/UW_star_catalog'
 
         self._galaxy_stride = galaxy_stride
         if pkg_root:
@@ -279,8 +283,12 @@ class CatalogCreator:
         self._sn_object_type = sn_object_type
 
         self._star_truth = star_truth
+        self._star_input_fmt = star_input_fmt
         if self._star_truth is None:
-            self._star_truth = _star_db
+            if self._star_input_fmt == 'sqlite':
+                self._star_truth = _star_db
+            elif self._star_input_fmt == 'parquet':
+                self._star_truth = _star_parquet
         self._cat = None
 
         self._parts = parts
@@ -315,7 +323,6 @@ class CatalogCreator:
         self._provenance = provenance
         self._dc2 = dc2
         self._include_roman_flux = include_roman_flux
-
         self._obs_sed_factory = None
 
     def _make_tophat_columns(self, dat, names, cmp):
@@ -830,19 +837,22 @@ class CatalogCreator:
 
         if star_cat:
             # Get data for this pixel
-            cols = ','.join(['format("%s",simobjid) as id', 'ra',
-                             'decl as dec',
-                             'magNorm as magnorm', 'mura', 'mudecl as mudec',
-                             'radialVelocity as radial_velocity', 'parallax',
-                             'sedFilename as sed_filepath', 'ebv'])
-            q = f'select {cols} from stars where hpid={pixel} '
-            with sqlite3.connect(star_cat) as conn:
-                star_df = pd.read_sql_query(q, conn)
-
-            star_df['sed_filepath'] = get_star_sed_path(star_df['sed_filepath'])
-
+            if self._star_input_fmt == 'sqlite':
+                cols = ','.join(['format("%s",simobjid) as id', 'ra',
+                                 'decl as dec', 'magNorm as magnorm', 'mura',
+                                 'mudecl as mudec',
+                                 'radialVelocity as radial_velocity',
+                                 'parallax',
+                                 'sedFilename as sed_filepath', 'ebv'])
+                q = f'select {cols} from stars where hpid={pixel} '
+                with sqlite3.connect(star_cat) as conn:
+                    star_df = pd.read_sql_query(q, conn)
+            elif self._star_input_fmt == 'parquet':
+                star_df = _star_parquet_reader(self._star_truth, pixel,
+                                               arrow_schema)
             nobj = len(star_df['id'])
             self._logger.debug(f'Found {nobj} stars')
+            star_df['sed_filepath'] = get_star_sed_path(star_df['sed_filepath'])
             star_df['object_type'] = np.full((nobj,), 'star')
             star_df['host_galaxy_id'] = np.zeros((nobj,), np.int64())
 
@@ -873,26 +883,29 @@ class CatalogCreator:
                 params_df = pd.read_sql_query(q2, conn)
 
             nobj = len(sn_df['ra'])
-            sn_df['object_type'] = np.full((nobj,), self._sn_object_type)
+            if nobj > 0:
+                sn_df['object_type'] = np.full((nobj,), self._sn_object_type)
 
-            sn_df['MW_rv'] = make_MW_extinction_rv(sn_df['ra'], sn_df['dec'])
-            sn_df['MW_av'] = make_MW_extinction_av(sn_df['ra'], sn_df['dec'])
+                sn_df['MW_rv'] = make_MW_extinction_rv(sn_df['ra'],
+                                                       sn_df['dec'])
+                sn_df['MW_av'] = make_MW_extinction_av(sn_df['ra'],
+                                                       sn_df['dec'])
 
-            # Add fillers for columns not relevant for sn
-            sn_df['sed_filepath'] = np.full((nobj), '')
-            sn_df['magnorm'] = np.full((nobj,), None)
-            sn_df['mura'] = np.full((nobj,), None)
-            sn_df['mudec'] = np.full((nobj,), None)
-            sn_df['radial_velocity'] = np.full((nobj,), None)
-            sn_df['parallax'] = np.full((nobj,), None)
-            sn_df['variability_model'] = np.full((nobj,), 'salt2_extended')
+                # Add fillers for columns not relevant for sn
+                sn_df['sed_filepath'] = np.full((nobj), '')
+                sn_df['magnorm'] = np.full((nobj,), None)
+                sn_df['mura'] = np.full((nobj,), None)
+                sn_df['mudec'] = np.full((nobj,), None)
+                sn_df['radial_velocity'] = np.full((nobj,), None)
+                sn_df['parallax'] = np.full((nobj,), None)
+                sn_df['variability_model'] = np.full((nobj,), 'salt2_extended')
 
-            # Form array of struct from params_df
-            sn_df['salt2_params'] = params_df.to_records(index=False)
-            out_table = pa.Table.from_pandas(sn_df, schema=arrow_schema)
-            self._logger.debug('Created arrow table from sn dataframe')
+                # Form array of struct from params_df
+                sn_df['salt2_params'] = params_df.to_records(index=False)
+                out_table = pa.Table.from_pandas(sn_df, schema=arrow_schema)
+                self._logger.debug('Created arrow table from sn dataframe')
 
-            writer.write_table(out_table)
+                writer.write_table(out_table)
 
         writer.close()
         if self._provenance == 'yaml':

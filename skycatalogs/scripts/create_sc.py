@@ -88,6 +88,10 @@ parser.add_argument('--galaxy-truth', default=None, help='''Truth catalog
                     depends on value of --galaxy-type option''')
 parser.add_argument('--include-roman-flux', action='store_true',
                     help='If supplied calculate & store Roman as well as LSST  fluxes')
+parser.add_argument('--star-input-fmt', default='sqlite',
+                    choices=['sqlite', 'parquet'], help='''
+                    star truth may come from either sqlite db or collection
+                    of parquet files''')
 
 args = parser.parse_args()
 
@@ -139,7 +143,8 @@ creator = CatalogCreator(parts, area_partition=None,
                          provenance=provenance,
                          dc2=args.dc2, galaxy_type=args.galaxy_type,
                          galaxy_truth=args.galaxy_truth,
-                         include_roman_flux=args.include_roman_flux)
+                         include_roman_flux=args.include_roman_flux,
+                         star_input_fmt=args.star_input_fmt)
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
     logger.info("Creating galaxy catalogs")
