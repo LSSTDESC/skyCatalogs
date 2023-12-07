@@ -191,8 +191,8 @@ class CatalogCreator:
                  output_type='parquet', mag_cut=None,
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator',
-                 pkg_root=None, skip_done=False, flux_only=False,
-                 main_only=False, flux_parallel=16, galaxy_nside=32,
+                 pkg_root=None, skip_done=False, no_main=False,
+                 no_flux=False, flux_parallel=16, galaxy_nside=32,
                  galaxy_stride=1000000, provenance=None,
                  dc2=False, sn_object_type='sncosmo', galaxy_type='cosmodc2',
                  include_roman_flux=False, star_input_fmt='sqlite'):
@@ -230,8 +230,8 @@ class CatalogCreator:
         skip_done       If True, skip over files which already exist. Otherwise
                         (by default) overwrite with new version.
                         Output info message in either case if file exists.
-        flux_only       Only create flux files, not main files
-        main_only       Only create main files, not flux files
+        no_main         Do not create main files
+        no_flux         Do not create flux files
         flux_parallel   Number of processes to divide work of computing fluxes
         galaxy_nside    Healpix configuration value "nside" for galaxy output
         galaxy_stride   Max number of rows per galaxy row group
@@ -316,8 +316,8 @@ class CatalogCreator:
         self._logname = logname
         self._logger = logging.getLogger(logname)
         self._skip_done = skip_done
-        self._flux_only = flux_only
-        self._main_only = main_only
+        self._no_main = no_main
+        self._no_flux = no_flux
         self._flux_parallel = flux_parallel
         self._galaxy_nside = galaxy_nside
         self._provenance = provenance
@@ -362,14 +362,14 @@ class CatalogCreator:
         None
         """
         if catalog_type == ('galaxy'):
-            if not self._flux_only:
+            if not self._no_main:
                 self.create_galaxy_catalog()
-            if not self._main_only:
+            if not self._no_flux:
                 self.create_galaxy_flux_catalog()
         elif catalog_type == ('pointsource'):
-            if not self._flux_only:
+            if not self._no_main:
                 self.create_pointsource_catalog()
-            if not self._main_only:
+            if not self._no_flux:
                 self.create_pointsource_flux_catalog()
         else:
             raise NotImplementedError(f'CatalogCreator.create: unsupported catalog type {catalog_type}')
@@ -647,6 +647,7 @@ class CatalogCreator:
         '''
 
         from .skyCatalogs import open_catalog
+        self._sed_gen = None
 
         self._gal_flux_schema = make_galaxy_flux_schema(self._logname,
                                                         self._galaxy_type,
@@ -666,6 +667,17 @@ class CatalogCreator:
         self.object_type = 'galaxy'
         if self._galaxy_type == 'diffsky':
             self.object_type = 'diffsky_galaxy'
+            from .diffsky_sedgen import DiffskySedGenerator
+            # Default values are ok for all the diffsky-specific
+            # parameters: include_nonLSST_flux, sed_parallel, auto_loop,
+            # wave_ang_min, wave_ang_max, rel_err, n_per
+            self._sed_gen = DiffskySedGenerator(logname=self._logname,
+                                                galaxy_truth=self._galaxy_truth,
+                                                output_dir=self._output_dir,
+                                                skip_done=True,
+                                                sky_cat=self._cat)
+
+
         self._flux_template = self._cat.raw_config['object_types'][self.object_type]['flux_file_template']
 
         self._logger.info('Creating galaxy flux files')
@@ -706,6 +718,10 @@ class CatalogCreator:
             else:
                 self._logger.info(f'Skipping regeneration of {output_path}')
                 return
+
+        if self._galaxy_type == 'diffsky':
+            # Generate SEDs if necessary
+            self._sed_gen.generate_pixel(pixel)
 
         # If there are multiple row groups, each is stored in a separate
         # object collection. Need to loop over them
