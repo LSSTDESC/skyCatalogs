@@ -719,13 +719,17 @@ class CatalogCreator:
                 self._logger.info(f'Skipping regeneration of {output_path}')
                 return
 
+        # If there are multiple row groups, each is stored in a separate
+        # object collection. Need to loop over them
+        object_list = self._cat.get_object_type_by_hp(pixel, self.object_type)
+        if len(object_list) == 0:
+            self._logger.warning(f'Cannot create flux file for pixel {pixel} because main file does not exist or is empty')
+            return
+
         if self._galaxy_type == 'diffsky':
             # Generate SEDs if necessary
             self._sed_gen.generate_pixel(pixel)
 
-        # If there are multiple row groups, each is stored in a separate
-        # object collection. Need to loop over them
-        object_list = self._cat.get_object_type_by_hp(pixel, self.object_type)
         writer = None
         global _galaxy_collection
         global _instrument_needed

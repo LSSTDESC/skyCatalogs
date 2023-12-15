@@ -9,7 +9,6 @@ from lsstdesc_diffsky.io_utils import load_diffsky_params
 from lsstdesc_diffsky.legacy.roman_rubin_2023.dsps.data_loaders.load_ssp_data import load_ssp_templates_singlemet
 from lsstdesc_diffsky.legacy.roman_rubin_2023.dsps.data_loaders.defaults import SSPDataSingleMet
 from lsstdesc_diffsky.defaults import OUTER_RIM_COSMO_PARAMS
-#from lsstdesc_diffsky.sed.disk_bulge_sed_kernels_singlemet import calc_rest_sed_disk_bulge_knot_singlegal
 from lsstdesc_diffsky.sed.disk_bulge_sed_kernels_singlemet import calc_rest_sed_disk_bulge_knot_galpop
 all_diffskypop_params = read_diffskypop_params("roman_rubin_2023")
 from .catalog_creator import CatalogCreator
@@ -78,21 +77,24 @@ class DiffskySedGenerator():
     output_dir      Where diffsky parquet files are
     sky_cat         To get access to skyCatalogs main files already written
                     Must be a non-null SkyCatalog object.
-    auto_loop       Iterate over all pixels?
+    skip_done       If false, overwrite existing files
+    auto_loop       If true, immediately loop through pixels in 'parts'
     rel_err         Target relative tolerance for flux integral.
     wave_ang_min    Minimum wavelength to keep in SEDs.
     wave_ang_max    Maximum wavelength to keep in SEDs.
     n_per           Number of SEDs to batch calculate in diffsky.
                     Memory footprint increases nonlinearly with larger n_per
     sed_out         If SEDs are to go somewhere other than usual output_dir
+    parts           Pixels for which SEDs are created (only used if auto_loop
+                    is True
     '''
 
     def __init__(self, logname='skyCatalogs.creator', galaxy_truth=None,
                  output_dir=None, sky_cat=None, skip_done=True,
-                 include_roman_flux=False, auto_loop=False,
-                 wave_ang_min=500, wave_ang_max=100000, rel_err=0.03,
-                 n_per=10000, sed_out=None):       ### temp setting for n_per
-        ## self._galaxy_truth = galaxy_truth
+                 auto_loop=False,
+                 wave_ang_min=500, wave_ang_max=100000,
+                 rel_err=0.03, n_per=100000,
+                 sed_out=None, parts=None):
         self._output_dir = output_dir
         self._cat = sky_cat
         self._logger = logging.getLogger(logname)
@@ -116,30 +118,10 @@ class DiffskySedGenerator():
         self._hdf5_root_dir = gal_cat.get_catalog_info()['catalog_root_dir']
         self._hdf5_name_template = gal_cat.get_catalog_info()['catalog_filename_template']
 
-        self.pix_iter = 0
         if auto_loop:
             # Loop over necessary pixels
             for p in self._parts:
-                self.iterate_pixel()
-
-    def iterate_pixel(self, pix=None):
-        """
-        Iterates to next/target pixel.
-        Parameters
-        ----------
-        pix     Optional pixel list index.
-        """
-        if pix is None:
-            p = self._parts[self.pix_iter]
-        elif pix>=len(self._parts):
-            self._logger.error(f'Tried to calculate for pixel index {pix} outsid pixel list.')
-            return
-        else:
-            p = self._parts[pix]
-        self._logger.info(f'Starting on pixel {p}')
-        self.generate_pixel(p)
-        self._logger.info(f'Completed pixel {p}')
-        self.pix_iter+=1
+                self.generate_pixel(p)
 
     def _get_thinned_ssp_data(  self,
                                 rel_err,
@@ -238,11 +220,17 @@ class DiffskySedGenerator():
 
     def generate_pixel(self, pixel):
         """
-        Iterates to next/target pixel.
         Parameters
         ----------
         pixel     Pixel to generate SEDs for.
         """
+
+        # Check that main file for this pixel exists and has some
+        # data for us  If not, issue warning and return.
+        object_list = self._cat.get_object_type_by_hp(pixel, 'diffsky_galaxy')
+        if len(object_list) == 0:
+            self._logger.warning(f'No sky catalog data for pixel {pixel}\nCannot create SEDs')
+            return
 
         # Load diffsky galaxy data
         diffsky_galaxy_id,redshift,mah_params, \
@@ -276,12 +264,11 @@ class DiffskySedGenerator():
         for g in np.unique(diffsky_galaxy_id//100000):
             h5_groups[g]=f.create_group('galaxy/'+str(g))
 
-        # If there are multiple row groups, each is stored in a separate
-        # object collection. Need to loop over them
-        object_list = self._cat.get_object_type_by_hp(pixel, 'diffsky_galaxy')
 
         tmp_store = np.zeros((3,len(self.ssp_data.ssp_wave)),dtype='f4')
         # Loop over object collections to do SED calculations
+        # If there are multiple row groups, each is stored in a separate
+        # object collection. Need to loop over them
         for object_coll in object_list.get_collections():
             _galaxy_collection = object_coll
             galaxy_id = object_coll.get_native_attribute('galaxy_id')
