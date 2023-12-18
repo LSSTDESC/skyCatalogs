@@ -34,6 +34,7 @@ __all__ = ['CatalogCreator']
 _MW_rv_constant = 3.1
 _nside_allowed = 2**np.arange(15)
 
+
 def _get_tophat_info(columns):
     '''
     Parameters
@@ -150,7 +151,8 @@ def _generate_subpixel_masks(ra, dec, subpixels, nside=32):
 # Collection of galaxy objects for current row group, current pixel
 # Used while doing flux computation
 
-def _do_galaxy_flux_chunk(send_conn, galaxy_collection, instrument_needed, l_bnd, u_bnd):
+def _do_galaxy_flux_chunk(send_conn, galaxy_collection, instrument_needed,
+                          l_bnd, u_bnd):
     '''
     output connection
     l_bnd, u_bnd     demarcates slice to process
@@ -501,8 +503,8 @@ class CatalogCreator:
             # to_fetch = all columns of interest in gal_cat
             non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'redshiftHubble',
                        'peculiarVelocity', 'shear_1', 'shear_2',
-                       'convergence',
-                       'size_bulge_true', 'size_minor_bulge_true', 'sersic_bulge',
+                       'convergence', 'size_bulge_true',
+                       'size_minor_bulge_true', 'sersic_bulge',
                        'size_disk_true', 'size_minor_disk_true', 'sersic_disk']
             if self._dc2:
                 non_sed += ['ellipticity_1_disk_true_dc2',
@@ -535,7 +537,7 @@ class CatalogCreator:
                         'convergence', 'diskEllipticity1', 'diskEllipticity2',
                         'spheroidEllipticity1', 'spheroidEllipticity2',
                         'spheroidHalfLightRadiusArcsec',
-                        'diskHalfLightRadiusArcsec','um_source_galaxy_obs_sm']
+                        'diskHalfLightRadiusArcsec', 'um_source_galaxy_obs_sm']
 
         # df is not a dataframe!  It's just a dict
         if not self._mag_cut:
@@ -562,12 +564,14 @@ class CatalogCreator:
                 to_rename['ellipticity_2_bulge_true_dc2'] = 'ellipticity_2_bulge_true'
 
             if self._sed_subdir:
-                #  Generate full paths for disk and bulge SED files, even though
+                #  Generate full paths for disk and bulge SED files even though
                 #  we don't actually write the files here
                 df['bulge_sed_file_path'] =\
-                    generate_sed_path(df['galaxy_id'], self._sed_subdir, 'bulge')
+                    generate_sed_path(df['galaxy_id'], self._sed_subdir,
+                                      'bulge')
                 df['disk_sed_file_path'] =\
-                    generate_sed_path(df['galaxy_id'], self._sed_subdir, 'disk')
+                    generate_sed_path(df['galaxy_id'], self._sed_subdir,
+                                      'disk')
 
             if self._knots:
                 # adjust disk sed; create knots sed
@@ -605,7 +609,8 @@ class CatalogCreator:
 
                 if self._galaxy_type == 'cosmodc2':
                     compressed = self._make_tophat_columns(compressed,
-                                                           sed_disk_names, 'disk')
+                                                           sed_disk_names,
+                                                           'disk')
                     compressed = self._make_tophat_columns(compressed,
                                                            sed_bulge_names,
                                                            'bulge')
@@ -649,9 +654,9 @@ class CatalogCreator:
         from .skyCatalogs import open_catalog
         self._sed_gen = None
 
-        self._gal_flux_schema = make_galaxy_flux_schema(self._logname,
-                                                        self._galaxy_type,
-                                                        include_roman_flux=self._include_roman_flux)
+        self._gal_flux_schema =\
+            make_galaxy_flux_schema(self._logname, self._galaxy_type,
+                                    include_roman_flux=self._include_roman_flux)
         self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
 
         if not config_file:
@@ -676,7 +681,6 @@ class CatalogCreator:
                                                 output_dir=self._output_dir,
                                                 skip_done=True,
                                                 sky_cat=self._cat)
-
 
         self._flux_template = self._cat.raw_config['object_types'][self.object_type]['flux_file_template']
 
@@ -780,7 +784,8 @@ class CatalogCreator:
                     # For debugging call directly
                     proc = Process(target=_do_galaxy_flux_chunk,
                                    name=f'proc_{i}',
-                                   args=(conn_wrt, _galaxy_collection, _instrument_needed, lb, u))
+                                   args=(conn_wrt, _galaxy_collection,
+                                         _instrument_needed, lb, u))
                     proc.start()
                     p_list.append(proc)
                     lb = u

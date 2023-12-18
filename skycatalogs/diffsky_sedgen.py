@@ -11,16 +11,15 @@ from lsstdesc_diffsky.legacy.roman_rubin_2023.dsps.data_loaders.defaults import 
 from lsstdesc_diffsky.defaults import OUTER_RIM_COSMO_PARAMS
 from lsstdesc_diffsky.sed.disk_bulge_sed_kernels_singlemet import calc_rest_sed_disk_bulge_knot_galpop
 all_diffskypop_params = read_diffskypop_params("roman_rubin_2023")
-from .catalog_creator import CatalogCreator
-from .skyCatalogs import open_catalog
 
 __all__ = ['DiffskySedGenerator']
+
 
 def _calculate_sed_multi(send_conn, _redshift, _mah_params, _ms_params,
                          _q_params, _fbulge_params, _fknot, _ssp_data,
                          galaxy_id, n_per):
     def _calc_seds(_redshift, _mah_params, _ms_params, _q_params,
-                    _fbulge_params, _fknot, _ssp_data, l_bnd, u_bnd, n_per):
+                   _fbulge_params, _fknot, _ssp_data, l_bnd, u_bnd, n_per):
         # Documentation for calculation available here:
         # https://lsstdesc-diffsky.readthedocs.io/en/latest/demo_roman_rubin_2023_seds_singlemet.html
         args = (_redshift[l_bnd:u_bnd],
@@ -42,21 +41,21 @@ def _calculate_sed_multi(send_conn, _redshift, _mah_params, _ms_params,
     flux_factor = 4.0204145742268754e-16
 
     # Iterate over chunks of n_per
-    l_bnd=0
-    u_bnd=len(galaxy_id)
+    l_bnd = 0
+    u_bnd = len(galaxy_id)
     out_list = []
     lb = l_bnd
     u = min(l_bnd + n_per, u_bnd)
     for i in range((u_bnd-l_bnd)//n_per+1):
-        if lb==u:
+        if lb == u:
             break
-        sed_info = _calc_seds(_redshift,_mah_params,_ms_params,_q_params,
-                                _fbulge_params,_fknot,_ssp_data,lb,u,n_per)
+        sed_info = _calc_seds(_redshift, _mah_params, _ms_params, _q_params,
+                              _fbulge_params, _fknot, _ssp_data, lb, u, n_per)
         # Accumulate output chunks
-        out_list.append({'galaxy_id':galaxy_id[lb:u],
-                        'bulge':sed_info.rest_sed_bulge*flux_factor,
-                        'disk':sed_info.rest_sed_diffuse_disk*flux_factor,
-                        'knots':sed_info.rest_sed_knot*flux_factor})
+        out_list.append({'galaxy_id': galaxy_id[lb:u],
+                         'bulge': sed_info.rest_sed_bulge*flux_factor,
+                         'disk': sed_info.rest_sed_diffuse_disk*flux_factor,
+                         'knots': sed_info.rest_sed_knot*flux_factor})
         lb = u
         u = min(lb + n_per, u_bnd)
 
@@ -68,8 +67,8 @@ def _calculate_sed_multi(send_conn, _redshift, _mah_params, _ms_params,
 
 class DiffskySedGenerator():
     '''
-    Used for evaluating and storing diffsky galaxy SEDs, which are represented with
-    an adaptively thinned spectrum and stored in an hdf5 file.
+    Used for evaluating and storing diffsky galaxy SEDs, which are
+    represented with an adaptively thinned spectrum and stored in an hdf5 file.
     Parameters
     ----------
     logname         Where to write log output
@@ -107,10 +106,11 @@ class DiffskySedGenerator():
         from pathlib import Path
         PACKAGE_SRC_DIR = os.path.dirname(os.path.abspath(str(Path(__file__))))
         SKYCATALOGDATA_ROOT = os.path.join(PACKAGE_SRC_DIR, "data")
-        SINGLE_MET = os.path.join(SKYCATALOGDATA_ROOT, "dsps_ssp_data_singlemet.h5")
+        SINGLE_MET = os.path.join(SKYCATALOGDATA_ROOT,
+                                  "dsps_ssp_data_singlemet.h5")
         # ##############
 
-        self._get_thinned_ssp_data(rel_err,wave_ang_min,wave_ang_max,
+        self._get_thinned_ssp_data(rel_err, wave_ang_min, wave_ang_max,
                                    SSP_file_name=SINGLE_MET)
         import GCRCatalogs
         gal_cat = GCRCatalogs.load_catalog(galaxy_truth)
@@ -123,11 +123,11 @@ class DiffskySedGenerator():
             for p in self._parts:
                 self.generate_pixel(p)
 
-    def _get_thinned_ssp_data(  self,
-                                rel_err,
-                                wave_ang_min,
-                                wave_ang_max,
-                                SSP_file_name='dsps_ssp_data_singlemet.h5'):
+    def _get_thinned_ssp_data(self,
+                              rel_err,
+                              wave_ang_min,
+                              wave_ang_max,
+                              SSP_file_name='dsps_ssp_data_singlemet.h5'):
         """
         Return thinned SSP templates.
         Parameters
@@ -153,7 +153,7 @@ class DiffskySedGenerator():
             x=ssp_wave_nm[mask], f=np.sum(ssp_data.ssp_flux[:, mask], axis=0)
         )
         sed = galsim.SED(sed_lut, wave_type="nm",
-                        flux_type="flambda", redshift=0.0)
+                         flux_type="flambda", redshift=0.0)
 
         # Thin template sum to target tolerance.
         sed2 = sed.thin(rel_err=rel_err, fast_search=False)
@@ -164,16 +164,16 @@ class DiffskySedGenerator():
         thin_ssp_wave_ang = ssp_data.ssp_wave[mask][mask2]
         thin_ssp_flux = ssp_data.ssp_flux[:, mask][:, mask2]
         self.ssp_data = SSPDataSingleMet(ssp_data.ssp_lg_age_gyr,
-                                        thin_ssp_wave_ang, thin_ssp_flux)
+                                         thin_ssp_wave_ang, thin_ssp_flux)
 
-    def _combine_col(self,cnt,col1,col2,col3):
-        if len(np.shape(col1))>1:
-            tmp = np.zeros((cnt,np.shape(col1)[1]),dtype=col1.dtype)
-            tmp[0:len(col1),:] = col1
-            tmp[len(col1):len(col1)+len(col2),:] = col2
-            tmp[len(col1)+len(col2):len(col1)+len(col2)+len(col3),:] = col3
+    def _combine_col(self, cnt, col1, col2, col3):
+        if len(np.shape(col1)) > 1:
+            tmp = np.zeros((cnt, np.shape(col1)[1]), dtype=col1.dtype)
+            tmp[0:len(col1), :] = col1
+            tmp[len(col1):len(col1)+len(col2), :] = col2
+            tmp[len(col1)+len(col2):len(col1)+len(col2)+len(col3), :] = col3
         else:
-            tmp = np.zeros(cnt,dtype=col1.dtype)
+            tmp = np.zeros(cnt, dtype=col1.dtype)
             tmp[0:len(col1)] = col1
             tmp[len(col1):len(col1)+len(col2)] = col2
             tmp[len(col1)+len(col2):len(col1)+len(col2)+len(col3)] = col3
@@ -187,11 +187,13 @@ class DiffskySedGenerator():
         mock1, metadata = load_healpixel(hdf5_file_path)
         diffsky_param_data1 = load_diffsky_params(mock1)
         hdf5_file_path = os.path.join(self._hdf5_root_dir,
-            self._hdf5_name_template.format(1, 2, pixel))
+                                      self._hdf5_name_template.format(1, 2,
+                                                                      pixel))
         mock2, metadata = load_healpixel(hdf5_file_path)
         diffsky_param_data2 = load_diffsky_params(mock2)
         hdf5_file_path = os.path.join(self._hdf5_root_dir,
-            self._hdf5_name_template.format(2, 3, pixel))
+                                      self._hdf5_name_template.format(2, 3,
+                                                                      pixel))
         mock3, metadata = load_healpixel(hdf5_file_path)
         diffsky_param_data3 = load_diffsky_params(mock3)
         cnt = len(mock1['galaxy_id'])+len(mock2['galaxy_id'])+len(mock3['galaxy_id'])
@@ -216,7 +218,7 @@ class DiffskySedGenerator():
                                   diffsky_param_data2.fknot,
                                   diffsky_param_data3.fknot)
 
-        return galaxy_id,redshift,mah_params,ms_params,q_params,fbulge_params,fknot
+        return galaxy_id, redshift, mah_params, ms_params, q_params, fbulge_params, fknot
 
     def generate_pixel(self, pixel):
         """
@@ -233,8 +235,8 @@ class DiffskySedGenerator():
             return
 
         # Load diffsky galaxy data
-        diffsky_galaxy_id,redshift,mah_params, \
-        ms_params,q_params,fbulge_params,fknot \
+        diffsky_galaxy_id, redshift, mah_params, \
+            ms_params, q_params, fbulge_params, fknot \
             = self._load_diffsky_data(pixel)
 
         # Set up output file
@@ -252,36 +254,31 @@ class DiffskySedGenerator():
                 return
 
         # Set up h5 file and metadata on wavelengths
-        f = h5py.File(output_path,'w',libver='latest')
+        f = h5py.File(output_path, 'w', libver='latest')
         _ = f.create_dataset('meta/wave_list',
-                            maxshape=(len(self.ssp_data.ssp_wave),),
-                            shape=(len(self.ssp_data.ssp_wave),),
-                            dtype='f4', #compression="gzip",
-                            #compression_opts=9,
-                            data=self.ssp_data.ssp_wave)
+                             maxshape=(len(self.ssp_data.ssp_wave),),
+                             shape=(len(self.ssp_data.ssp_wave),),
+                             dtype='f4',  # compression="gzip",
+                             # compression_opts=9,
+                             data=self.ssp_data.ssp_wave)
         # Set up hdf5 groups
-        h5_groups={}
+        h5_groups = {}
         for g in np.unique(diffsky_galaxy_id//100000):
-            h5_groups[g]=f.create_group('galaxy/'+str(g))
+            h5_groups[g] = f.create_group('galaxy/'+str(g))
 
-
-        tmp_store = np.zeros((3,len(self.ssp_data.ssp_wave)),dtype='f4')
+        tmp_store = np.zeros((3, len(self.ssp_data.ssp_wave)), dtype='f4')
         # Loop over object collections to do SED calculations
         # If there are multiple row groups, each is stored in a separate
         # object collection. Need to loop over them
         for object_coll in object_list.get_collections():
-            _galaxy_collection = object_coll
             galaxy_id = object_coll.get_native_attribute('galaxy_id')
             rg_written = 0
             self._logger.debug(f'Handling range 0 to {len(galaxy_id)}')
-            readers = []
 
             # Limit objects to those in the matching skycatalog
-            mask              = np.in1d(diffsky_galaxy_id,galaxy_id)
+            mask = np.in1d(diffsky_galaxy_id, galaxy_id)
 
             # Build output SED data chunks
-            out_dict = []
-
             out_list = _calculate_sed_multi(None,
                                             redshift[mask],
                                             mah_params[mask],
@@ -292,21 +289,22 @@ class DiffskySedGenerator():
                                             self.ssp_data,
                                             diffsky_galaxy_id[mask],
                                             self._n_per)
-            ichunk=0
+            ichunk = 0
             for chunk in out_list:
-                print('chunk',ichunk)
-                ichunk+=1
-                for igid,gid in enumerate(chunk['galaxy_id']):
-                    tmp_store[0,:] = chunk['bulge'][igid,:]
-                    tmp_store[1,:] = chunk['disk'][igid,:]
-                    tmp_store[2,:] = chunk['knots'][igid,:]
-                    _ = h5_groups[gid//100000].create_dataset(str(gid),
-                                        maxshape=(3,len(self.ssp_data.ssp_wave),),
-                                        shape=(3,len(self.ssp_data.ssp_wave),),
-                                        dtype='f4', #compression="gzip",
-                                        #compression_opts=9,
-                                        data=tmp_store)
-
+                print('chunk', ichunk)
+                ichunk += 1
+                for igid, gid in enumerate(chunk['galaxy_id']):
+                    tmp_store[0, :] = chunk['bulge'][igid, :]
+                    tmp_store[1, :] = chunk['disk'][igid, :]
+                    tmp_store[2, :] = chunk['knots'][igid, :]
+                    _ = h5_groups[gid//100000].\
+                        create_dataset(str(gid),
+                                       maxshape=(3,
+                                                 len(self.ssp_data.ssp_wave),),
+                                       shape=(3, len(self.ssp_data.ssp_wave),),
+                                       dtype='f4',  # compression="gzip",
+                                       # compression_opts=9,
+                                       data=tmp_store)
             rg_written += 1
 
         f.close()
