@@ -118,6 +118,8 @@ class DiffskySedGenerator():
         self._hdf5_root_dir = gal_cat.get_catalog_info()['catalog_root_dir']
         self._hdf5_name_template = gal_cat.get_catalog_info()['catalog_filename_template']
 
+        if self._output_dir is None:
+            self._output_dir = sky_cat._cat_dir
         if auto_loop:
             # Loop over necessary pixels
             for p in self._parts:

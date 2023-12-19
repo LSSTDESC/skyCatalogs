@@ -251,6 +251,8 @@ class CatalogCreator:
 
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
         _diffsky_cat = 'roman_rubin_2023_v1.1.1_elais'
+        # When it's officially available, default will be newer version:
+        # _diffsky_cat = 'roman_rubin_2023_v1.1.2_elais'
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
         _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
 

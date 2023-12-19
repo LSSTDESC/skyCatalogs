@@ -79,18 +79,15 @@ if not skycatalog_root:
 from skycatalogs.skyCatalogs import open_catalog
 
 sky_cat = open_catalog(args.config_path, skycatalog_root=skycatalog_root)
-parts = args.pixels
-# if args.provenance:
-#     provenance = args.provenance
-# else:
-#     provenance = None
-
 from skycatalogs.diffsky_sedgen import DiffskySedGenerator
 
 # hard-code for now.  Should be able to retrieve galaxy truth from sky_cat
 galaxy_truth = args.galaxy_truth
 if galaxy_truth is None:
     galaxy_truth = 'roman_rubin_2023_v1.1.1_elais'
+    # Change to
+    #  galaxy_truth = 'roman_rubin_2023_v1.1.2_elais'
+    # when v1.1.2 is officially in GCRCatalogs
 
 creator = DiffskySedGenerator(logname=logname, galaxy_truth=galaxy_truth,
                               output_dir=args.output_dir, sky_cat=sky_cat,
