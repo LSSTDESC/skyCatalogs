@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Try out CatalogCreator
 # Note: root dir for SED files is $SIMS_SED_LIBRARY_DIR, defined by
 #       LSST Science Pipelines setup
