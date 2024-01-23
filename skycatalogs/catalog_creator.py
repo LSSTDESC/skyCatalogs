@@ -23,7 +23,7 @@ from .utils.parquet_schema_utils import make_star_flux_schema
 from .utils.parquet_schema_utils import make_pointsource_schema
 from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.base_object import LSST_BANDS
-from .objects.base_object import ROMAN_BANDS
+#from .objects.base_object import ROMAN_BANDS
 
 """
 Code to create a sky catalog for particular object types
@@ -868,7 +868,8 @@ class CatalogCreator:
 
             writer.write_table(out_table)
 
-        if sn_cat:
+#        if sn_cat:
+        if False:
             # Get data for this pixel
             cols = ','.join(['snid_in as id', 'snra_in as ra',
                              'sndec_in as dec', 'galaxy_id as host_galaxy_id'])

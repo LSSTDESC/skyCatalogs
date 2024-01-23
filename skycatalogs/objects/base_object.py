@@ -4,9 +4,9 @@ import os
 import itertools
 import numpy as np
 import galsim
-from galsim.roman import longwave_bands as roman_longwave_bands
-from galsim.roman import shortwave_bands as roman_shortwave_bands
-from galsim.roman import getBandpasses as roman_getBandpasses
+#from galsim.roman import longwave_bands as roman_longwave_bands
+#from galsim.roman import shortwave_bands as roman_shortwave_bands
+#from galsim.roman import getBandpasses as roman_getBandpasses
 
 from skycatalogs.utils.translate_utils import form_object_string
 from skycatalogs.utils.config_utils import Config
@@ -18,11 +18,11 @@ form of their associated SEDs
 '''
 
 __all__ = ['BaseObject', 'ObjectCollection', 'ObjectList',
-           'LSST_BANDS', 'ROMAN_BANDS',
+           'LSST_BANDS', #'ROMAN_BANDS',
            'load_lsst_bandpasses', 'load_roman_bandpasses']
 
 LSST_BANDS = ('ugrizy')
-ROMAN_BANDS = roman_shortwave_bands+roman_longwave_bands
+#ROMAN_BANDS = roman_shortwave_bands+roman_longwave_bands
 
 # global for easy access for code run within mp
 
