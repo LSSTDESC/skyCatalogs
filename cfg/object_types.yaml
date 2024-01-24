@@ -100,3 +100,10 @@ object_types :
         { type: healpix, ordering : ring, nside : 32}
       sed_model : snana
       internal_extinction : None
+  sso :
+      file_template : 'sso_(?P<min_mjd>\d+)_(?P<max_mjd>\d+).parquet'
+      flux_file_template : 'sso_flux_(?P<min_mjd>\d+)_(?P<max_mjd>\d+).parquet'
+      data_file_type : parquet
+      area_partition : None
+      time_partition : mjd
+      sed_model : file_angstrom
