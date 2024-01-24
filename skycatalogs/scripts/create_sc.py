@@ -92,6 +92,14 @@ parser.add_argument('--star-input-fmt', default='sqlite',
                     choices=['sqlite', 'parquet'], help='''
                     star truth may come from either sqlite db or collection
                     of parquet files''')
+parser.add_argument('--sso-truth', default=None, help='''
+                    directory containing SSO truth, used to construct
+                    SSO catalogs''')
+parser.add_argument('--sso-sed', default=None, help='''
+                    path to sqlite file containing SED to be used
+                    for all SSOs''')
+parser.add_argument('--sso', action='store_true',
+                    help='''If provided output SSO catalog''')
 
 args = parser.parse_args()
 
@@ -144,7 +152,8 @@ creator = CatalogCreator(parts, area_partition=None,
                          dc2=args.dc2, galaxy_type=args.galaxy_type,
                          galaxy_truth=args.galaxy_truth,
                          include_roman_flux=args.include_roman_flux,
-                         star_input_fmt=args.star_input_fmt)
+                         star_input_fmt=args.star_input_fmt,
+                         sso_truth=args.sso_truth, sso_sed=args.sso_sed)
 logger.info(f'Starting with healpix pixel {parts[0]}')
 if not args.no_galaxies:
     logger.info("Creating galaxy catalogs")
@@ -154,6 +163,9 @@ if not args.no_pointsources:
     logger.info("Creating point source catalogs")
     creator.create('pointsource')
 
-
+if args.sso:
+    logger.info("Creating SSO catalogs")
+    creator.create('sso')
+    
 logger.info('All done')
 print_date()

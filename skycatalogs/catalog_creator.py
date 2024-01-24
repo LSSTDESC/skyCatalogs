@@ -24,6 +24,7 @@ from .utils.parquet_schema_utils import make_pointsource_schema
 from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.base_object import LSST_BANDS
 from .objects.base_object import ROMAN_BANDS
+from .sso_catalog_creator import SsoCatalogCreator
 
 """
 Code to create a sky catalog for particular object types
@@ -195,7 +196,8 @@ class CatalogCreator:
                  main_only=False, flux_parallel=16, galaxy_nside=32,
                  galaxy_stride=1000000, provenance=None,
                  dc2=False, sn_object_type='sncosmo', galaxy_type='cosmodc2',
-                 include_roman_flux=False, star_input_fmt='sqlite'):
+                 include_roman_flux=False, star_input_fmt='sqlite',
+                 sso_truth=None, sso_sed=None):
         """
         Store context for catalog creation
 
@@ -242,6 +244,8 @@ class CatalogCreator:
         galaxy_type     Currently allowed values are cosmodc2 and diffsky
         include_roman_flux Calculate and write Roman flux values
         star_input_fmt  May be either 'sqlite' or 'parquet'
+        sso_truth       Directory containing Sorcha output
+        sso_sed         Path to sed file to be used for all SSOs
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -289,6 +293,7 @@ class CatalogCreator:
                 self._star_truth = _star_db
             elif self._star_input_fmt == 'parquet':
                 self._star_truth = _star_parquet
+
         self._cat = None
 
         self._parts = parts
@@ -303,6 +308,9 @@ class CatalogCreator:
 
         self._output_dir = os.path.join(self._skycatalog_root,
                                         self._catalog_dir)
+
+        self._sso_creator = SsoCatalogCreator(self._output_dir, sso_truth,
+                                              sso_sed)
 
         self._written_config = None
         self._config_path = config_path
@@ -324,6 +332,7 @@ class CatalogCreator:
         self._dc2 = dc2
         self._include_roman_flux = include_roman_flux
         self._obs_sed_factory = None
+        self._sos_sed_factory = None               ## do we need this?
 
     def _make_tophat_columns(self, dat, names, cmp):
         '''
@@ -355,8 +364,8 @@ class CatalogCreator:
 
         Parameters
         ----------
-        catalog_type   string    Currently 'galaxy' and 'pointsource' are
-                                 the only values allowed
+        catalog_type   string    Currently 'galaxy', 'pointsource'
+                                 and 'sso' are the only values allowed
         Return
         ------
         None
@@ -371,6 +380,12 @@ class CatalogCreator:
                 self.create_pointsource_catalog()
             if not self._main_only:
                 self.create_pointsource_flux_catalog()
+        elif catalog_type == ('sso'):
+            if not self._flux_only:
+                self._sso_creator.create_sso_catalog()
+            if not self._main_only:
+                self._sso_creator.create_sso_flux_catalog()
+                
         else:
             raise NotImplementedError(f'CatalogCreator.create: unsupported catalog type {catalog_type}')
 

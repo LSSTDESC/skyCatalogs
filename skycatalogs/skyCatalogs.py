@@ -14,6 +14,7 @@ from skycatalogs.objects.base_object import ObjectList
 from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from skycatalogs.readers import ParquetReader
 from skycatalogs.utils.sed_tools import TophatSedFactory, DiffskySedFactory
+from skycatalogs.utils.sed_tools import SsoSedFactory
 from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
@@ -303,7 +304,11 @@ class SkyCatalog(object):
                                   config['object_types']['diffsky_galaxy']
                                   ['sed_file_template'],
                                   config['Cosmology'])
-
+        if 'sso' in config['object_types']:
+            self._sso_sed_path = config['provenance']['inputs'].get('sso_sed',
+            default='sso_sed.db')
+            
+            self._sso_sed_factory = SsoSedFactory(self._sso_sed_path)
         self._extinguisher = MilkyWayExtinction()
 
         # Make our properties accessible to BaseObject, etc.
