@@ -240,7 +240,7 @@ class BaseObject(object):
             sed = sed.atRedshift(redshift)
         return sed
 
-    def get_gsobject_components(self, gsparams=None, rng=None):
+    def get_gsobject_components(self, gsparams=None, rng=None, exposure=None):
         """
         Return a dictionary of the GSObject components for the
         sky catalogs object, keyed by component name.
@@ -264,7 +264,7 @@ class BaseObject(object):
 
         raise NotImplementedError('get_observer_sed_component must be implemented by subclass')
 
-    def get_observer_sed_components(self, mjd=None, exposure=15.0):
+    def get_observer_sed_components(self, mjd=None):
         """
         Return a dictionary of the SEDs, keyed by component name.
         """
@@ -283,8 +283,7 @@ class BaseObject(object):
         components.
         """
         sed = None
-        for sed_cmp in self.get_observer_sed_components(mjd=mjd,
-                                                        exposure=15.0).values():
+        for sed_cmp in self.get_observer_sed_components(mjd=mjd).values():
             if sed is None:
                 sed = sed_cmp
             else:
@@ -292,7 +291,7 @@ class BaseObject(object):
 
         return sed
 
-    def get_flux(self, bandpass, sed=None, mjd=None, exposure=15.0):
+    def get_flux(self, bandpass, sed=None, mjd=None):
         """
         Return the total object flux integrated over the bandpass
         in photons/sec/cm^2
@@ -300,7 +299,7 @@ class BaseObject(object):
         """
 
         if not sed:
-            sed = self.get_total_observer_sed(mjd=mjd, exposure=exposure)
+            sed = self.get_total_observer_sed(mjd=mjd)
 
         if sed is None:
             return 0.0
@@ -309,16 +308,15 @@ class BaseObject(object):
 
         return flux
 
-    def get_fluxes(self, bandpasses, mjd=None, exposure=15.0):
+    def get_fluxes(self, bandpasses, mjd=None):
         # To avoid recomputing sed
-        sed = self.get_total_observer_sed(mjd=mjd, exposure=exposure)
+        sed = self.get_total_observer_sed(mjd=mjd)
         if sed is None:
             return [0.0 for b in bandpasses]
 
         return [sed.calculateFlux(b) for b in bandpasses]
 
-    def get_LSST_flux(self, band, sed=None, cache=True, mjd=None,
-                      exposure=15.0):
+    def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
         if band not in LSST_BANDS:
             return None
         att = f'lsst_flux_{band}'
@@ -331,36 +329,32 @@ class BaseObject(object):
         if att in self.native_columns:
             return self.get_native_attribute(att)
 
-        val = self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd,
-                            exposure=exposure)
+        val = self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
 
         if cache:
             setattr(self, att, val)
         return val
 
-    def get_LSST_fluxes(self, cache=True, as_dict=True, mjd=None,
-                        exposure=15.0):
+    def get_LSST_fluxes(self, cache=True, as_dict=True, mjd=None):
         '''
         Return a dict of fluxes for LSST bandpasses or, if as_dict is False,
         just a list in the same order as LSST_BANDS
         '''
         fluxes = dict()
-        sed = self.get_total_observer_sed(mjd=mjd, exposure=exposure)
+        sed = self.get_total_observer_sed(mjd=mjd)
         if sed is None:
             for band in LSST_BANDS:
                 fluxes[band] = 0.0
         else:
             for band in LSST_BANDS:
                 fluxes[band] = self.get_LSST_flux(band, sed=sed,
-                                                  cache=cache, mjd=mjd,
-                                                  exposure=exposure)
+                                                  cache=cache, mjd=mjd)
         if as_dict:
             return fluxes
         else:
             return list(fluxes.values())
 
-    def get_roman_flux(self, band, sed=None, cache=True, mjd=None,
-                       exposure=15.0):
+    def get_roman_flux(self, band, sed=None, cache=True, mjd=None):
         if band not in ROMAN_BANDS:
             return None
         att = f'roman_flux_{band}'
@@ -373,21 +367,19 @@ class BaseObject(object):
         if att in self.native_columns:
             return self.get_native_attribute(att)
 
-        val = self.get_flux(roman_bandpasses[band], sed=sed, mjd=mjd,
-                            exposure=exposure)
+        val = self.get_flux(roman_bandpasses[band], sed=sed, mjd=mjd)
 
         if cache:
             setattr(self, att, val)
         return val
 
-    def get_roman_fluxes(self, cache=True, as_dict=True, mjd=None,
-                         exposure=15.0):
+    def get_roman_fluxes(self, cache=True, as_dict=True, mjd=None):
         '''
         Return a dict of fluxes for Roman bandpasses or, if as_dict is False,
         just a list in the same order as ROMAN_BANDS
         '''
         fluxes = dict()
-        sed = self.get_total_observer_sed(mjd=mjd, exposure=exposure)
+        sed = self.get_total_observer_sed(mjd=mjd)
 
         if sed is None:
             for band in ROMAN_BANDS:
@@ -395,8 +387,7 @@ class BaseObject(object):
         else:
             for band in ROMAN_BANDS:
                 fluxes[band] = self.get_roman_flux(band, sed=sed,
-                                                   cache=cache, mjd=mjd,
-                                                   exposure=exposure)
+                                                   cache=cache, mjd=mjd)
         if as_dict:
             return fluxes
         else:
