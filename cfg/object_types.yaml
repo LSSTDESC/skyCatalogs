@@ -1,109 +1,109 @@
 #  Yaml fragment to be incorporated into configs
 object_types :
-  galaxy :
-      file_template : 'galaxy_(?P<healpix>\d+).parquet'
-      flux_file_template : 'galaxy_flux_(?P<healpix>\d+).parquet'
-      data_file_type : parquet
-      area_partition :
-        { type: healpix, ordering : ring, nside : 32}
-      composite :
-        bulge : required
-        disk  : required
-        knots : optional
-      attribute_aliases :
-        size_knots_true : size_disk_true
-        size_minor_knots_true : size_minor_disk_true
-  bulge_basic :
-      subtype : bulge
-      parent : galaxy
-      sed_model : tophat
-      internal_extinction : CCM
-      MW_extinction : F19
-      spatial_model : sersic2D
-  disk_basic :
-      subtype : disk
-      parent : galaxy
-      sed_model : tophat
-      internal_extinction : CCM
-      MW_extinction : F19
-      spatial_model :  sersic2D
-  knots_basic :
-      subtype : knots
-      parent : galaxy
-      sed_model : tophat
-      internal_extinction : CCM
-      MW_extinction : F19
-      spatial_model :  knots
-  diffsky_galaxy :
-      file_template : 'galaxy_(?P<healpix>\d+).parquet'
-      flux_file_template : 'galaxy_flux_(?P<healpix>\d+).parquet'
-      sed_file_template : 'galaxy_sed_(?P<healpix>\d+).hdf5'
-      data_file_type : parquet
-      area_partition :
-        { type: healpix, ordering : ring, nside : 32}
-      composite :
-        bulge : required
-        disk  : required
-        knots : optional
-  diffsky_bulge :
-      subtype : bulge
-      parent : diffsky_galaxy
-      sed_model : TBD
-      internal_extinction : CCM
-      MW_extinction : F19
-      spatial_model : sersic2D
-  diffsky_disk :
-      subtype : disk
-      parent : diffsky_galaxy
-      sed_model : TBD
-      internal_extinction : CCM
-      MW_extinction : F19
-      spatial_model :  sersic2D
-  diffsky_knots :
-      subtype : knots
-      parent : diffsky_galaxy
-      sed_model : TBD
-      internal_extinction : CCM
-      MW_extinction : F19
-      spatial_model :  knots
+  galaxy:
+      file_template: 'galaxy_(?P<healpix>\d+).parquet'
+      flux_file_template: 'galaxy_flux_(?P<healpix>\d+).parquet'
+      data_file_type: parquet
+      area_partition:
+        { type: healpix, ordering: ring, nside: 32}
+      composite:
+        bulge: required
+        disk:  required
+        knots: optional
+      attribute_aliases:
+        size_knots_true: size_disk_true
+        size_minor_knots_true: size_minor_disk_true
+  bulge_basic:
+      subtype: bulge
+      parent: galaxy
+      sed_model: tophat
+      internal_extinction: CCM
+      MW_extinction: F19
+      spatial_model: sersic2D
+  disk_basic:
+      subtype: disk
+      parent: galaxy
+      sed_model: tophat
+      internal_extinction: CCM
+      MW_extinction: F19
+      spatial_model:  sersic2D
+  knots_basic:
+      subtype: knots
+      parent: galaxy
+      sed_model: tophat
+      internal_extinction: CCM
+      MW_extinction: F19
+      spatial_model:  knots
+  diffsky_galaxy:
+      file_template: 'galaxy_(?P<healpix>\d+).parquet'
+      flux_file_template: 'galaxy_flux_(?P<healpix>\d+).parquet'
+      sed_file_template: 'galaxy_sed_(?P<healpix>\d+).hdf5'
+      data_file_type: parquet
+      area_partition:
+        { type: healpix, ordering: ring, nside: 32}
+      composite:
+        bulge: required
+        disk : required
+        knots: optional
+  diffsky_bulge:
+      subtype: bulge
+      parent: diffsky_galaxy
+      sed_model: TBD
+      internal_extinction: CCM
+      MW_extinction: F19
+      spatial_model: sersic2D
+  diffsky_disk:
+      subtype: disk
+      parent: diffsky_galaxy
+      sed_model: TBD
+      internal_extinction: CCM
+      MW_extinction: F19
+      spatial_model:  sersic2D
+  diffsky_knots:
+      subtype: knots
+      parent: diffsky_galaxy
+      sed_model: TBD
+      internal_extinction: CCM
+      MW_extinction: F19
+      spatial_model:  knots
       
-  star :
-      file_template : 'pointsource_(?P<healpix>\d+).parquet'
-      flux_file_template : 'pointsource_flux_(?P<healpix>\d+).parquet'
-      data_file_type : parquet
-      area_partition :
-        { type: healpix, ordering : ring, nside : 32}
-      sed_model : file_nm
-      sed_file_root_env_var : SIMS_SED_LIBRARY_DIR
-      MW_extinction : F19
-      internal_extinction : None
-  sncosmo :
-      file_template : 'pointsource_(?P<healpix>\d+).parquet'
-      data_file_type : parquet
-      area_partition :
-        { type: healpix, ordering : ring, nside : 32}
+  star:
+      file_template: 'pointsource_(?P<healpix>\d+).parquet'
+      flux_file_template: 'pointsource_flux_(?P<healpix>\d+).parquet'
+      data_file_type: parquet
+      area_partition:
+        { type: healpix, ordering: ring, nside: 32}
+      sed_model: file_nm
+      sed_file_root_env_var: SIMS_SED_LIBRARY_DIR
+      MW_extinction: F19
+      internal_extinction: None
+  sncosmo:
+      file_template: 'pointsource_(?P<healpix>\d+).parquet'
+      data_file_type: parquet
+      area_partition:
+        { type: healpix, ordering: ring, nside: 32}
 
-      sed_model : sncosmo
-      MW_extinction : F19
-      internal_extinction : None
-  gaia_star :
-      data_file_type : butler_refcat
-      butler_parameters :
-        collections : HSC/defaults
-        dstype : gaia_dr2_20200414
-      area_partition : None
-      sed_method : use_lut
-  snana :
-      file_template : 'snana_(?P<healpix>\d+).parquet'
-      data_file_type : parquet
-      area_partition :
-        { type: healpix, ordering : ring, nside : 32}
-      sed_model : snana
-      internal_extinction : None
-  sso :
-      file_template : 'sso_(?P<min_mjd>\d+)_(?P<max_mjd>\d+).parquet'
-      flux_file_template : 'sso_flux_(?P<min_mjd>\d+)_(?P<max_mjd>\d+).parquet'
-      data_file_type : parquet
-      area_partition : None
-      time_partition : mjd
-      sed_model : file_angstrom
+      sed_model: sncosmo
+      MW_extinction: F19
+      internal_extinction: None
+  gaia_star:
+      data_file_type: butler_refcat
+      butler_parameters:
+        collections: HSC/defaults
+        dstype: gaia_dr2_20200414
+      area_partition: None
+      sed_method: use_lut
+  snana:
+      file_template: 'snana_(?P<healpix>\d+).parquet'
+      data_file_type: parquet
+      area_partition:
+        { type: healpix, ordering: ring, nside: 32}
+      sed_model: snana
+      internal_extinction: None
+  sso:
+      file_template: 'sso_(?P<min_mjd>\d+)_(?P<max_mjd>\d+).parquet'
+      flux_file_template: 'sso_flux_(?P<min_mjd>\d+)_(?P<max_mjd>\d+).parquet'
+      data_file_type: parquet
+      area_partition: None
+      time_partition: mjd
+      sed_model: dbfile_angstrom_flambda

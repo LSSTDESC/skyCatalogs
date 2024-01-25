@@ -663,8 +663,14 @@ class ObjectList(Sequence):
 
     def append_collection(self, coll):
         old = self._total_len
-        self._total_len += len(coll)
-        self._located.append(LocatedCollection(coll, old, self._total_len))
+        if isinstance(coll, ObjectCollection):
+            self._total_len += len(coll)
+            self._located.append(LocatedCollection(coll, old, self._total_len))
+        else:  #  list of collections
+            for c in coll:
+                self._total_len += len(c)
+                self._located.append(LocatedCollection(c, old, self._total_len))
+                old = self._total_len
 
     def append_object_list(self, object_list):
         for e in object_list._located:

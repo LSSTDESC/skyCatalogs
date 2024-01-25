@@ -35,6 +35,7 @@ __all__ = ['CatalogCreator']
 _MW_rv_constant = 3.1
 _nside_allowed = 2**np.arange(15)
 
+
 def _get_tophat_info(columns):
     '''
     Parameters
@@ -309,9 +310,6 @@ class CatalogCreator:
         self._output_dir = os.path.join(self._skycatalog_root,
                                         self._catalog_dir)
 
-        self._sso_creator = SsoCatalogCreator(self._output_dir, sso_truth,
-                                              sso_sed)
-
         self._written_config = None
         self._config_path = config_path
         self._catalog_name = catalog_name
@@ -332,7 +330,8 @@ class CatalogCreator:
         self._dc2 = dc2
         self._include_roman_flux = include_roman_flux
         self._obs_sed_factory = None
-        self._sos_sed_factory = None               ## do we need this?
+        self._sos_sed_factory = None               # do we need this?
+        self._sso_creator = SsoCatalogCreator(self, sso_truth, sso_sed)
 
     def _make_tophat_columns(self, dat, names, cmp):
         '''
@@ -385,7 +384,7 @@ class CatalogCreator:
                 self._sso_creator.create_sso_catalog()
             if not self._main_only:
                 self._sso_creator.create_sso_flux_catalog()
-                
+
         else:
             raise NotImplementedError(f'CatalogCreator.create: unsupported catalog type {catalog_type}')
 
@@ -550,7 +549,8 @@ class CatalogCreator:
                         'convergence', 'diskEllipticity1', 'diskEllipticity2',
                         'spheroidEllipticity1', 'spheroidEllipticity2',
                         'spheroidHalfLightRadiusArcsec',
-                        'diskHalfLightRadiusArcsec','um_source_galaxy_obs_sm']
+                        'diskHalfLightRadiusArcsec',
+                        'um_source_galaxy_obs_sm']
 
         # df is not a dataframe!  It's just a dict
         if not self._mag_cut:
@@ -1071,6 +1071,8 @@ class CatalogCreator:
             inputs['sn_truth'] = self._sn_truth
         if self._star_truth:
             inputs['star_truth'] = self._star_truth
+        if self._sso_truth:
+            inputs['sso_truth'] = self._sso_truth
         config.add_key('provenance', assemble_provenance(self._pkg_root,
                                                          inputs=inputs))
 

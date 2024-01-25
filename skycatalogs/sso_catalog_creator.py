@@ -18,7 +18,8 @@ Code for creating sky catalogs for sso objects
 
 __all__ = ['SsoCatalogCreator']
 
-_DEFAULT_ROW_GROUP_SIZE = 20000      # for testing. Should be much larger
+_DEFAULT_ROW_GROUP_SIZE = 100000      # Maybe could be larger
+
 
 def _partition_mjd(mins, maxes, counts, max_rowgroup_size):
     ''' Determine mjd intervals, each of which will be processed
@@ -44,13 +45,22 @@ def _partition_mjd(mins, maxes, counts, max_rowgroup_size):
     return mjds
 
 
-
 class SsoCatalogCreator:
     _sso_truth = '/sdf/home/j/jrb/rubin-user/sso/input/19jan2024'
     _sso_sed = '/sdf/home/j/jrb/rubin-user/sso/sed/solar_sed.db'
 
-    def __init__(self, output_dir, sso_truth=None, sso_sed=None):
-        self._output_dir = output_dir
+    def __init__(self, catalog_creator, output_dir,
+                 sso_truth=None, sso_sed=None):
+        '''
+        Parameters
+        ----------
+        catalog_creator   instance of CatalogCreator
+        sso_truth         path to input data directory
+        sso_sed           path to solar sed
+        '''
+        self._catalog_creator = catalog_creator
+        self._output_dir = catalog_creator._output_dir
+        self._logger = catalog_creator._logger
         self._sso_truth = sso_truth
         if sso_truth is None:
             self._sso_truth = SsoCatalogCreator._sso_truth
@@ -70,19 +80,29 @@ class SsoCatalogCreator:
 
     def _create_main_schema(self):
 
-        fields = [pa.field('id', pa.string()),
-                  pa.field('mjd', pa.float64()),
-                  pa.field('ra', pa.float64()),
-                  pa.field('dec', pa.float64()),
-                  pa.field('observedTrailedSourceMag', pa.float64()),
-                  pa.field('filter', pa.string())]
-                  # pa.field('ra_rate', pa.float64()),
-                  # pa.field('dec_rate', pa.float64())]
+        fields = [
+            pa.field('id', pa.string()),
+            pa.field('mjd', pa.float64()),
+            pa.field('ra', pa.float64()),
+            pa.field('dec', pa.float64()),
+            pa.field('observedTrailedSourceMag', pa.float64()),
+            # pa.field('ra_rate', pa.float64()),
+            # pa.field('dec_rate', pa.float64()),
+            pa.field('filter', pa.string())]
         return pa.schema(fields)
 
     def _create_flux_schema(self):
         # id, mjd and 6 flux fields (for now.  Maybe later also Roman)
-        pass
+        fields = [
+            pa.field('id', pa.string()),
+            pa.field('mjd', pa.float64()),
+            pa.field('lsst_flux_u', pa.float32(), True),
+            pa.field('lsst_flux_g', pa.float32(), True),
+            pa.field('lsst_flux_r', pa.float32(), True),
+            pa.field('lsst_flux_i', pa.float32(), True),
+            pa.field('lsst_flux_z', pa.float32(), True),
+            pa.field('lsst_flux_y', pa.float32(), True)]
+        return pa.schema(fields)
 
     def _write_rg(self, writer, min_mjd, max_mjd, db_files, arrow_schema):
         df_list = []
@@ -135,10 +155,29 @@ class SsoCatalogCreator:
 
         #  In sso description in config come up with suitable re for filenames
 
+    def _create_sso_flux_file(self, main_file):
+        pass
+
     def create_sso_flux_catalog(self):
         """
         Create sso flux catalog.  Includes id, mjd (since given sso normally
         has several observations) and fluxes.   (Or just one flux and
         associated band?)
         """
-        pass
+        from .skyCatalogs import open_catalog
+
+        arrow_schema = self._create_flux_schema()
+        config_file = self._catalog_creator.write_config(path_only=True)
+        self._cat = open_catalog(config_file,
+                                 skycatalog_root=self._catalog_creator._skycatalog_root)
+        sso_config = self._cat.raw_config['object_types']['sso']
+        self._flux_template = sso_config['flux_file_template']
+        self._main_template = sso_config['file_template']
+
+        self._logger.info('Creating sso flux files')
+
+        # For each main file make a corresponding flux file
+        files = os.listdir(self._output_dir)
+        mains = [os.path.join(self._output_dir, f) for f in files if re.match(self._main_template, f)]
+        for f in mains:
+            self._create_sso_flux_file(f)

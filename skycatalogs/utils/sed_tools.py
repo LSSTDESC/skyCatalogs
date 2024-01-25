@@ -5,6 +5,7 @@ from astropy.cosmology import FlatLambdaCDM
 import astropy.constants
 import h5py
 import sqlite3
+import pandas as pd
 
 import numpy as np
 from dust_extinction.parameter_averages import F19
@@ -197,7 +198,7 @@ class DiffskySedFactory:
 
         seds = {}
         for i, component in enumerate(['bulge', 'disk', 'knots']):
-            lut = galsim.LookupTable(x=self._wave_list, f=sed_array[i,:],
+            lut = galsim.LookupTable(x=self._wave_list, f=sed_array[i, :],
                                      interpolant='linear')
             # Create the SED object and apply redshift.
             sed = galsim.SED(lut, wave_type='angstrom', flux_type='fnu')\
@@ -205,6 +206,7 @@ class DiffskySedFactory:
             seds[component] = sed
 
         return seds
+
 
 class SsoSedFactory():
     '''
@@ -231,6 +233,7 @@ class SsoSedFactory():
 
     def create(self):
         return self.sed
+
 
 class MilkyWayExtinction:
     '''

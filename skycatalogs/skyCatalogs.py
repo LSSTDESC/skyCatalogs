@@ -306,8 +306,8 @@ class SkyCatalog(object):
                                   config['Cosmology'])
         if 'sso' in config['object_types']:
             self._sso_sed_path = config['provenance']['inputs'].get('sso_sed',
-            default='sso_sed.db')
-            
+                                                                    default='sso_sed.db')
+
             self._sso_sed_factory = SsoSedFactory(self._sso_sed_path)
         self._extinguisher = MilkyWayExtinction()
 
@@ -567,7 +567,8 @@ class SkyCatalog(object):
         region        box, circle or PolygonalRegion. Supported region
                       types made depend on object_type
         object_type   known object type without parent
-        mjd           MJD of observation epoch.
+        mjd           MJD of observation epoch. In case of custom load
+                      this argument may be a pair defining an interval
 
         Returns all objects found
         '''
@@ -720,6 +721,20 @@ class SkyCatalog(object):
         An iterator
         '''
         pass
+
+    def get_object_by_mjd_interval(self, min_mjd, max_mjd,
+                                   file_list=None, obj_type='sso'):
+        '''
+        Make object list of all objects with mjd within interval.
+        If file_list is specified, search only those files.
+        Currently only implemented for obj_type_set={'sso'}
+        Parameters
+        ----------
+        min_mjd   float    mjd must be >= min_mjd
+        max_mjd   float    mjd must be < max_mjd
+        file_list list     files to search.  If None, search all files
+        obj_type  string   Currently only 'sso' is supported
+        '''
 
 
 def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):

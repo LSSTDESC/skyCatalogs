@@ -8,6 +8,11 @@ __all__ = ['SsoObject']
 class SsoObject(BaseObject):
     _type_name = 'sso'
 
+    def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index,
+                 mjd):
+        super.__init__(ra, dec, id, self._type_name, belongs_to, belongs_index)
+        self._mjd = mjd
+                       
     def _get_sed(self, mjd=None):
         '''
         returns a SED and magnorm
@@ -46,7 +51,7 @@ class SsoObject(BaseObject):
         sed = self.withMagnitude(0, self._bp500)
         sed = sed*flux_500
 
-        # no extinction 
+        # no extinction
         return sed
 
     def get_flux(self, bandpass, sed=None, mjd=None, exposure=15.0):
@@ -58,6 +63,4 @@ class SsoObject(BaseObject):
         flux = sed.calculateFlux(bandpass)
 
         return flux
-            
-
     
