@@ -1,16 +1,14 @@
 import os
-import sys
-import re
-###  import logging
+# import sys
+# import re
+# import logging
 import numpy as np
-import numpy.ma as ma
+# import numpy.ma as ma
 import sqlite3
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-
-# from .utils.parquet_schema_utils import make_sso_flux_schema
-###  or alternately include method in SsoCatalogCreator
+from .objects.base_object import LSST_BANDS
 
 """
 Code for creating sky catalogs for sso objects
@@ -55,6 +53,7 @@ class SsoCatalogCreator:
         Parameters
         ----------
         catalog_creator   instance of CatalogCreator
+        output_dir        destination directory for generated catalogs
         sso_truth         path to input data directory
         sso_sed           path to solar sed
         '''
@@ -65,7 +64,7 @@ class SsoCatalogCreator:
         if sso_truth is None:
             self._sso_truth = SsoCatalogCreator._sso_truth
         self._sso_sed = sso_sed
-        if sso_sed is None:
+        if sso_sed is None:           # use default path
             self._sso_sed = SsoCatalogCreator._sso_sed
 
         self._row_group_size = _DEFAULT_ROW_GROUP_SIZE
@@ -138,14 +137,14 @@ class SsoCatalogCreator:
         mjd_list = _partition_mjd(mins, maxes, counts, self._row_group_size)
         arrow_schema = self._create_main_schema()
 
-        ### Depending on length of mjd_list, may need more than one
-        ### output file in which case will need to add an outer loop
-        ### over output file. Decide on max row groups per file.
+        # ## Depending on length of mjd_list, may need more than one
+        # ## output file in which case will need to add an outer loop
+        # ## over output file. Decide on max row groups per file.
         mjd_min = min(mins)
         mjd_max = max(maxes)
         out_name = f'sso_{int(mjd_min)}_{int(np.ceil(mjd_max))}.parquet'
         writer = pq.ParquetWriter(os.path.join(self._output_dir, out_name),
-                                 arrow_schema)
+                                  arrow_schema)
         for i in range(len(mjd_list) - 1):
             self._write_rg(writer, mjd_list[i], mjd_list[i+1], db_files,
                            arrow_schema)
@@ -155,8 +154,34 @@ class SsoCatalogCreator:
 
         #  In sso description in config come up with suitable re for filenames
 
-    def _create_sso_flux_file(self, main_file):
-        pass
+    def _create_sso_flux_file(self, info, arrow_schema):
+        '''
+        Parameters
+        ----------
+        info          dict  information pertaining to an existing sso main file
+        arrow_schema        to be used in creating the new flux file
+        '''
+        object_list = self._cat.get_object_type_by_region(None, 'sso',
+                                                          mjd=None,
+                                                          filepath=info.path)
+        colls = object_list.get_collections()
+        outname = f'sso_flux_{info.mjd_min}_{info.mjd_max}.parquet'
+
+        writer = pq.ParquetWriter(os.path.join(self._output_dir, outname))
+        outs = dict()
+        for c in colls:
+            outs['id'] = c._id
+            outs['mjd'] = c._mjds
+            all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in c]
+            all_fluxes_transpose = zip(*all_fluxes)
+            for i, band in enumerate(LSST_BANDS):
+                v = all_fluxes_transpose.__next__()
+                outs[f'lsst_flux_{band}'] = v
+            out_df = pd.DataFrame.from_dict(outs)
+            out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
+            writer.write_table(out_table)
+
+        writer.close()
 
     def create_sso_flux_catalog(self):
         """
@@ -177,7 +202,6 @@ class SsoCatalogCreator:
         self._logger.info('Creating sso flux files')
 
         # For each main file make a corresponding flux file
-        files = os.listdir(self._output_dir)
-        mains = [os.path.join(self._output_dir, f) for f in files if re.match(self._main_template, f)]
-        for f in mains:
-            self._create_sso_flux_file(f)
+        for f, info in self._cat._sso_files:
+            if info['scope'] == 'main':
+                self._create_sso_flux_file(info, arrow_schema)

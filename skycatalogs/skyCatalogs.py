@@ -10,8 +10,10 @@ import numpy.ma as ma
 from astropy import units as u
 from skycatalogs.objects.base_object import load_lsst_bandpasses, load_roman_bandpasses
 from skycatalogs.utils.catalog_utils import CatalogContext
-from skycatalogs.objects.base_object import ObjectList
+from skycatalogs.objects.base_object import ObjectList, ObjectCollection
 from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
+from skycatalogs.objects.sso_object import SsoObject, SsoCollection
+from skycatalogs.objects.sso_object import find_sso_files
 from skycatalogs.readers import ParquetReader
 from skycatalogs.utils.sed_tools import TophatSedFactory, DiffskySedFactory
 from skycatalogs.utils.sed_tools import SsoSedFactory
@@ -289,6 +291,9 @@ class SkyCatalog(object):
         #       for 'object_types', map object type to filepath
         self._hp_info = dict()
         _ = self._find_all_hps()
+        if 'sso' in self.raw_config['object_types']:
+            self._sso_files = find_sso_files(self._cat_dir,
+                                             self.raw_config['object_types']['sso'])
 
         # NOTE: the use of TophatSedFactory is appropriate *only* for an
         # input galaxy catalog with format like cosmoDC2, which includes
@@ -338,6 +343,11 @@ class SkyCatalog(object):
         if 'diffsky_galaxy' in config['object_types']:
             self.cat_cxt.register_source_type('diffsky_galaxy',
                                               object_class=DiffskyObject)
+        if 'sso' in config['object_types']:
+            self.cat_cxt.register_source_type('sso',
+                                              object_class=SsoObject,
+                                              collection_class=SsoCollection,
+                                              custom_load=True)
 
     @property
     def observed_sed_factory(self):
@@ -399,23 +409,24 @@ class SkyCatalog(object):
             else:
                 fpath = os.path.join(rel_dir, f)
             for k in tmpl_keys:
-                m = re.fullmatch(k, f)
-                if m:
-                    hp = int(m['healpix'])
-                    hp_set.add(hp)
+                if k.find('?P<healpix>') != -1:
+                    m = re.fullmatch(k, f)
+                    if m:
+                        hp = int(m['healpix'])
+                        hp_set.add(hp)
 
-                    if hp not in self._hp_info:
-                        self._hp_info[hp] = {'files': {fpath: None},
-                                             'object_types': {name: [fpath]}}
-                    else:
-                        this_hp = self._hp_info[hp]
-                        # Value of 'object_types' is now a list
-                        if fpath not in this_hp['files']:
-                            this_hp['files'][fpath] = None
-                        if name in this_hp['object_types']:
-                            this_hp['object_types'][name].append(fpath)
+                        if hp not in self._hp_info:
+                            self._hp_info[hp] = {'files': {fpath: None},
+                                                 'object_types': {name: [fpath]}}
                         else:
-                            this_hp['object_types'][name] = [fpath]
+                            this_hp = self._hp_info[hp]
+                            # Value of 'object_types' is now a list
+                            if fpath not in this_hp['files']:
+                                this_hp['files'][fpath] = None
+                            if name in this_hp['object_types']:
+                                this_hp['object_types'][name].append(fpath)
+                            else:
+                                this_hp['object_types'][name] = [fpath]
         return hp_set
 
     def _find_all_hps(self):
@@ -560,7 +571,8 @@ class SkyCatalog(object):
 
         return object_list
 
-    def get_object_type_by_region(self, region, object_type, mjd=None):
+    def get_object_type_by_region(self, region, object_type, mjd=None,
+                                  filepath=None):
         '''
         Parameters
         ----------
@@ -569,8 +581,13 @@ class SkyCatalog(object):
         object_type   known object type without parent
         mjd           MJD of observation epoch. In case of custom load
                       this argument may be a pair defining an interval
+        filepath      if not None, look only in this file.
+                      Only used for custom loads
 
-        Returns all objects found
+        Returns
+        -------
+        an ObjectList containing all objects found.
+
         '''
 
         out_list = ObjectList()
@@ -582,9 +599,13 @@ class SkyCatalog(object):
         coll_type = self.cat_cxt.lookup_collection_type(object_type)
         if coll_type is not None:
             if self.cat_cxt.use_custom_load(object_type):
-                out_list.append_collection(coll_type.load_collection(region,
-                                                                     self,
-                                                                     mjd=mjd))
+                coll = coll_type.load_collection(region, self, mjd=mjd,
+                                                 filepath=filepath)
+                if isinstance(coll, ObjectCollection):
+                    out_list.append_collection(coll)
+                else:
+                    for c in coll:
+                        out_list.append_collection(c)
                 return out_list
 
         if partition != 'None':
