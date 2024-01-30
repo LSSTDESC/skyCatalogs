@@ -94,7 +94,7 @@ class SsoObject(BaseObject):
         sed, magnorm = self._get_sed(mjd=mjd)
 
         flux_500 = np.exp(-0.9210340371976184 * magnorm)
-        sed = self.withMagnitude(0, self._bp500)
+        sed = sed.withMagnitude(0, self._bp500)
         sed = sed*flux_500
 
         # no extinction

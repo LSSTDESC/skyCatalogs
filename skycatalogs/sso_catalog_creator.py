@@ -181,7 +181,7 @@ class SsoCatalogCreator:
         for c in colls:
             outs['id'] = c._id
             outs['mjd'] = c._mjds
-            all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in c]
+            all_fluxes = [o.get_LSST_fluxes(as_dict=False, mjd=o._mjd) for o in c]
             all_fluxes_transpose = zip(*all_fluxes)
             for i, band in enumerate(LSST_BANDS):
                 v = all_fluxes_transpose.__next__()
