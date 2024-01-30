@@ -33,7 +33,7 @@ def find_sso_files(sso_path, sso_config):
         match = re.fullmatch(sso_config['file_template'], f)
         if match:
             new_entry = {'mjd_min': int(match['mjd_min']),
-                         'mjd_max': int(match['mjd_min']),
+                         'mjd_max': int(match['mjd_max']),
                          'scope': 'main',
                          'path' : os.path.join(sso_path, f)}
             files_dict[f] = new_entry
@@ -41,7 +41,7 @@ def find_sso_files(sso_path, sso_config):
         match = re.fullmatch(sso_config['flux_file_template'], f)
         if match:
             new_entry = {'mjd_min': int(match['mjd_min']),
-                         'mjd_max': int(match['mjd_min']),
+                         'mjd_max': int(match['mjd_max']),
                          'scope': 'flux',
                          'path' : os.path.join(sso_path, f)}
             files_dict[f] = new_entry
