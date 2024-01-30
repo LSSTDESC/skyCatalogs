@@ -223,7 +223,7 @@ class SsoSedFactory():
             raise ValueError(f'SsoSedFactory: Unsupport input format {fmt}; must be "db"')
         wave_type = 'angstrom'
         flux_type = 'flambda'
-        q = 'select wavelength, flux from SED order by wavelength'
+        q = 'select wavelength, flux as flambda from SED order by wavelength'
         with sqlite3.connect(sed_path) as conn:
             sed_df = pd.read_sql_query(q, conn)
         lut = galsim.LookupTable(x=sed_df['wavelength'], f=sed_df['flambda'],

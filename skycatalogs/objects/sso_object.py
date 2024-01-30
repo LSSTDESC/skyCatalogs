@@ -38,7 +38,7 @@ def find_sso_files(sso_path, sso_config):
                          'path' : os.path.join(sso_path, f)}
             files_dict[f] = new_entry
             continue
-        match = re.fullmatch(sso_config['flux_file_template'], f_base)
+        match = re.fullmatch(sso_config['flux_file_template'], f)
         if match:
             new_entry = {'mjd_min': int(match['mjd_min']),
                          'mjd_max': int(match['mjd_min']),
@@ -55,7 +55,8 @@ class SsoObject(BaseObject):
 
     def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index,
                  mjd):
-        super.__init__(ra, dec, id, self._type_name, belongs_to, belongs_index)
+        super().__init__(ra, dec, id, self._type_name, belongs_to,
+                         belongs_index)
         self._mjd = mjd
 
     def _get_sed(self, mjd=None):
@@ -128,16 +129,18 @@ class SsoCollection(ObjectCollection):
         return rg_list
 
     @staticmethod
-    def form_row_group_collection(skycatalog, filepath, row_group,
+    def form_row_group_collection(skycatalog, reader, row_group,
                                   mjd=None, region=None):
         '''
         Parameters
         ----------
-        filepath
-        row_group  row group to use as input
-        mjd        if not None, exclude rows with mjd not within _MJD_EPS
-                   of this value
-        region     if not None, exclude rows with (ra, dec) not in the region
+        skycatalog   SkyCatalog object
+        reader       skycatalogs.readers.parquet_readers.ParquetReader
+                     Read only from this file
+        row_group    row group to use as input
+        mjd          if not None, exclude rows with mjd not within _MJD_EPS
+                     of this value
+        region       if not None, exclude rows with (ra, dec) not in the region
 
         Returns
         -------
@@ -145,9 +148,9 @@ class SsoCollection(ObjectCollection):
         '''
         if region is not None:
             raise ValueError('SsoCollection.form_row_group_collection: region parameter not yet implemented')
-        reader = ParquetReader(filepath)
-        values = reader.read_row_group(row_group,
-                                       columns=['id', 'mjd', 'ra', 'dec'])
+        # reader = ParquetReader(filepath)
+        values = reader.read_columns(['id', 'mjd', 'ra', 'dec'], None,
+                                     row_group=row_group)
         if mjd:     # make mask
             mask = np.logical_or((values['mjd'] >= mjd + _MJD_EPS),
                                  (values['mjd'] < mjd - _MJD_EPS))
@@ -185,23 +188,29 @@ class SsoCollection(ObjectCollection):
                     file will be loaded
         filepath    Restrict search to a particular file.
 
-        Returns:    A list of SsoCollection objects
+        Returns:    An ObjectList
         '''
         object_list = ObjectList()
         files_dict = skycatalog._sso_files
+        f_entry = None
         if filepath:
-            if filepath not in files_dict:
+            for f in files_dict:
+                if filepath == files_dict[f]['path']:
+                    f_entry = files_dict[f]
+                    break
+            if f_entry is None:
                 return []
-            f_entry = files_dict[filepath]
             if mjd is not None:   # parse file name to see if mjd is included.
                 if mjd < f_entry['mjd_min'] - _MJD_EPS or mjd >= f_entry['mjd_max'] + _MJD_EPS:
                     return []
             if 'reader' not in f_entry:
                 f_entry['reader'] = ParquetReader(filepath)
-            row_groups = SsoObject.find_row_groups(f_entry['reader'], mjd)
+            row_groups = SsoCollection.find_row_groups(f_entry['reader'], mjd)
             for r in row_groups:
-                coll = SsoObject.form_row_group_collection(skycatalog,
-                                                           region, r, mjd)
+                coll = SsoCollection.form_row_group_collection(skycatalog,
+                                                               f_entry['reader'],
+                                                               r, mjd=mjd,
+                                                               region=region)
                 if coll:
                     object_list.append_collection(coll)
             return object_list
@@ -238,7 +247,46 @@ class SsoCollection(ObjectCollection):
 
         One of mjd_global, mjd_individual must not be None
         '''
-        super.__init__(ra, dic, id, 'sso', None, sky_catalog,
-                       region=region, mjd=mjd_global, mask=mask,
-                       readers=readers, row_group=row_group)
-        self._mjds = np.array(mjd_individuals)
+        super().__init__(ra, dec, id, 'sso', None, sky_catalog,
+                         region=region, mjd=mjd_global, mask=mask,
+                         readers=readers, row_group=row_group)
+        self._mjds = np.array(mjd_individual)
+
+    def __getitem__(self, key):
+        '''
+        Override implementation in base_object because sso objects
+        must have an mjd
+
+        Parameters
+        ----------
+        If key is an int (or int-like) return a single base object
+        If key is a slice return a list of objects
+        If key is a tuple where key[0] is iterable of int-like,
+           return a list of objects
+        '''
+
+        if self._uniform_object_type:
+            object_type = self._object_type_unique
+        else:
+            object_type = self._object_types[key]
+
+        if isinstance(key, int) or isinstance(key, np.int64):
+            return self._object_class(self._ra[key], self._dec[key],
+                                      self._id[key], object_type, self, key,
+                                      self._mjds[key])
+
+        elif type(key) == slice:
+            if key.start is None:
+                key.start = 0
+            ixdata = [i for i in range(min(key.stop, len(self._ra)))]
+            ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
+            return [self._object_class(self._ra[i], self._dec[i], self._id[i],
+                                       object_type, self, i, self._mjds[i])
+                    for i in ixes]
+
+        elif type(key) == tuple and isinstance(key[0], Iterable):
+            #  check it's a list of int-like?
+            return [self._object_class(self._ra[i], self._dec[i], self._id[i],
+                                       object_type, self, i, self._mjds[i])
+                    for i in key[0]]
+        

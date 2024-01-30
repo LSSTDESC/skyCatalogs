@@ -102,7 +102,7 @@ object_types :
       internal_extinction: None
   sso:
       file_template: 'sso_(?P<mjd_min>\d+)_(?P<mjd_max>\d+).parquet'
-      flux_file_template: 'sso_flux_(?P<min_mjd>\d+)_(?P<max_mjd>\d+).parquet'
+      flux_file_template: 'sso_flux_(?P<mjd_min>\d+)_(?P<mjd_max>\d+).parquet'
       data_file_type: parquet
       area_partition: None
       time_partition: mjd

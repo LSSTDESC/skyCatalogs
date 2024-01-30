@@ -77,6 +77,14 @@ class SsoCatalogCreator:
                  observedTrailedSourceMag from {tbl} where mjd >= (?)
                  and mjd < (?) order by mjd'''
 
+    @property
+    def sso_truth(self):
+        return self._sso_truth
+
+    @property
+    def sso_sed(self):
+        return self._sso_sed
+    
     def _create_main_schema(self):
 
         fields = [
@@ -163,11 +171,12 @@ class SsoCatalogCreator:
         '''
         object_list = self._cat.get_object_type_by_region(None, 'sso',
                                                           mjd=None,
-                                                          filepath=info.path)
+                                                          filepath=info['path'])
         colls = object_list.get_collections()
-        outname = f'sso_flux_{info.mjd_min}_{info.mjd_max}.parquet'
+        outname = f"sso_flux_{info['mjd_min']}_{info['mjd_max']}.parquet"
 
-        writer = pq.ParquetWriter(os.path.join(self._output_dir, outname))
+        writer = pq.ParquetWriter(os.path.join(self._output_dir, outname),
+                                  arrow_schema)
         outs = dict()
         for c in colls:
             outs['id'] = c._id
@@ -202,6 +211,6 @@ class SsoCatalogCreator:
         self._logger.info('Creating sso flux files')
 
         # For each main file make a corresponding flux file
-        for f, info in self._cat._sso_files:
+        for f, info in self._cat._sso_files.items():
             if info['scope'] == 'main':
                 self._create_sso_flux_file(info, arrow_schema)

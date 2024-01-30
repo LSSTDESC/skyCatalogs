@@ -311,7 +311,7 @@ class SkyCatalog(object):
                                   config['Cosmology'])
         if 'sso' in config['object_types']:
             self._sso_sed_path = config['provenance']['inputs'].get('sso_sed',
-                                                                    default='sso_sed.db')
+                                                                    'sso_sed.db')
 
             self._sso_sed_factory = SsoSedFactory(self._sso_sed_path)
         self._extinguisher = MilkyWayExtinction()
@@ -603,9 +603,8 @@ class SkyCatalog(object):
                                                  filepath=filepath)
                 if isinstance(coll, ObjectCollection):
                     out_list.append_collection(coll)
-                else:
-                    for c in coll:
-                        out_list.append_collection(c)
+                else:  # ObjectList
+                    out_list.append_object_list(coll)
                 return out_list
 
         if partition != 'None':

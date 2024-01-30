@@ -330,8 +330,10 @@ class CatalogCreator:
         self._dc2 = dc2
         self._include_roman_flux = include_roman_flux
         self._obs_sed_factory = None
-        self._sos_sed_factory = None               # do we need this?
+        self._sso_sed_factory = None               # do we need this?
         self._sso_creator = SsoCatalogCreator(self, sso_truth, sso_sed)
+        self._sso_truth = self._sso_creator.sso_truth
+        self._sso_sed = self._sso_creator.sso_sed
 
     def _make_tophat_columns(self, dat, names, cmp):
         '''
@@ -1073,6 +1075,7 @@ class CatalogCreator:
             inputs['star_truth'] = self._star_truth
         if self._sso_truth:
             inputs['sso_truth'] = self._sso_truth
+            inputs['sso_sed'] = self._sso_sed
         config.add_key('provenance', assemble_provenance(self._pkg_root,
                                                          inputs=inputs))
 
