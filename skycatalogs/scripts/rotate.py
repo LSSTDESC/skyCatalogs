@@ -1,18 +1,11 @@
 import os
 import time
 import healpy
-import logging # expected by make_galaxy_schema
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-# Following imports were used in old GCR_siminterface rotate class
-#  from lsst.sims.utils import angularSeparation
-#  from lsst.sims.utils import rotationMatrixFromVectors
-#  from lsst.sims.utils import cartesianFromSpherical, sphericalFromCartesian
 
-#  Possible alternatives are in rubin_schedule.utils.coordinate_transformations
-#
 from rubin_scheduler.utils import cartesian_from_spherical, spherical_from_cartesian
 from rubin_scheduler.utils import rotation_matrix_from_vectors, angular_separation
 from skycatalogs.skyCatalogs import open_catalog
@@ -213,6 +206,7 @@ class GalaxyRotator:
         # Now write out healpixels for this collection (sets of healpixels
         # belonging to different fields are disjoint)
         # for hp in hps_distinct:
+        print('Generating data for pixels ', field_distinct)
         for hp in field_distinct:
             outpath = os.path.join(output_dir, f'galaxy_{hp}.parquet')
             writer = pq.ParquetWriter(outpath, arrow_schema)
@@ -237,7 +231,11 @@ rotated_dir = '/pscratch/sd/j/jrbogart/desc/skycatalogs/rotated'
 cat = open_catalog(input_config)
 NSIDE = 32    # should really read from config
 
-for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(DC2_RA, DC2_DEC, FIELD_RA, FIELD_DEC, FIELD_NAMES):
+# For Ops rehearsal Did first field in a separate run
+# for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(DC2_RA[1:], DC2_DEC[1:], FIELD_RA[1:],
+#                                               FIELD_DEC[1:], FIELD_NAMES[1:]):
+for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(DC2_RA, DC2_DEC, FIELD_RA,
+                                              FIELD_DEC, FIELD_NAMES):
     disk = Disk(dc2_ra, dc2_dec, DISK_RADIUS_DG * 3600)
     obj_list = cat.get_object_type_by_region(disk, 'galaxy')
     print('Field ', name)
@@ -248,5 +246,5 @@ for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(DC2_RA, DC2_DEC, FIELD_RA, FIELD_D
     galaxy_schema = make_galaxy_schema('rotate_logger')
     galaxy_rotator = GalaxyRotator(rotator, name, obj_list)
     galaxy_rotator.output_field_pixels(rotated_dir, galaxy_schema)
-
-    break    ### for testing stop after 1 field
+    print('Completed field ', name)
+    # break    ### for testing stop after 1 field
