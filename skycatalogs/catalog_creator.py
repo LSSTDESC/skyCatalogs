@@ -198,7 +198,7 @@ class CatalogCreator:
                  galaxy_stride=1000000, provenance=None,
                  dc2=False, sn_object_type='sncosmo', galaxy_type='cosmodc2',
                  include_roman_flux=False, star_input_fmt='sqlite',
-                 sso_truth=None, sso_sed=None):
+                 sso_truth=None, sso_sed=None, sso_partition='healpixel'):
         """
         Store context for catalog creation
 
@@ -247,6 +247,7 @@ class CatalogCreator:
         star_input_fmt  May be either 'sqlite' or 'parquet'
         sso_truth       Directory containing Sorcha output
         sso_sed         Path to sed file to be used for all SSOs
+        sso_partition   Whether to partition by time or by healpixels
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -334,6 +335,7 @@ class CatalogCreator:
         self._sso_creator = SsoCatalogCreator(self, sso_truth, sso_sed)
         self._sso_truth = self._sso_creator.sso_truth
         self._sso_sed = self._sso_creator.sso_sed
+        self._sso_partition = sso_partition
 
     def _make_tophat_columns(self, dat, names, cmp):
         '''

@@ -101,9 +101,9 @@ object_types :
       sed_model: snana
       internal_extinction: None
   sso:
-      file_template: 'sso_(?P<mjd_min>\d+)_(?P<mjd_max>\d+).parquet'
-      flux_file_template: 'sso_flux_(?P<mjd_min>\d+)_(?P<mjd_max>\d+).parquet'
+      file_template: 'sso_(?P<healpix>\d+).parquet'
+      flux_file_template: 'sso_flux_(?P<healpix>\d+).parquet'
       data_file_type: parquet
-      area_partition: None
-      time_partition: mjd
+      area_partition:
+        { type: healpix, ordering: ring, nside: 32}
       sed_model: dbfile_angstrom_flambda

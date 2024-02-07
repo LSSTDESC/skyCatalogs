@@ -19,32 +19,32 @@ __all__ = ['SsoCatalogCreator']
 _DEFAULT_ROW_GROUP_SIZE = 100000      # Maybe could be larger
 
 
-def _partition_mjd(mins, maxes, counts, max_rowgroup_size):
-    ''' Determine mjd intervals, each of which will be processed
-            in one go'''
-    total_rows = np.sum(np.array(counts))
-    min_min = int(np.floor(np.min(np.array(mins))))
-    max_max = int(np.ceil(np.max(np.array(maxes))))
-    # n_rowgroup = (max_max + (max_rowgroup_size - 1) - min_min)/max_rowgroup_size
-    n_rowgroup = int(np.ceil(total_rows/max_rowgroup_size))
-    # for debugging
-    if n_rowgroup < 2:
-        n_rowgroup = 2
-    mjd_interval = int(np.ceil((max_max - min_min)/n_rowgroup))
-    mjds = [min_min]
-    last = min_min
-    for i in range(n_rowgroup):
-        last += mjd_interval
-        last = min(last, max_max)
-        mjds.append(last)
-        if last == max_max:
-            break
+# def _partition_mjd(mins, maxes, counts, max_rowgroup_size):
+#     ''' Determine mjd intervals, each of which will be processed
+#             in one go'''
+#     total_rows = np.sum(np.array(counts))
+#     min_min = int(np.floor(np.min(np.array(mins))))
+#     max_max = int(np.ceil(np.max(np.array(maxes))))
+#     # n_rowgroup = (max_max + (max_rowgroup_size - 1) - min_min)/max_rowgroup_size
+#     n_rowgroup = int(np.ceil(total_rows/max_rowgroup_size))
+#     # for debugging
+#     if n_rowgroup < 2:
+#         n_rowgroup = 2
+#     mjd_interval = int(np.ceil((max_max - min_min)/n_rowgroup))
+#     mjds = [min_min]
+#     last = min_min
+#     for i in range(n_rowgroup):
+#         last += mjd_interval
+#         last = min(last, max_max)
+#         mjds.append(last)
+#         if last == max_max:
+#             break
 
-    return mjds
+#     return mjds
 
 
 class SsoCatalogCreator:
-    _sso_truth = '/sdf/home/j/jrb/rubin-user/sso/input/19jan2024'
+    _sso_truth = '/sdf/home/j/jrb/rubin-user/sso/input/6feb2024'
     _sso_sed = '/sdf/home/j/jrb/rubin-user/sso/sed/solar_sed.db'
 
     def __init__(self, catalog_creator, output_dir,
@@ -72,10 +72,12 @@ class SsoCatalogCreator:
         tbl = 'pp_results'
         mjd_c = 'FieldMJD_TAI'
         self._mjd_q = f'select min({mjd_c}), max({mjd_c}), count({mjd_c}) from {tbl}'
-        self._df_query = f'''select ObjID as id, {mjd_c} as mjd,
-                 "AstRA(deg)" as ra, "AstDec(deg)" as dec, optFilter as filter,
-                 observedTrailedSourceMag from {tbl} where mjd >= (?)
-                 and mjd < (?) order by mjd'''
+        self._dfhp_query = f'''select ObjID as id, {mjd_c} as mjd,
+                 "AstRA(deg)" as ra, "AstDec(deg)" as dec, 
+                 "AstRARate(deg/day)" as ra_rate, 
+                 "AstDecRate(deg/day)" as dec_rate,
+                 observedTrailedSourceMag from {tbl} where healpix = (?)
+                 order by mjd, ObjID'''
 
     @property
     def sso_truth(self):
@@ -93,9 +95,9 @@ class SsoCatalogCreator:
             pa.field('ra', pa.float64()),
             pa.field('dec', pa.float64()),
             pa.field('observedTrailedSourceMag', pa.float64()),
-            # pa.field('ra_rate', pa.float64()),
-            # pa.field('dec_rate', pa.float64()),
-            pa.field('filter', pa.string())]
+            pa.field('ra_rate', pa.float64()),
+            pa.field('dec_rate', pa.float64())]
+            # pa.field('filter', pa.string())]
         return pa.schema(fields)
 
     def _create_flux_schema(self):
@@ -111,17 +113,48 @@ class SsoCatalogCreator:
             pa.field('lsst_flux_y', pa.float32(), True)]
         return pa.schema(fields)
 
-    def _write_rg(self, writer, min_mjd, max_mjd, db_files, arrow_schema):
+    # def _write_time_rg(self, writer, min_mjd, max_mjd, db_files, arrow_schema):
+    #     df_list = []
+    #     for f in db_files:
+    #         conn = sqlite3.connect(f)
+    #         df_list.append(pd.read_sql_query(self._df_query,
+    #                                          conn,
+    #                                          params=(min_mjd, max_mjd)))
+    #     df = pd.concat(df_list)
+    #     df_sorted = df.sort_values('mjd')
+    #     tbl = pa.Table.from_pandas(df_sorted, schema=arrow_schema)
+    #     writer.write_table(tbl)
+
+    def _get_hps(self, filepath):
+        
+        with sqlite3.connect(filepath) as conn:
+            df = pd.read_sql_query('select distinct healpix from pp_results',
+                                   conn)
+        return set(df['healpix'])
+
+    def _write_hp(self, hp, hps_by_file, arrow_schema):
         df_list = []
-        for f in db_files:
-            conn = sqlite3.connect(f)
-            df_list.append(pd.read_sql_query(self._df_query,
-                                             conn,
-                                             params=(min_mjd, max_mjd)))
+        for f in hps_by_file:
+            if hp in hps_by_file[f]:
+                conn = sqlite3.connect(f)
+                one_df = pd.read_sql_query(self._dfhp_query, conn,
+                                           params=(hp,))
+                df_list.append(one_df)
+        if df_list == []:
+            return
+        writer = pq.ParquetWriter(os.path.join(self._output_dir,
+                                               f'sso_{hp}.parquet'),
+                                  arrow_schema)
+
         df = pd.concat(df_list)
         df_sorted = df.sort_values('mjd')
+
+        # Should be prepared to write multiple row groups here
+        # depending on # of rows in the table.
+        # For now only a single row group will be necessary
         tbl = pa.Table.from_pandas(df_sorted, schema=arrow_schema)
         writer.write_table(tbl)
+                           
 
     def create_sso_catalog(self):
         """
@@ -130,36 +163,18 @@ class SsoCatalogCreator:
         #  Find all the db files from Sorcha.   They should all be in a single
         #  directory with no other files in that directory
         files = os.listdir(self._sso_truth)
+        arrow_schema = self._create_main_schema()        
         db_files = [os.path.join(self._sso_truth, f) for f in files if f.endswith('.db')]
-        mins = []
-        maxes = []
-        counts = []
+
+        all_hps = set()
+        hps_by_file = dict()
         for f in db_files:
-            with sqlite3.connect(f) as conn:
-                res = conn.execute(self._mjd_q)
-                r = res.fetchone()
-                mins.append(float(r[0]))
-                maxes.append(float(r[1]))
-                counts.append(int(r[2]))
-
-        mjd_list = _partition_mjd(mins, maxes, counts, self._row_group_size)
-        arrow_schema = self._create_main_schema()
-
-        # ## Depending on length of mjd_list, may need more than one
-        # ## output file in which case will need to add an outer loop
-        # ## over output file. Decide on max row groups per file.
-        mjd_min = min(mins)
-        mjd_max = max(maxes)
-        out_name = f'sso_{int(mjd_min)}_{int(np.ceil(mjd_max))}.parquet'
-        writer = pq.ParquetWriter(os.path.join(self._output_dir, out_name),
-                                  arrow_schema)
-        for i in range(len(mjd_list) - 1):
-            self._write_rg(writer, mjd_list[i], mjd_list[i+1], db_files,
-                           arrow_schema)
-
-        # close parquet file
-        writer.close()
-
+            hps_by_file[f] = self._get_hps(f)
+        all_hps = sorted(all_hps.union(hps_by_file[f]))
+                
+        for h in all_hps:
+            self._write_hp(h, hps_by_file, arrow_schema)
+                
         #  In sso description in config come up with suitable re for filenames
 
     def _create_sso_flux_file(self, info, arrow_schema):
