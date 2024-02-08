@@ -19,29 +19,6 @@ __all__ = ['SsoCatalogCreator']
 _DEFAULT_ROW_GROUP_SIZE = 100000      # Maybe could be larger
 
 
-# def _partition_mjd(mins, maxes, counts, max_rowgroup_size):
-#     ''' Determine mjd intervals, each of which will be processed
-#             in one go'''
-#     total_rows = np.sum(np.array(counts))
-#     min_min = int(np.floor(np.min(np.array(mins))))
-#     max_max = int(np.ceil(np.max(np.array(maxes))))
-#     # n_rowgroup = (max_max + (max_rowgroup_size - 1) - min_min)/max_rowgroup_size
-#     n_rowgroup = int(np.ceil(total_rows/max_rowgroup_size))
-#     # for debugging
-#     if n_rowgroup < 2:
-#         n_rowgroup = 2
-#     mjd_interval = int(np.ceil((max_max - min_min)/n_rowgroup))
-#     mjds = [min_min]
-#     last = min_min
-#     for i in range(n_rowgroup):
-#         last += mjd_interval
-#         last = min(last, max_max)
-#         mjds.append(last)
-#         if last == max_max:
-#             break
-
-#     return mjds
-
 
 class SsoCatalogCreator:
     _sso_truth = '/sdf/home/j/jrb/rubin-user/sso/input/6feb2024'
@@ -97,7 +74,6 @@ class SsoCatalogCreator:
             pa.field('observedTrailedSourceMag', pa.float64()),
             pa.field('ra_rate', pa.float64()),
             pa.field('dec_rate', pa.float64())]
-            # pa.field('filter', pa.string())]
         return pa.schema(fields)
 
     def _create_flux_schema(self):
@@ -112,18 +88,6 @@ class SsoCatalogCreator:
             pa.field('lsst_flux_z', pa.float32(), True),
             pa.field('lsst_flux_y', pa.float32(), True)]
         return pa.schema(fields)
-
-    # def _write_time_rg(self, writer, min_mjd, max_mjd, db_files, arrow_schema):
-    #     df_list = []
-    #     for f in db_files:
-    #         conn = sqlite3.connect(f)
-    #         df_list.append(pd.read_sql_query(self._df_query,
-    #                                          conn,
-    #                                          params=(min_mjd, max_mjd)))
-    #     df = pd.concat(df_list)
-    #     df_sorted = df.sort_values('mjd')
-    #     tbl = pa.Table.from_pandas(df_sorted, schema=arrow_schema)
-    #     writer.write_table(tbl)
 
     def _get_hps(self, filepath):
         
@@ -175,8 +139,6 @@ class SsoCatalogCreator:
         for h in all_hps:
             self._write_hp(h, hps_by_file, arrow_schema)
                 
-        #  In sso description in config come up with suitable re for filenames
-
     def _create_sso_flux_file(self, info, arrow_schema):
         '''
         Parameters
@@ -188,7 +150,7 @@ class SsoCatalogCreator:
                                                           mjd=None,
                                                           filepath=info['path'])
         colls = object_list.get_collections()
-        outname = f"sso_flux_{info['mjd_min']}_{info['mjd_max']}.parquet"
+        outname = f"sso_flux_{info['hp']}.parquet"
 
         writer = pq.ParquetWriter(os.path.join(self._output_dir, outname),
                                   arrow_schema)
@@ -210,8 +172,7 @@ class SsoCatalogCreator:
     def create_sso_flux_catalog(self):
         """
         Create sso flux catalog.  Includes id, mjd (since given sso normally
-        has several observations) and fluxes.   (Or just one flux and
-        associated band?)
+        has several observations) and fluxes.  
         """
         from .skyCatalogs import open_catalog
 
