@@ -1,9 +1,5 @@
 import os
-# import sys
-# import re
-# import logging
 import numpy as np
-# import numpy.ma as ma
 import sqlite3
 import pandas as pd
 import pyarrow as pa
@@ -17,7 +13,6 @@ Code for creating sky catalogs for sso objects
 __all__ = ['SsoCatalogCreator']
 
 _DEFAULT_ROW_GROUP_SIZE = 100000      # Maybe could be larger
-
 
 
 class SsoCatalogCreator:
@@ -50,8 +45,8 @@ class SsoCatalogCreator:
         mjd_c = 'FieldMJD_TAI'
         self._mjd_q = f'select min({mjd_c}), max({mjd_c}), count({mjd_c}) from {tbl}'
         self._dfhp_query = f'''select ObjID as id, {mjd_c} as mjd,
-                 "AstRA(deg)" as ra, "AstDec(deg)" as dec, 
-                 "AstRARate(deg/day)" as ra_rate, 
+                 "AstRA(deg)" as ra, "AstDec(deg)" as dec,
+                 "AstRARate(deg/day)" as ra_rate,
                  "AstDecRate(deg/day)" as dec_rate,
                  observedTrailedSourceMag from {tbl} where healpix = (?)
                  order by mjd, ObjID'''
@@ -63,7 +58,7 @@ class SsoCatalogCreator:
     @property
     def sso_sed(self):
         return self._sso_sed
-    
+
     def _create_main_schema(self):
 
         fields = [
@@ -90,7 +85,7 @@ class SsoCatalogCreator:
         return pa.schema(fields)
 
     def _get_hps(self, filepath):
-        
+
         with sqlite3.connect(filepath) as conn:
             df = pd.read_sql_query('select distinct healpix from pp_results',
                                    conn)
@@ -118,7 +113,7 @@ class SsoCatalogCreator:
         # For now only a single row group will be necessary
         tbl = pa.Table.from_pandas(df_sorted, schema=arrow_schema)
         writer.write_table(tbl)
-                           
+
 
     def create_sso_catalog(self):
         """
@@ -127,7 +122,7 @@ class SsoCatalogCreator:
         #  Find all the db files from Sorcha.   They should all be in a single
         #  directory with no other files in that directory
         files = os.listdir(self._sso_truth)
-        arrow_schema = self._create_main_schema()        
+        arrow_schema = self._create_main_schema()
         db_files = [os.path.join(self._sso_truth, f) for f in files if f.endswith('.db')]
 
         all_hps = set()
@@ -135,25 +130,21 @@ class SsoCatalogCreator:
         for f in db_files:
             hps_by_file[f] = self._get_hps(f)
         all_hps = sorted(all_hps.union(hps_by_file[f]))
-                
-        for h in all_hps:
-            self._write_hp(h, hps_by_file, arrow_schema)
-                
-    def _create_sso_flux_file(self, info, arrow_schema):
-        '''
-        Parameters
-        ----------
-        info          dict  information pertaining to an existing sso main file
-        arrow_schema        to be used in creating the new flux file
-        '''
-        object_list = self._cat.get_object_type_by_region(None, 'sso',
-                                                          mjd=None,
-                                                          filepath=info['path'])
-        colls = object_list.get_collections()
-        outname = f"sso_flux_{info['hp']}.parquet"
 
-        writer = pq.ParquetWriter(os.path.join(self._output_dir, outname),
-                                  arrow_schema)
+        todo = self._catalog_creator._parts
+        if len(todo) == 0:
+            todo = all_hps
+        for h in todo:
+            self._write_hp(h, hps_by_file, arrow_schema)
+
+    def _create_sso_flux_pixel(self, pixel, arrow_schema):
+        output_filename = f'sso_flux_{pixel}.parquet'
+        output_path = os.path.join(self._catalog_creator._output_dir,
+                                   output_filename)
+
+        object_list = self._cat.get_object_type_by_hp(pixel, 'sso')
+        colls = object_list.get_collections()
+        writer = pq.ParquetWriter(output_path, arrow_schema)
         outs = dict()
         for c in colls:
             outs['id'] = c._id
@@ -172,7 +163,7 @@ class SsoCatalogCreator:
     def create_sso_flux_catalog(self):
         """
         Create sso flux catalog.  Includes id, mjd (since given sso normally
-        has several observations) and fluxes.  
+        has several observations) and fluxes.
         """
         from .skyCatalogs import open_catalog
 
@@ -187,6 +178,9 @@ class SsoCatalogCreator:
         self._logger.info('Creating sso flux files')
 
         # For each main file make a corresponding flux file
-        for f, info in self._cat._sso_files.items():
-            if info['scope'] == 'main':
-                self._create_sso_flux_file(info, arrow_schema)
+        # for f, info in self._cat._sso_files.items():
+        #     if info['scope'] == 'main':
+        #         self._create_sso_flux_file(info, arrow_schema)
+
+        for p in self._catalog_creator._parts:
+            self._create_sso_flux_pixel(p, arrow_schema)

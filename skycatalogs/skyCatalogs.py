@@ -13,7 +13,7 @@ from skycatalogs.utils.catalog_utils import CatalogContext
 from skycatalogs.objects.base_object import ObjectList, ObjectCollection
 from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from skycatalogs.objects.sso_object import SsoObject, SsoCollection
-from skycatalogs.objects.sso_object import find_sso_files
+# from skycatalogs.objects.sso_object import find_sso_files
 from skycatalogs.readers import ParquetReader
 from skycatalogs.utils.sed_tools import TophatSedFactory, DiffskySedFactory
 from skycatalogs.utils.sed_tools import SsoSedFactory
@@ -70,25 +70,27 @@ def _get_intersecting_hps(hp_ordering, nside, region):
     return pixels
 
 
-def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
+def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
                        mjd=None):
     '''
     Parameters
     ----------
     tbl          data table including columns named "ra", "dec", and id_column
-                 (and also "object_type" colum if galaxy is False, possibly
+                 (and also "object_type" colum if source_type is "star"
+                 or "Gaia_star", possibly
                  start_mjd and end_mjd if galaxy is False and mjd is not
                  None)
     id_column    string
     region       mask should restrict to this region (or not at all if None)
-    source_type  string or set (or other container) of expected object type(s).
-                 For now, must be a singleton
-    mjd          if not none, may be used to filter transient objects
+    source_type  string of expected object type
+    mjd          if not none, may be used to filter transient or variable
+                 objects
 
     Returns
     -------
     4 values for galaxies and snana: ra, dec, id, mask
     5 values for pointsources: ra, dec, id, object_type, mask
+    5 values for SSO: ra, dec, id, mjd, mask
     If objects are in the region, ra, dec, id correspond to those objects.
     mask will mask off unused objects
     If there are no objects in the region, all return values are None
@@ -97,13 +99,11 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
     if isinstance(tbl[id_column][0], (int, np.int64)):
         tbl[id_column] = [str(an_id) for an_id in tbl[id_column]]
 
-    if not isinstance(source_type, str):
-        source_type = set(source_type)
-        if len(source_type) != 1:
-            raise NotImplementedError('_compress_via_mask only accepts singleton object_type')
-        source_type = source_type.pop()
-    no_obj_type_return = (source_type in {'galaxy', 'diffsky_galaxy', 'snana'})
-    time_filter = ('start_mjd' in tbl) and ('end_mjd' in tbl) and mjd is not None
+    no_obj_type_return = (source_type in {'galaxy', 'diffsky_galaxy',
+                                          'snana', 'sso'})
+    no_mjd_return = (source_type != 'sso')   # for now
+    transient_filter = ('start_mjd' in tbl) and ('end_mjd' in tbl) and mjd is not None
+    variable_filter = ('mjd' in tbl)
 
     if region is not None:
         if isinstance(region, PolygonalRegion):        # special case
@@ -117,9 +117,9 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
             # Compute mask for that box
             mask = _compute_region_mask(bnd_box, tbl['ra'], tbl['dec'])
             if all(mask):    # even bounding box doesn't intersect table rows
-                if no_obj_type_return:
+                if no_obj_type_return and no_mjd_return:
                     return None, None, None, None
-                else:
+                else:    # currently if object type is returned, mjd is not
                     return None, None, None, None, None
 
             # Get compressed ra, dec
@@ -135,13 +135,16 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
         else:
             mask = _compute_region_mask(region, tbl['ra'], tbl['dec'])
 
-        if time_filter:
-            time_mask = _compute_time_mask(mjd, tbl['start_mjd'],
-                                           tbl['end_mjd'])
+        if transient_filter:
+            time_mask = _compute_transient_mask(mjd, tbl['start_mjd'],
+                                                tbl['end_mjd'])
+            mask = np.logical_or(mask, time_mask)
+        elif variable_filter:
+            time_mask = _compute_variable_mask(mjd, tbl['mjd'])
             mask = np.logical_or(mask, time_mask)
 
         if all(mask):
-            if no_obj_type_return:
+            if no_obj_type_return and no_mjd_return:
                 return None, None, None, None
             else:
                 return None, None, None, None, None
@@ -150,7 +153,11 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
             dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
             id_compress = ma.array(tbl[id_column], mask=mask).compressed()
             if no_obj_type_return:
-                return ra_compress, dec_compress, id_compress, mask
+                if no_mjd_return:
+                    return ra_compress, dec_compress, id_compress, mask
+                else:
+                    mjd_compress = ma.array(tbl['mjd'], mask=mask).compressed()
+                    return ra_compress, dec_compress, id_compress, mjd_compress, mask
             else:
 
                 object_type_compress = ma.array(tbl['object_type'],
@@ -158,15 +165,27 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
                 return ra_compress, dec_compress, id_compress, object_type_compress, mask
     else:
         if no_obj_type_return:
-            if time_filter:
-                time_mask = _compute_time_mask(mjd, tbl['start_mjd'],
-                                               tbl['end_mjd'])
+            if transient_filter:
+                time_mask = _compute_transient_mask(mjd, tbl['start_mjd'],
+                                                    tbl['end_mjd'])
                 ra_compress = ma.array(tbl['ra'], mask=time_mask).compressed()
                 dec_compress = ma.array(tbl['dec'],
                                         mask=time_mask).compressed()
                 id_compress = ma.array(tbl[id_column],
                                        mask=time_mask).compressed()
                 return ra_compress, dec_compress, id_compress, time_mask
+            elif variable_filter:
+                time_mask = _compute_variable_mask(mjd, tbl['mjd'])
+                if time_mask:
+                    ra_compress = ma.array(tbl['ra'], mask=time_mask).compressed()
+                    dec_compress = ma.array(tbl['dec'],
+                                            mask=time_mask).compressed()
+                    id_compress = ma.array(tbl[id_column],
+                                           mask=time_mask).compressed()
+                    mjd_compress = ma.array(tbl['mjd'], mask=time_mask).compressed()
+                    return ra_compress, dec_compress, id_compress, mjd_compress, time_mask
+                else:
+                    return tbl['ra'], tbl['dec'], tbl[id_column], tbl['mjd'], None
             else:
                 return tbl['ra'], tbl['dec'], tbl[id_column], None
         else:
@@ -213,7 +232,7 @@ def _compute_region_mask(region, ra, dec):
     return mask
 
 
-def _compute_time_mask(current_mjd, start_mjd, end_mjd):
+def _compute_transient_mask(current_mjd, start_mjd, end_mjd):
     '''
     Starting with an existing mask of excluded objects, exclude additional
     objects not visible at time current_mjd
@@ -230,6 +249,32 @@ def _compute_time_mask(current_mjd, start_mjd, end_mjd):
     '''
     mask = np.logical_or((current_mjd > end_mjd), (current_mjd < start_mjd))
 
+    return mask
+
+
+MJD_EPS = 0.00002    # about 1.7 seconds
+
+
+def _compute_variable_mask(current_mjd, mjd_column, epsilon=MJD_EPS):
+    '''
+    Compute mask to exclude all entries with
+    abs(mjd - current_mjd)  > epsilon
+
+    Parameters
+    ----------
+    current_mjd  float            mjd of interest
+    mjd_column   array of float   mjd for each entry
+    epsilon      float            tolerance for matching mjd entry
+
+    Returns
+    -------
+    mask
+    '''
+    if not current_mjd:
+        return None
+
+    diff = current_mjd - mjd_column
+    mask = np.logical_or((diff > epsilon), (diff < -epsilon))
     return mask
 
 
@@ -291,9 +336,9 @@ class SkyCatalog(object):
         #       for 'object_types', map object type to filepath
         self._hp_info = dict()
         _ = self._find_all_hps()
-        if 'sso' in self.raw_config['object_types']:
-            self._sso_files = find_sso_files(self._cat_dir,
-                                             self.raw_config['object_types']['sso'])
+#        if 'sso' in self.raw_config['object_types']:
+#            self._sso_files = find_sso_files(self._cat_dir,
+#                                             self.raw_config['object_types']['sso'])
 
         # NOTE: the use of TophatSedFactory is appropriate *only* for an
         # input galaxy catalog with format like cosmoDC2, which includes
@@ -346,8 +391,7 @@ class SkyCatalog(object):
         if 'sso' in config['object_types']:
             self.cat_cxt.register_source_type('sso',
                                               object_class=SsoObject,
-                                              collection_class=SsoCollection,
-                                              custom_load=True)
+                                              collection_class=SsoCollection)
 
     @property
     def observed_sed_factory(self):
@@ -631,14 +675,17 @@ class SkyCatalog(object):
             return object_list
 
         if object_type in ['galaxy', 'diffsky_galaxy']:
-            COLUMNS = ['galaxy_id', 'ra', 'dec']
+            columns = ['galaxy_id', 'ra', 'dec']
             id_name = 'galaxy_id'
         elif object_type in ['snana']:
-            COLUMNS = ['id', 'ra', 'dec', 'start_mjd', 'end_mjd']
+            columns = ['id', 'ra', 'dec', 'start_mjd', 'end_mjd']
             id_name = 'id'
         elif object_type in ['star', 'sncosmo']:
-            COLUMNS = ['object_type', 'id', 'ra', 'dec']
+            columns = ['object_type', 'id', 'ra', 'dec']
             id_name = 'id'
+        elif object_type in ['sso']:
+            id_name = 'id'
+            columns = ['id', 'ra', 'dec', 'mjd']
         else:
             raise NotImplementedError(f'Unsupported object type {object_type}')
 
@@ -652,7 +699,6 @@ class SkyCatalog(object):
             f_list = self._hp_info[hp]['object_types'][object_type] \
                 if object_type in self._hp_info[hp]['object_types'] else []
         elif 'parent' in self._config['object_types'][object_type]:
-            # ##f_list = self._hp_info[hp]['object_types'][self._config['object_types'][ot]['parent']]
             f_list = self._hp_info[hp]['object_types'][self._config['object_types'][object_type]['parent']]
 
         for f in f_list:
@@ -683,13 +729,13 @@ class SkyCatalog(object):
 
             # Make a collection for each row group
             for rg in range(rdr.n_row_groups):
-                arrow_t = rdr.read_columns(COLUMNS, None, rg)
+                arrow_t = rdr.read_columns(columns, None, rg)
                 if object_type in {'galaxy', 'diffsky_galaxy', 'snana'}:
                     ra_c, dec_c, id_c, mask =\
                         _compress_via_mask(arrow_t,
                                            id_name,
                                            region,
-                                           source_type={object_type},
+                                           source_type=object_type,
                                            mjd=mjd)
                     if ra_c is not None:
                         new_collection = coll_class(ra_c, dec_c, id_c,
@@ -705,7 +751,20 @@ class SkyCatalog(object):
                             SED_file = os.path.join(self._cat_dir, base)
                             new_collection.set_SED_file(SED_file)
                         object_list.append_collection(new_collection)
-
+                elif object_type in {'sso'}:
+                    ra_c, dec_c, id_c, mjd_c, mask =\
+                        _compress_via_mask(arrow_t,
+                                           id_name,
+                                           region,
+                                           source_type=object_type,
+                                           mjd=mjd)
+                    new_collection = SsoCollection(ra_c, dec_c, id_c, hp, self,
+                                                   mjd_individual=mjd_c,
+                                                   region=region,
+                                                   mjd=mjd, mask=mask,
+                                                   readers=the_readers,
+                                                   row_group=rg)
+                    object_list.append_collection(new_collection)
                 else:
                     ra_c, dec_c, id_c, object_type_c, mask =\
                         _compress_via_mask(arrow_t, id_name, region,
