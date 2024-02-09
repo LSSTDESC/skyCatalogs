@@ -176,7 +176,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
                 return ra_compress, dec_compress, id_compress, time_mask
             elif variable_filter:
                 time_mask = _compute_variable_mask(mjd, tbl['mjd'])
-                if time_mask:
+                if time_mask is not None:
                     ra_compress = ma.array(tbl['ra'], mask=time_mask).compressed()
                     dec_compress = ma.array(tbl['dec'],
                                             mask=time_mask).compressed()
@@ -758,13 +758,15 @@ class SkyCatalog(object):
                                            region,
                                            source_type=object_type,
                                            mjd=mjd)
-                    new_collection = SsoCollection(ra_c, dec_c, id_c, hp, self,
-                                                   mjd_individual=mjd_c,
-                                                   region=region,
-                                                   mjd=mjd, mask=mask,
-                                                   readers=the_readers,
-                                                   row_group=rg)
-                    object_list.append_collection(new_collection)
+                    if ra_c is not None:
+                        new_collection = SsoCollection(ra_c, dec_c, id_c, hp,
+                                                       self,
+                                                       mjd_individual=mjd_c,
+                                                       region=region,
+                                                       mjd=mjd, mask=mask,
+                                                       readers=the_readers,
+                                                       row_group=rg)
+                        object_list.append_collection(new_collection)
                 else:
                     ra_c, dec_c, id_c, object_type_c, mask =\
                         _compress_via_mask(arrow_t, id_name, region,
