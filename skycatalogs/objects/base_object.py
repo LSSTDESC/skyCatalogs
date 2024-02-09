@@ -570,7 +570,10 @@ class ObjectCollection(Sequence):
         return id in self._id
 
     def __len__(self):
-        return len(self._id)
+        if self._id is not None:
+            return len(self._id)
+        else:
+            return 0
 
     # def __iter__(self):   Standard impl based on __getitem__ should be ok
     # def __reversed__(self):   Default implementation ok
