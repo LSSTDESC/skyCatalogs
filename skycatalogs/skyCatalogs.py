@@ -118,7 +118,7 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
 
             # Find largest vertex offset from the mean direction in arcsec.
             max_offset = np.degrees(np.arccos(min([mean_dir.dot(_)
-                                                   for _ in vetices])))*3600.
+                                                   for _ in vertices])))*3600.
 
             # Construct a "Disk" enclosing the polygonal region.
             lon_lat = lsst.sphgeom.LonLat(mean_dir)
@@ -126,7 +126,7 @@ def _compress_via_mask(tbl, id_column, region, source_type={'galaxy'},
             dec = lon_lat.getLat().asDegrees()
             disk_region = Disk(ra, dec, max_offset)
 
-            mask = _compute_mask(disk_region, tbl['ra'], tbl['dec'])
+            mask = _compute_region_mask(disk_region, tbl['ra'], tbl['dec'])
             if all(mask):
                 if no_obj_type_return:
                     return None, None, None, None
