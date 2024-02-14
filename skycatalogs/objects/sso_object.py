@@ -63,7 +63,7 @@ class SsoObject(BaseObject):
             final_v = UnitVector3d(NormalizedAngle.fromDegrees(ra_final),
                                    Angle.fromDegrees(dec_final))
             chord = (final_v - init_v).getNorm()
-            length = Angle(np.arccos(1.0 - (chord*chord/2.0))).asDegrees() * 3600
+            length = Angle(2 * np.arcsin(chord/2.0)).asDegrees() * 3600
 
             gobj = galsim.Box(length, skinny*length, gsparams=gsparams)
             # now rotate to direction of (ra_rate, dec_rate)
