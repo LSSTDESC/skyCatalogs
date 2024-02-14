@@ -3,9 +3,12 @@ import itertools
 import numpy as np
 import galsim
 from .base_object import BaseObject, ObjectCollection
+from lsst.sphgeom import Angle, NormalizedAngle, UnitVector3d
+# import healpy
 
 
 __all__ = ['SsoObject', 'SsoCollection']
+
 
 class SsoObject(BaseObject):
     _type_name = 'sso'
@@ -16,6 +19,10 @@ class SsoObject(BaseObject):
         super().__init__(ra, dec, id, self._type_name, belongs_to,
                          belongs_index)
         self._mjd = mjd
+
+    @property
+    def mjd(self):
+        return self._mjd
 
     def _get_sed(self, mjd=None):
         '''
@@ -31,15 +38,49 @@ class SsoObject(BaseObject):
             # Do we look for specific entry or do we allow interpolation?
         return SsoObject._solar_sed, self.get_native_attribute('observedTrailedSourceMag')
 
-    def get_gsobject_components(self, gsparams=None, rng=None, exposure=15.0):
+    def get_gsobject_components(self, gsparams=None, rng=None, exposure=15.0,
+                                streak=False):
+        skinny = 1.e-6   # ratio of width to height in our box
+
         if gsparams is not None:
             gsparams = galsim.GSParams(**gsparams)
-        # For a streak we use galsim.?? (galsim.Box?)
-        # To get the dimensions of the box, use ra rate, dec rate and
-        # exposure length.  The first two will be in the sky catalogs
-        # parquet file; the last will be passed in.
-        # For now start with the simpler thing: just a point source.
-        return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
+
+        if streak:
+            # For a streak make galsim.Box with length the angular distance
+            # in arcseconds from initial ra, dec to final
+            # Make the width very, very small
+            # Then rotate appropriately
+            ra = self.ra
+            dec = self.dec
+            # Convert from degrees/day to arcsec/sec
+            ra_rate = self.get_native_attribute('ra_rate')/24.0
+            dec_rate = self.get_native_attribute('dec_rate')/24.0
+            ra_final = ra + ra_rate * exposure
+            dec_final = dec + dec_rate * exposure
+
+            init_v = UnitVector3d(NormalizedAngle.fromDegrees(ra),
+                                  Angle.fromDegrees(dec))
+            final_v = UnitVector3d(NormalizedAngle.fromDegrees(ra_final),
+                                   Angle.fromDegrees(dec_final))
+            chord = (final_v - init_v).getNorm()
+            length = Angle(np.arccos(1.0 - (chord*chord/2.0))).asDegrees() * 3600
+
+            gobj = galsim.Box(length, skinny*length, gsparams=gsparams)
+            # now rotate to direction of (ra_rate, dec_rate)
+            try:
+                angle_rad = galsim.Angle(np.arctan(dec_rate/(ra_rate * np.cos(dec))), galsim.radians)
+
+                gobj = gobj.rotate(angle_rad)
+            except ZeroDivisionError:
+                gobj = gobj.rotate(galsim.Angle(90, galsim.degrees))
+            return {'this_object': gobj}
+        else:
+            # To get the dimensions of the box, use ra rate, dec rate and
+            # exposure length.  The first two will be in the sky catalogs
+            # parquet file; the last will be passed in.
+            # For now start with the simpler thing: just a point source.
+
+            return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
 
     def get_observer_sed_component(self, component, mjd=None):
         if mjd is None:
