@@ -16,7 +16,7 @@ _DEFAULT_ROW_GROUP_SIZE = 100000      # Maybe could be larger
 
 
 class SsoCatalogCreator:
-    _sso_truth = '/sdf/home/j/jrb/rubin-user/sso/input/6feb2024'
+    _sso_truth = '/sdf/home/j/jrb/rubin-user/sso/input/8feb2024'
     _sso_sed = '/sdf/home/j/jrb/rubin-user/sso/sed/solar_sed.db'
 
     def __init__(self, catalog_creator, output_dir,
