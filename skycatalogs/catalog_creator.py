@@ -185,6 +185,41 @@ def _do_galaxy_flux_chunk(send_conn, galaxy_collection, instrument_needed,
         return out_dict
 
 
+def _do_star_flux_chunk(send_conn, star_collection, instrument_needed,
+                        l_bnd, u_bnd):
+    '''
+    end_conn         output connection
+    star_collection  information from main file
+    instrument_needed List of which calculations should be done
+    l_bnd, u_bnd     demarcates slice to process
+
+    returns
+                    dict with keys id, lsst_flux_u, ... lsst_flux_y
+    '''
+    out_dict = {}
+
+    o_list = star_collection[l_bnd: u_bnd]
+    out_dict['id'] = [o.get_native_attribute('id') for o in o_list]
+    if 'lsst' in instrument_needed:
+        all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        for i, band in enumerate(LSST_BANDS):
+            v = all_fluxes_transpose.__next__()
+            out_dict[f'lsst_flux_{band}'] = v
+
+    if 'roman' in instrument_needed:
+        all_fluxes = [o.get_roman_fluxes(as_dict=False) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        for i, band in enumerate(ROMAN_BANDS):
+            v = all_fluxes_transpose.__next__()
+            out_dict[f'roman_flux_{band}'] = v
+
+    if send_conn:
+        send_conn.send(out_dict)
+    else:
+        return out_dict
+
+
 class CatalogCreator:
     def __init__(self, parts, area_partition=None, skycatalog_root=None,
                  catalog_dir='.', galaxy_truth=None,
@@ -990,6 +1025,9 @@ class CatalogCreator:
         # For schema use self._ps_flux_schema
         # output_template should be derived from value for flux_file_template
         #  in main catalog config.  Cheat for now
+
+        global _star_collection
+
         output_filename = f'pointsource_flux_{pixel}.parquet'
         output_path = os.path.join(self._output_dir, output_filename)
 
@@ -1000,36 +1038,80 @@ class CatalogCreator:
                 self._logger.info(f'Skipping regeneration of {output_path}')
                 return
 
+        # NOTE: For now there is only one collection in the object list
+        #       because stars are in a single row group
         object_list = self._cat.get_object_type_by_hp(pixel, 'star')
-        last_row_ix = len(object_list) - 1
-        writer = None
+        obj_coll = object_list.get_collections()[0]
+        _star_collection = obj_coll
 
-        # Write out as a single rowgroup as was done for main catalog
         l_bnd = 0
-        u_bnd = last_row_ix + 1
+        u_bnd = len(_star_collection)
+        n_parallel = self._flux_parallel
 
-        o_list = object_list[l_bnd: u_bnd]
-        self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
-        out_dict = {}
-        out_dict['id'] = [o.get_native_attribute('id') for o in o_list]
-        all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in o_list]
-        all_fluxes_transpose = zip(*all_fluxes)
-        for i, band in enumerate(LSST_BANDS):
-            self._logger.debug(f'Band {band} is number {i}')
-            v = all_fluxes_transpose.__next__()
-            out_dict[f'lsst_flux_{band}'] = v
-            if i == 1:
-                self._logger.debug(f'Len of flux column: {len(v)}')
-                self._logger.debug(f'Type of flux column: {type(v)}')
+        if n_parallel == 1:
+            n_per = u_bnd - l_bnd
+        else:
+            n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
+        fields_needed = self._ps_flux_schema.names
+        instrument_needed = ['lsst']       # for now
+
+        writer = None
+        rg_written = 0
+
+        lb = l_bnd
+        u = min(l_bnd + n_per, u_bnd)
+        readers = []
+
+        if n_parallel == 1:
+            out_dict = _do_star_flux_chunk(None, _star_collection,
+                                           instrument_needed, lb, u)
+        else:
+            # Expect to be able to do about 1500/minute/process
+            out_dict = {}
+            for field in fields_needed:
+                out_dict[field] = []
+
+            tm = max(int((n_per*60)/500), 5)  # Give ourselves a cushion
+            self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+            p_list = []
+            for i in range(n_parallel):
+                conn_rd, conn_wrt = Pipe(duplex=False)
+                readers.append(conn_rd)
+
+                # For debugging call directly
+                proc = Process(target=_do_star_flux_chunk,
+                               name=f'proc_{i}',
+                               args=(conn_wrt, _star_collection,
+                                     instrument_needed, lb, u))
+                proc.start()
+                p_list.append(proc)
+                lb = u
+                u = min(lb + n_per, u_bnd)
+
+            self._logger.debug('Processes started')
+            for i in range(n_parallel):
+                ready = readers[i].poll(tm)
+                if not ready:
+                    self._logger.error(f'Process {i} timed out after {tm} sec')
+                    sys.exit(1)
+                dat = readers[i].recv()
+                for field in fields_needed:
+                    out_dict[field] += dat[field]
+            for p in p_list:
+                p.join()
+
         out_df = pd.DataFrame.from_dict(out_dict)
         out_table = pa.Table.from_pandas(out_df,
                                          schema=self._ps_flux_schema)
+
         if not writer:
             writer = pq.ParquetWriter(output_path, self._ps_flux_schema)
         writer.write_table(out_table)
 
+        rg_written += 1
+
         writer.close()
-        # self._logger.debug(f'#row groups written to flux file: {rg_written}')
+        self._logger.debug(f'# row groups written to flux file: {rg_written}')
         if self._provenance == 'yaml':
             self.write_provenance_file(output_path)
 
