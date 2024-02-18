@@ -154,7 +154,11 @@ creator = CatalogCreator(parts, area_partition=None,
                          include_roman_flux=args.include_roman_flux,
                          star_input_fmt=args.star_input_fmt,
                          sso_truth=args.sso_truth, sso_sed=args.sso_sed)
-logger.info(f'Starting with healpix pixel {parts[0]}')
+if len(parts) > 0:
+    logger.info(f'Starting with healpix pixel {parts[0]}')
+elif args.sso:
+    logger.info(f'Creating catalogs for all available healpixels')
+
 if not args.no_galaxies:
     logger.info("Creating galaxy catalogs")
     creator.create('galaxy')
@@ -166,6 +170,6 @@ if not args.no_pointsources:
 if args.sso:
     logger.info("Creating SSO catalogs")
     creator.create('sso')
-    
+
 logger.info('All done')
 print_date()
