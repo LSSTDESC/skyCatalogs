@@ -48,7 +48,8 @@ class SsoCatalogCreator:
                  "AstRA(deg)" as ra, "AstDec(deg)" as dec,
                  "AstRARate(deg/day)" as ra_rate,
                  "AstDecRate(deg/day)" as dec_rate,
-                 observedTrailedSourceMag from {tbl} where healpix = (?)
+                 TrailedSourceMag as trailed_source_mag from {tbl}
+                 where healpix = (?)
                  order by mjd, ObjID'''
 
     @property
@@ -66,7 +67,7 @@ class SsoCatalogCreator:
             pa.field('mjd', pa.float64()),
             pa.field('ra', pa.float64()),
             pa.field('dec', pa.float64()),
-            pa.field('observedTrailedSourceMag', pa.float64()),
+            pa.field('trailed_source_mag', pa.float64()),
             pa.field('ra_rate', pa.float64()),
             pa.field('dec_rate', pa.float64())]
         return pa.schema(fields)
