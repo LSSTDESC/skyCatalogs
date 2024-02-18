@@ -36,7 +36,7 @@ class SsoObject(BaseObject):
             # directly or are there other effects to be applied?
             # Have to find it by looking for entry for this id, this mjd
             # Do we look for specific entry or do we allow interpolation?
-        return SsoObject._solar_sed, self.get_native_attribute('observedTrailedSourceMag')
+        return SsoObject._solar_sed, self.get_native_attribute('trailed_source_mag')
 
     def get_gsobject_components(self, gsparams=None, rng=None, exposure=15.0,
                                 streak=False):
@@ -52,10 +52,15 @@ class SsoObject(BaseObject):
             # Then rotate appropriately
             ra = self.ra
             dec = self.dec
-            # Convert from degrees/day to arcsec/sec
+            # Convert from (arc?)degrees/day to arcsec/sec
             ra_rate = self.get_native_attribute('ra_rate')/24.0
+            # Take out factor of cos(dec).
+            ra_rate_raw = ra_rate/np.cos(dec)
+            # ra_rate = self.get_native_attribute('ra_rate')/24.0
             dec_rate = self.get_native_attribute('dec_rate')/24.0
-            ra_final = ra + ra_rate * exposure
+            # ra_final is approximate since really ra_rate is a function
+            # of dec, but average dec_rate is small so
+            ra_final = ra + ra_rate_raw * exposure
             dec_final = dec + dec_rate * exposure
 
             init_v = UnitVector3d(NormalizedAngle.fromDegrees(ra),
@@ -68,7 +73,11 @@ class SsoObject(BaseObject):
             gobj = galsim.Box(length, skinny*length, gsparams=gsparams)
             # now rotate to direction of (ra_rate, dec_rate)
             try:
-                angle_rad = galsim.Angle(np.arctan(dec_rate/(ra_rate * np.cos(dec))), galsim.radians)
+                # angle_rad = galsim.Angle(np.arctan(dec_rate/(ra_rate * np.cos(dec))), galsim.radians)
+                # NOTE: Probably cos(dec) has already been applied, in which
+                # case we want
+                angle_rad = galsim.Angle(np.arctan(dec_rate/ra_rate),
+                                         galsim.radians)
 
                 gobj = gobj.rotate(angle_rad)
             except ZeroDivisionError:
