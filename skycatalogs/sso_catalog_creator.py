@@ -1,4 +1,6 @@
 import os
+import sys
+from multiprocessing import Process, Pipe
 import numpy as np
 import sqlite3
 import pandas as pd
@@ -13,6 +15,44 @@ Code for creating sky catalogs for sso objects
 __all__ = ['SsoCatalogCreator']
 
 _DEFAULT_ROW_GROUP_SIZE = 100000      # Maybe could be larger
+
+
+def _do_sso_flux_chunk(send_conn, sso_collection, instrument_needed,
+                       l_bnd, u_bnd):
+    '''
+    end_conn         output connection
+    star_collection  information from main file
+    instrument_needed List of which calculations should be done
+    l_bnd, u_bnd     demarcates slice to process
+
+    returns
+                    dict with keys id, lsst_flux_u, ... lsst_flux_y
+    '''
+    out_dict = {}
+
+    o_list = sso_collection[l_bnd: u_bnd]
+    # out_dict['id'] = [o.get_native_attribute('id') for o in o_list]
+    # out_dict['mjd'] = [o.get_native_attribute('mjd') for o in o_list]
+    out_dict['id'] = list(sso_collection._id[l_bnd: u_bnd])
+    out_dict['mjd'] = list(sso_collection._mjds[l_bnd: u_bnd])
+    if 'lsst' in instrument_needed:
+        all_fluxes = [o.get_LSST_fluxes(as_dict=False, mjd=o._mjd) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        for i, band in enumerate(LSST_BANDS):
+            v = all_fluxes_transpose.__next__()
+            out_dict[f'lsst_flux_{band}'] = v
+
+    # if 'roman' in instrument_needed:
+    #     all_fluxes = [o.get_roman_fluxes(as_dict=False) for o in o_list]
+    #     all_fluxes_transpose = zip(*all_fluxes)
+    #     for i, band in enumerate(ROMAN_BANDS):
+    #         v = all_fluxes_transpose.__next__()
+    #         out_dict[f'roman_flux_{band}'] = v
+
+    if send_conn:
+        send_conn.send(out_dict)
+    else:
+        return out_dict
 
 
 class SsoCatalogCreator:
@@ -115,7 +155,6 @@ class SsoCatalogCreator:
         tbl = pa.Table.from_pandas(df_sorted, schema=arrow_schema)
         writer.write_table(tbl)
 
-
     def create_sso_catalog(self):
         """
         Create the 'main' sso catalog, including everything except fluxes
@@ -139,27 +178,95 @@ class SsoCatalogCreator:
             self._write_hp(h, hps_by_file, arrow_schema)
 
     def _create_sso_flux_pixel(self, pixel, arrow_schema):
+        '''
+        Create parquet file for a single healpix pixel, containing
+        id, mjd and fluxes
+        Parameters
+        pixel         int
+        arrow_schema  schema for parquet file to be output
+        Return
+        ------
+        None
+        '''
+
+        global _sso_collection
         output_filename = f'sso_flux_{pixel}.parquet'
         output_path = os.path.join(self._catalog_creator._output_dir,
                                    output_filename)
 
         object_list = self._cat.get_object_type_by_hp(pixel, 'sso')
+        n_parallel = self._catalog_creator._flux_parallel
+
         colls = object_list.get_collections()
         writer = pq.ParquetWriter(output_path, arrow_schema)
-        outs = dict()
+        # outs = dict()
+        fields_needed = arrow_schema.names
+        instrument_needed = ['lsst']
+        rg_written = 0
+        writer = None
+
+        # There is only one row group per main healpixel file currently
+        # so the loop could be dispensed with
         for c in colls:
-            outs['id'] = c._id
-            outs['mjd'] = c._mjds
-            all_fluxes = [o.get_LSST_fluxes(as_dict=False, mjd=o._mjd) for o in c]
-            all_fluxes_transpose = zip(*all_fluxes)
-            for i, band in enumerate(LSST_BANDS):
-                v = all_fluxes_transpose.__next__()
-                outs[f'lsst_flux_{band}'] = v
-            out_df = pd.DataFrame.from_dict(outs)
-            out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
+            _sso_collection = c
+            l_bnd = 0
+            u_bnd = len(c)
+            if n_parallel == 1:
+                n_per = u_bnd - l_bnd
+            else:
+                n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
+
+            lb = l_bnd
+            u = min(l_bnd + n_per, u_bnd)
+            readers = []
+            if n_parallel == 1:
+                out_dict = _do_sso_flux_chunk(None, c, instrument_needed,
+                                              l_bnd, u_bnd)
+            else:
+                out_dict = {}
+                for field in fields_needed:
+                    out_dict[field] = []
+
+                tm = max(int((n_per*60)/500), 5)
+                self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+                p_list = []
+                for i in range(n_parallel):
+                    conn_rd, conn_wrt = Pipe(duplex=False)
+                    readers.append(conn_rd)
+
+                    # For debugging call directly
+                    proc = Process(target=_do_sso_flux_chunk,
+                                   name=f'proc_{i}',
+                                   args=(conn_wrt, _sso_collection,
+                                         instrument_needed, lb, u))
+                    proc.start()
+                    p_list.append(proc)
+                    lb = u
+                    u = min(lb + n_per, u_bnd)
+                self._logger.debug('Processes started')
+                for i in range(n_parallel):
+                    ready = readers[i].poll(tm)
+                    if not ready:
+                        self._logger.error(f'Process {i} timed out after {tm} sec')
+                        sys.exit(1)
+                    dat = readers[i].recv()
+                    for field in fields_needed:
+                        out_dict[field] += dat[field]
+                for p in p_list:
+                    p.join()
+
+            out_df = pd.DataFrame.from_dict(out_dict)
+            out_table = pa.Table.from_pandas(out_df,
+                                             schema=arrow_schema)
+
+            if not writer:
+                writer = pq.ParquetWriter(output_path, arrow_schema)
             writer.write_table(out_table)
 
+            rg_written += 1
+
         writer.close()
+        self._logger.debug(f'# row groups written to flux file: {rg_written}')
 
     def create_sso_flux_catalog(self):
         """
@@ -177,11 +284,6 @@ class SsoCatalogCreator:
         self._main_template = sso_config['file_template']
 
         self._logger.info('Creating sso flux files')
-
-        # For each main file make a corresponding flux file
-        # for f, info in self._cat._sso_files.items():
-        #     if info['scope'] == 'main':
-        #         self._create_sso_flux_file(info, arrow_schema)
 
         for p in self._catalog_creator._parts:
             self._create_sso_flux_pixel(p, arrow_schema)
