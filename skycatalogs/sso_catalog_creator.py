@@ -56,7 +56,7 @@ def _do_sso_flux_chunk(send_conn, sso_collection, instrument_needed,
 
 
 class SsoCatalogCreator:
-    _sso_truth = '/sdf/home/j/jrb/rubin-user/sso/input/8feb2024'
+    _sso_truth = '/sdf/home/j/jrb/rubin-user/sso/input/20feb2024'
     _sso_sed = '/sdf/home/j/jrb/rubin-user/sso/sed/solar_sed.db'
 
     def __init__(self, catalog_creator, output_dir,
