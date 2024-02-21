@@ -211,6 +211,8 @@ class SsoCatalogCreator:
             _sso_collection = c
             l_bnd = 0
             u_bnd = len(c)
+            if (u_bnd - l_bnd) < 5 * n_parallel:
+                n_parallel = 1
             if n_parallel == 1:
                 n_per = u_bnd - l_bnd
             else:
@@ -227,7 +229,7 @@ class SsoCatalogCreator:
                 for field in fields_needed:
                     out_dict[field] = []
 
-                tm = max(int((n_per*60)/500), 5)
+                tm = max(int((n_per*60)/500), 10)
                 self._logger.info(f'Using timeout value {tm} for {n_per} sources')
                 p_list = []
                 for i in range(n_parallel):
