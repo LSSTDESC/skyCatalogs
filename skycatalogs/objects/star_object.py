@@ -33,11 +33,9 @@ class StarObject(BaseObject):
 
     def _mag_modulation(self, mjd):
         if not self.is_variable or mjd is None:
-            return 1.0
+            return 0.0
         modulation = (self.mag_amplitude *
                       np.sin(2.*np.pi*(mjd - self._mjd0)/self.period + self.phase))
-        modulation = 0.0
-        print(modulation, end=" ")
         return modulation
 
     def _get_sed(self, mjd=None, redshift=0):
@@ -61,8 +59,10 @@ class StarObject(BaseObject):
 
         return sed
 
-    def get_LSST_flux(self, band, sed=None, cache=True, mjd=None,
-                      static=False):
-        if not self.is_variable or static:
+    def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
+        if not self.is_variable:
             return super().get_LSST_flux(band, sed=sed, cache=cache, mjd=mjd)
+
+        # Use the direct call to .get_flux to avoid unwanted flux caching
+        # for variable stars.
         return self.get_flux(self._lsst_bandpasses[band], sed=sed, mjd=mjd)
