@@ -6,8 +6,8 @@ from .base_object import BaseObject, ObjectCollection
 from lsst.sphgeom import Angle, NormalizedAngle, UnitVector3d
 # import healpy
 
-
-__all__ = ['SsoObject', 'SsoCollection']
+EXPOSURE_DEFAULT = 30.0         # seconds
+__all__ = ['SsoObject', 'SsoCollection', 'EXPOSURE_DEFAULT']
 
 
 class SsoObject(BaseObject):
@@ -38,9 +38,10 @@ class SsoObject(BaseObject):
             # Do we look for specific entry or do we allow interpolation?
         return SsoObject._solar_sed, self.get_native_attribute('trailed_source_mag')
 
-    def get_gsobject_components(self, gsparams=None, rng=None, exposure=15.0,
+    def get_gsobject_components(self, gsparams=None, rng=None,
                                 streak=False):
         skinny = 1.e-6   # ratio of width to height in our box
+        exposure = self._belongs_to._exposure
 
         if gsparams is not None:
             gsparams = galsim.GSParams(**gsparams)
@@ -123,7 +124,7 @@ class SsoCollection(ObjectCollection):
 
     def __init__(self, ra, dec, id, hp, sky_catalog, mjd_individual=None,
                  region=None, mjd=None,
-                 mask=None, readers=None, row_group=0):
+                 mask=None, readers=None, row_group=0, exposure=EXPOSURE_DEFAULT):
         '''
         Parameters
         ----------
@@ -144,6 +145,7 @@ class SsoCollection(ObjectCollection):
                          region=region, mjd=mjd, mask=mask,
                          readers=readers, row_group=row_group)
         self._mjds = np.array(mjd_individual)
+        self._exposure = exposure
 
     def __getitem__(self, key):
         '''

@@ -13,6 +13,7 @@ from skycatalogs.utils.catalog_utils import CatalogContext
 from skycatalogs.objects.base_object import ObjectList, ObjectCollection
 from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from skycatalogs.objects.sso_object import SsoObject, SsoCollection
+from skycatalogs.objects.sso_object import EXPOSURE_DEFAULT
 # from skycatalogs.objects.sso_object import find_sso_files
 from skycatalogs.readers import ParquetReader
 from skycatalogs.utils.sed_tools import TophatSedFactory, DiffskySedFactory
@@ -71,7 +72,7 @@ def _get_intersecting_hps(hp_ordering, nside, region):
 
 
 def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
-                       mjd=None):
+                       mjd=None, exposure=EXPOSURE_DEFAULT):
     '''
     Parameters
     ----------
@@ -85,6 +86,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
     source_type  string of expected object type
     mjd          if not none, may be used to filter transient or variable
                  objects
+    exposure     length of exposure if mjd is not None
 
     Returns
     -------
@@ -140,7 +142,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
                                                 tbl['end_mjd'])
             mask = np.logical_or(mask, time_mask)
         elif variable_filter:
-            time_mask = _compute_variable_mask(mjd, tbl['mjd'])
+            time_mask = _compute_variable_mask(mjd, tbl['mjd'], exposure)
             mask = np.logical_or(mask, time_mask)
 
         if all(mask):
@@ -175,7 +177,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
                                        mask=time_mask).compressed()
                 return ra_compress, dec_compress, id_compress, time_mask
             elif variable_filter:
-                time_mask = _compute_variable_mask(mjd, tbl['mjd'])
+                time_mask = _compute_variable_mask(mjd, tbl['mjd'], exposure)
                 if time_mask is not None:
                     ra_compress = ma.array(tbl['ra'], mask=time_mask).compressed()
                     dec_compress = ma.array(tbl['dec'],
@@ -252,18 +254,20 @@ def _compute_transient_mask(current_mjd, start_mjd, end_mjd):
     return mask
 
 
-MJD_EPS = 0.00002    # about 1.7 seconds
+MJD_EPS = 0.000001    # < 0.1 seconds
+JD_SEC = 1.0/(24.0*3600.0)
 
 
-def _compute_variable_mask(current_mjd, mjd_column, epsilon=MJD_EPS):
+def _compute_variable_mask(current_mjd, mjd_column, exposure, epsilon=MJD_EPS):
     '''
     Compute mask to exclude all entries with
-    abs(mjd - current_mjd)  > epsilon
+    mjd_column  > current_mjd - epsilon and mjd < current_mjd + exposure
 
     Parameters
     ----------
     current_mjd  float            mjd of interest
     mjd_column   array of float   mjd for each entry
+    exposure     float            exposure in seconds
     epsilon      float            tolerance for matching mjd entry
 
     Returns
@@ -273,8 +277,9 @@ def _compute_variable_mask(current_mjd, mjd_column, epsilon=MJD_EPS):
     if not current_mjd:
         return None
 
-    diff = current_mjd - mjd_column
-    mask = np.logical_or((diff > epsilon), (diff < -epsilon))
+    exposure_jd = exposure * JD_SEC
+    mask = np.logical_or(mjd_column < (current_mjd - epsilon),
+                         mjd_column > (current_mjd + exposure_jd))
     return mask
 
 
@@ -576,7 +581,8 @@ class SkyCatalog(object):
                 objs_copy.add(parent)
         return objs_copy
 
-    def get_objects_by_region(self, region, obj_type_set=None, mjd=None):
+    def get_objects_by_region(self, region, obj_type_set=None, mjd=None,
+                              exposure=EXPOSURE_DEFAULT):
         '''
         Parameters
         ----------
@@ -585,6 +591,7 @@ class SkyCatalog(object):
         obj_type_set   Return only these objects. Defaults to value in config if
                        specified; else default to all defined in config
         mjd            MJD of observation epoch.
+        exposure       exposure length (seconds)
 
         Returns
         -------
@@ -610,21 +617,21 @@ class SkyCatalog(object):
         obj_types.sort()
 
         for ot in obj_types:
-            new_list = self.get_object_type_by_region(region, ot, mjd=mjd)
+            new_list = self.get_object_type_by_region(region, ot, mjd=mjd,
+                                                      exposure=exposure)
             object_list.append_object_list(new_list)
 
         return object_list
 
     def get_object_type_by_region(self, region, object_type, mjd=None,
-                                  filepath=None):
+                                  exposure=EXPOSURE_DEFAULT, filepath=None):
         '''
         Parameters
         ----------
         region        box, circle or PolygonalRegion. Supported region
                       types made depend on object_type
         object_type   known object type without parent
-        mjd           MJD of observation epoch. In case of custom load
-                      this argument may be a pair defining an interval
+        mjd           MJD of observation epoch.
         filepath      if not None, look only in this file.
                       Only used for custom loads
 
@@ -644,7 +651,7 @@ class SkyCatalog(object):
         if coll_type is not None:
             if self.cat_cxt.use_custom_load(object_type):
                 coll = coll_type.load_collection(region, self, mjd=mjd,
-                                                 filepath=filepath)
+                                                 exposure=EXPOSURE_DEFAULT)
                 if isinstance(coll, ObjectCollection):
                     out_list.append_collection(coll)
                 else:  # ObjectList
@@ -655,15 +662,17 @@ class SkyCatalog(object):
             if partition['type'] == 'healpix':
                 hps = self.get_hps_by_region(region, object_type)
                 for hp in hps:
-                    c = self.get_object_type_by_hp(hp, object_type,
-                                                   region, mjd)
+                    c = self.get_object_type_by_hp(hp, object_type, region,
+                                                   mjd,
+                                                   exposure=EXPOSURE_DEFAULT)
                     if len(c) > 0:
                         out_list.append_object_list(c)
                 return out_list
         else:
             raise NotImplementedError(f'Unsupported object type {object_type}')
 
-    def get_object_type_by_hp(self, hp, object_type, region=None, mjd=None):
+    def get_object_type_by_hp(self, hp, object_type, region=None, mjd=None,
+                              exposure=EXPOSURE_DEFAULT):
         object_list = ObjectList()
 
         #  Do we need to check more specifically by object type?
@@ -757,7 +766,7 @@ class SkyCatalog(object):
                                            id_name,
                                            region,
                                            source_type=object_type,
-                                           mjd=mjd)
+                                           mjd=mjd, exposure=exposure)
                     if ra_c is not None:
                         new_collection = SsoCollection(ra_c, dec_c, id_c, hp,
                                                        self,
@@ -765,7 +774,8 @@ class SkyCatalog(object):
                                                        region=region,
                                                        mjd=mjd, mask=mask,
                                                        readers=the_readers,
-                                                       row_group=rg)
+                                                       row_group=rg,
+                                                       exposure=exposure)
                         object_list.append_collection(new_collection)
                 else:
                     ra_c, dec_c, id_c, object_type_c, mask =\
@@ -930,12 +940,12 @@ if __name__ == '__main__':
 
     print('Number of collections returned for polygon:  ',
           object_list_poly.collection_count)
-    assert(object_list.collection_count == object_list_poly.collection_count)
+    assert (object_list.collection_count == object_list_poly.collection_count)
     print('Object count for polygon: ', len(object_list_poly))
 
     fudge = 5
-    assert(len(object_list_poly) > len(object_list) - fudge)
-    assert(len(object_list_poly) < len(object_list) + fudge)
+    assert (len(object_list_poly) > len(object_list) - fudge)
+    assert (len(object_list_poly) < len(object_list) + fudge)
 
     print('Now try inscribed polygon which is not a box')
     ra_avg = (ra_min_small + ra_max_small) * 0.5
