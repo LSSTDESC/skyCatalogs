@@ -9,6 +9,7 @@ import erfa
 import astropy.modeling
 from astropy import units as u
 import galsim
+### Next line will have to go
 import lsst.daf.butler as daf_butler
 import lsst.geom
 from lsst.meas.algorithms import ReferenceObjectLoader
@@ -167,6 +168,7 @@ class GaiaCollection(ObjectCollection):
             gaia_section = skycatalog.raw_config['object_types']['gaia_star']
             GaiaCollection.set_config(gaia_section)
 
+        #  Probably all of the following down to ### must be replaced
         butler_params = GaiaCollection.get_config()['butler_parameters']
         butler = daf_butler.Butler(butler_params['repo'],
                                    collections=butler_params['collections'])
@@ -174,6 +176,11 @@ class GaiaCollection(ObjectCollection):
         refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
                    for _ in refs]
         dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
+        ###
+
+        # Not sure whether I should generate the dataIds and refCats
+        # ReferenceObjectLoader expects or whether ReferenceObjectLoader
+        # references db, in which case it needs to go
         config = ReferenceObjectLoader.ConfigClass()
         config.filterMap = {f'{_}': f'phot_{_}_mean' for _ in ('g', 'bp', 'rp')}
         ref_obj_loader = ReferenceObjectLoader(dataIds=dataIds,
