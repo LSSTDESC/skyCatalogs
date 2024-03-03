@@ -3,11 +3,12 @@ import itertools
 import numpy as np
 import galsim
 from .base_object import BaseObject, ObjectCollection
-from lsst.sphgeom import Angle, NormalizedAngle, UnitVector3d
-# import healpy
+from lsst.sphgeom import UnitVector3d, LonLat
 
 EXPOSURE_DEFAULT = 30.0         # seconds
 __all__ = ['SsoObject', 'SsoCollection', 'EXPOSURE_DEFAULT']
+
+SECONDS_PER_DAY = 24.0*3600.0
 
 
 class SsoObject(BaseObject):
@@ -40,7 +41,7 @@ class SsoObject(BaseObject):
 
     def get_gsobject_components(self, gsparams=None, rng=None,
                                 streak=False):
-        skinny = 1.e-6   # ratio of width to height in our box
+        trail_width = 1.e-6   # in arcseconds
         exposure = self._belongs_to._exposure
 
         if gsparams is not None:
@@ -53,43 +54,32 @@ class SsoObject(BaseObject):
             # Then rotate appropriately
             ra = self.ra
             dec = self.dec
-            # Convert from (arc?)degrees/day to arcsec/sec
-            ra_rate = self.get_native_attribute('ra_rate')/24.0
+            # Convert from (arc?)degrees/day to degrees/sec
+            ra_rate = self.get_native_attribute('ra_rate')/SECONDS_PER_DAY
             # Take out factor of cos(dec).
             ra_rate_raw = ra_rate/np.cos(dec)
             # ra_rate = self.get_native_attribute('ra_rate')/24.0
-            dec_rate = self.get_native_attribute('dec_rate')/24.0
+            dec_rate = self.get_native_attribute('dec_rate')/SECONDS_PER_DAY
             # ra_final is approximate since really ra_rate is a function
             # of dec, but average dec_rate is small so
             ra_final = ra + ra_rate_raw * exposure
             dec_final = dec + dec_rate * exposure
 
-            init_v = UnitVector3d(NormalizedAngle.fromDegrees(ra),
-                                  Angle.fromDegrees(dec))
-            final_v = UnitVector3d(NormalizedAngle.fromDegrees(ra_final),
-                                   Angle.fromDegrees(dec_final))
-            chord = (final_v - init_v).getNorm()
-            length = Angle(2 * np.arcsin(chord/2.0)).asDegrees() * 3600
+            init_v = UnitVector3d(LonLat.fromDegrees(ra, dec))
+            final_v = UnitVector3d(LonLat.fromDegrees(ra_final, dec_final))
+            length = np.degrees(np.arccos(init_v.dot(final_v))) * 3600.0
+            gobj = galsim.Box(length, trail_width, gsparams=gsparams)
 
-            gobj = galsim.Box(length, skinny*length, gsparams=gsparams)
             # now rotate to direction of (ra_rate, dec_rate)
-            try:
-                # angle_rad = galsim.Angle(np.arctan(dec_rate/(ra_rate * np.cos(dec))), galsim.radians)
-                # NOTE: Probably cos(dec) has already been applied, in which
-                # case we want
-                angle_rad = galsim.Angle(np.arctan(dec_rate/ra_rate),
-                                         galsim.radians)
+            # angle_rad = galsim.Angle(np.arctan2(dec_rate/(ra_rate * np.cos(dec))), galsim.radians)
+            # NOTE: Probably cos(dec) has already been applied, in which
+            # case we want
+            angle_rad = galsim.Angle(np.arctan2(dec_rate/ra_rate),
+                                     galsim.radians)
 
-                gobj = gobj.rotate(angle_rad)
-            except ZeroDivisionError:
-                gobj = gobj.rotate(galsim.Angle(90, galsim.degrees))
-            return {'this_object': gobj}
+            gobj = gobj.rotate(angle_rad)
         else:
-            # To get the dimensions of the box, use ra rate, dec rate and
-            # exposure length.  The first two will be in the sky catalogs
-            # parquet file; the last will be passed in.
-            # For now start with the simpler thing: just a point source.
-
+            # Treat as point source
             return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
 
     def get_observer_sed_component(self, component, mjd=None):
@@ -132,7 +122,7 @@ class SsoCollection(ObjectCollection):
         id           array of str
         sky_catalog  instance of SkyCatalog
         mjd_indiviual array of float or None
-        region        Geometric region or string (representing file path)
+        region        Geometric region
         mjd_global    float or None
         mask          exclusion mask if cuts have been made due to
                       geometric region or mjd

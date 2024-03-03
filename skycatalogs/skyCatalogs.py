@@ -254,8 +254,9 @@ def _compute_transient_mask(current_mjd, start_mjd, end_mjd):
     return mask
 
 
-MJD_EPS = 0.000001    # < 0.1 seconds
-JD_SEC = 1.0/(24.0*3600.0)
+SECONDS_PER_DAY = 24.0*3600.0
+MJD_EPS = 0.1/SECONDS_PER_DAY
+JD_SEC = 1.0/SECONDS_PER_DAY
 
 
 def _compute_variable_mask(current_mjd, mjd_column, exposure, epsilon=MJD_EPS):
@@ -341,9 +342,6 @@ class SkyCatalog(object):
         #       for 'object_types', map object type to filepath
         self._hp_info = dict()
         _ = self._find_all_hps()
-#        if 'sso' in self.raw_config['object_types']:
-#            self._sso_files = find_sso_files(self._cat_dir,
-#                                             self.raw_config['object_types']['sso'])
 
         # NOTE: the use of TophatSedFactory is appropriate *only* for an
         # input galaxy catalog with format like cosmoDC2, which includes
@@ -632,6 +630,7 @@ class SkyCatalog(object):
                       types made depend on object_type
         object_type   known object type without parent
         mjd           MJD of observation epoch.
+        exposure      exposure (seconds)
         filepath      if not None, look only in this file.
                       Only used for custom loads
 
@@ -812,20 +811,6 @@ class SkyCatalog(object):
         An iterator
         '''
         pass
-
-    def get_object_by_mjd_interval(self, min_mjd, max_mjd,
-                                   file_list=None, obj_type='sso'):
-        '''
-        Make object list of all objects with mjd within interval.
-        If file_list is specified, search only those files.
-        Currently only implemented for obj_type_set={'sso'}
-        Parameters
-        ----------
-        min_mjd   float    mjd must be >= min_mjd
-        max_mjd   float    mjd must be < max_mjd
-        file_list list     files to search.  If None, search all files
-        obj_type  string   Currently only 'sso' is supported
-        '''
 
 
 def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
