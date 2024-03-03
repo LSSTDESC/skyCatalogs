@@ -40,7 +40,7 @@ class SsoObject(BaseObject):
         return SsoObject._solar_sed, self.get_native_attribute('trailed_source_mag')
 
     def get_gsobject_components(self, gsparams=None, rng=None,
-                                streak=False):
+                                streak=True):
         trail_width = 1.e-6   # in arcseconds
         exposure = self._belongs_to._exposure
 
@@ -71,10 +71,10 @@ class SsoObject(BaseObject):
             gobj = galsim.Box(length, trail_width, gsparams=gsparams)
 
             # now rotate to direction of (ra_rate, dec_rate)
-            # angle_rad = galsim.Angle(np.arctan2(dec_rate/(ra_rate * np.cos(dec))), galsim.radians)
+            # angle_rad = galsim.Angle(np.arctan2(dec_rate, (ra_rate * np.cos(dec))), galsim.radians)
             # NOTE: Probably cos(dec) has already been applied, in which
             # case we want
-            angle_rad = galsim.Angle(np.arctan2(dec_rate/ra_rate),
+            angle_rad = galsim.Angle(np.arctan2(dec_rate, ra_rate),
                                      galsim.radians)
 
             gobj = gobj.rotate(angle_rad)
@@ -118,18 +118,20 @@ class SsoCollection(ObjectCollection):
         '''
         Parameters
         ----------
-        ra, dec      array of float
-        id           array of str
-        sky_catalog  instance of SkyCatalog
-        mjd_indiviual array of float or None
-        region        Geometric region
-        mjd_global    float or None
-        mask          exclusion mask if cuts have been made due to
-                      geometric region or mjd
-        readers       parquet reader (in practice there is always only 1)
-        row_group     int
+        ra, dec        array of float
+        id             array of str
+        sky_catalog    instance of SkyCatalog
+        mjd_individual array of float. Array of mjd values belonging
+                       to the objects which will be in the new collection
+        region         Geometric region
+        mjd_global     float or None. The mjd value which was used (along with
+                       region) to determine which objects should be in the
+                       collection
+        mask           exclusion mask if cuts have been made due to
+                       geometric region or mjd
+        readers        parquet reader (in practice there is always only 1)
+        row_group      int
 
-        One of mjd_global, mjd_individual must not be None
         '''
         super().__init__(ra, dec, id, 'sso', hp, sky_catalog,
                          region=region, mjd=mjd, mask=mask,

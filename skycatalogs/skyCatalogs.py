@@ -622,7 +622,7 @@ class SkyCatalog(object):
         return object_list
 
     def get_object_type_by_region(self, region, object_type, mjd=None,
-                                  exposure=EXPOSURE_DEFAULT, filepath=None):
+                                  exposure=EXPOSURE_DEFAULT):
         '''
         Parameters
         ----------
@@ -631,8 +631,6 @@ class SkyCatalog(object):
         object_type   known object type without parent
         mjd           MJD of observation epoch.
         exposure      exposure (seconds)
-        filepath      if not None, look only in this file.
-                      Only used for custom loads
 
         Returns
         -------
