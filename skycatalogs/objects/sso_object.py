@@ -124,7 +124,7 @@ class SsoCollection(ObjectCollection):
         mjd_individual array of float. Array of mjd values belonging
                        to the objects which will be in the new collection
         region         Geometric region
-        mjd_global     float or None. The mjd value which was used (along with
+        mjd            float or None. The mjd value which was used (along with
                        region) to determine which objects should be in the
                        collection
         mask           exclusion mask if cuts have been made due to
