@@ -58,10 +58,10 @@ parser.add_argument('--catalog-name', '--cat-name', default='skyCatalog',
 
 parser.add_argument('--skip-done', action='store_true',
                     help='If supplied skip existing data files; else overwrite with message')
-parser.add_argument('--flux-only', action='store_true',
-                    help='If supplied only do flux files. Main files must already exist')
-parser.add_argument('--main-only', action='store_true',
-                    help='If supplied only do main files, not flux files')
+parser.add_argument('--no-main', action='store_true',
+                    help='If supplied do not create main files. Note main files must exist in order to create flux files.')
+parser.add_argument('--no-flux', action='store_true',
+                    help='If supplied do not create flux files.')
 parser.add_argument('--flux-parallel', default=16, type=int,
                     help='Number of processes to run in parallel when computing fluxes')
 parser.add_argument('--provenance', '--prov', choices=['yaml'], help='''
@@ -144,7 +144,7 @@ creator = CatalogCreator(parts, area_partition=None,
                          knots_mag_cut=args.knots_magnitude_cut,
                          knots=(not args.no_knots), logname=logname,
                          skip_done=args.skip_done,
-                         flux_only=args.flux_only, main_only=args.main_only,
+                         no_main=args.no_main, no_flux=args.no_flux,
                          flux_parallel=args.flux_parallel,
                          galaxy_nside=args.galaxy_nside,
                          galaxy_stride=args.galaxy_stride,

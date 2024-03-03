@@ -8,6 +8,7 @@ import healpy
 import numpy as np
 import numpy.ma as ma
 from astropy import units as u
+import lsst.sphgeom
 from skycatalogs.objects.base_object import load_lsst_bandpasses, load_roman_bandpasses
 from skycatalogs.utils.catalog_utils import CatalogContext
 from skycatalogs.objects.base_object import ObjectList, ObjectCollection
@@ -108,18 +109,31 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
     variable_filter = ('mjd' in tbl)
 
     if region is not None:
-        if isinstance(region, PolygonalRegion):        # special case
-            # Find bounding box
-            vertices = region.get_vertices_radec()  # list of (ra, dec)
-            ra_max = max([v[0] for v in vertices])
-            ra_min = min([v[0] for v in vertices])
-            dec_max = max([v[1] for v in vertices])
-            dec_min = min([v[1] for v in vertices])
-            bnd_box = Box(ra_min, ra_max, dec_min, dec_max)
-            # Compute mask for that box
-            mask = _compute_region_mask(bnd_box, tbl['ra'], tbl['dec'])
-            if all(mask):    # even bounding box doesn't intersect table rows
-                if no_obj_type_return and no_mjd_return:
+        if isinstance(region, PolygonalRegion):
+            # Using native PolygonalRegion selection is slow, so
+            # pre-mask the RA, Dec values using an acceptance
+            # cone that encloses all of the vertices.
+
+            # Compute the mean direction from the region vertices.
+            vertices = region.get_vertices()
+            mean_dir = vertices[0]
+            for vertex in vertices[1:]:
+                mean_dir += vertex
+            mean_dir = lsst.sphgeom.UnitVector3d(mean_dir)
+
+            # Find largest vertex offset from the mean direction in arcsec.
+            max_offset = np.degrees(np.arccos(min([mean_dir.dot(_)
+                                                   for _ in vertices])))*3600.
+
+            # Construct a "Disk" enclosing the polygonal region.
+            lon_lat = lsst.sphgeom.LonLat(mean_dir)
+            ra = lon_lat.getLon().asDegrees()
+            dec = lon_lat.getLat().asDegrees()
+            disk_region = Disk(ra, dec, max_offset)
+
+            mask = _compute_region_mask(disk_region, tbl['ra'], tbl['dec'])
+            if all(mask):
+                if no_obj_type_return:
                     return None, None, None, None
                 else:    # currently if object type is returned, mjd is not
                     return None, None, None, None, None

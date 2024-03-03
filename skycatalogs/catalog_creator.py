@@ -152,7 +152,8 @@ def _generate_subpixel_masks(ra, dec, subpixels, nside=32):
 # Collection of galaxy objects for current row group, current pixel
 # Used while doing flux computation
 
-def _do_galaxy_flux_chunk(send_conn, galaxy_collection, instrument_needed, l_bnd, u_bnd):
+def _do_galaxy_flux_chunk(send_conn, galaxy_collection, instrument_needed,
+                          l_bnd, u_bnd):
     '''
     output connection
     l_bnd, u_bnd     demarcates slice to process
@@ -193,8 +194,8 @@ class CatalogCreator:
                  output_type='parquet', mag_cut=None,
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
                  knots=True, logname='skyCatalogs.creator',
-                 pkg_root=None, skip_done=False, flux_only=False,
-                 main_only=False, flux_parallel=16, galaxy_nside=32,
+                 pkg_root=None, skip_done=False, no_main=False,
+                 no_flux=False, flux_parallel=16, galaxy_nside=32,
                  galaxy_stride=1000000, provenance=None,
                  dc2=False, sn_object_type='sncosmo', galaxy_type='cosmodc2',
                  include_roman_flux=False, star_input_fmt='sqlite',
@@ -233,8 +234,8 @@ class CatalogCreator:
         skip_done       If True, skip over files which already exist. Otherwise
                         (by default) overwrite with new version.
                         Output info message in either case if file exists.
-        flux_only       Only create flux files, not main files
-        main_only       Only create main files, not flux files
+        no_main         Do not create main files
+        no_flux         Do not create flux files
         flux_parallel   Number of processes to divide work of computing fluxes
         galaxy_nside    Healpix configuration value "nside" for galaxy output
         galaxy_stride   Max number of rows per galaxy row group
@@ -254,7 +255,7 @@ class CatalogCreator:
         """
 
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
-        _diffsky_cat = 'roman_rubin_2023_v1.1.1_elais'
+        _diffsky_cat = 'roman_rubin_2023_v1.1.2_elais'
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
         _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
 
@@ -323,8 +324,8 @@ class CatalogCreator:
         self._logname = logname
         self._logger = logging.getLogger(logname)
         self._skip_done = skip_done
-        self._flux_only = flux_only
-        self._main_only = main_only
+        self._no_main = no_main
+        self._no_flux = no_flux
         self._flux_parallel = flux_parallel
         self._galaxy_nside = galaxy_nside
         self._provenance = provenance
@@ -374,14 +375,14 @@ class CatalogCreator:
         None
         """
         if catalog_type == ('galaxy'):
-            if not self._flux_only:
+            if not self._no_main:
                 self.create_galaxy_catalog()
-            if not self._main_only:
+            if not self._no_flux:
                 self.create_galaxy_flux_catalog()
         elif catalog_type == ('pointsource'):
-            if not self._flux_only:
+            if not self._no_main:
                 self.create_pointsource_catalog()
-            if not self._main_only:
+            if not self._no_flux:
                 self.create_pointsource_flux_catalog()
         elif catalog_type == ('sso'):
             if not self._flux_only:
@@ -519,8 +520,8 @@ class CatalogCreator:
             # to_fetch = all columns of interest in gal_cat
             non_sed = ['galaxy_id', 'ra', 'dec', 'redshift', 'redshiftHubble',
                        'peculiarVelocity', 'shear_1', 'shear_2',
-                       'convergence',
-                       'size_bulge_true', 'size_minor_bulge_true', 'sersic_bulge',
+                       'convergence', 'size_bulge_true',
+                       'size_minor_bulge_true', 'sersic_bulge',
                        'size_disk_true', 'size_minor_disk_true', 'sersic_disk']
             if self._dc2:
                 non_sed += ['ellipticity_1_disk_true_dc2',
@@ -580,12 +581,14 @@ class CatalogCreator:
                 to_rename['ellipticity_2_bulge_true_dc2'] = 'ellipticity_2_bulge_true'
 
             if self._sed_subdir:
-                #  Generate full paths for disk and bulge SED files, even though
+                #  Generate full paths for disk and bulge SED files even though
                 #  we don't actually write the files here
                 df['bulge_sed_file_path'] =\
-                    generate_sed_path(df['galaxy_id'], self._sed_subdir, 'bulge')
+                    generate_sed_path(df['galaxy_id'], self._sed_subdir,
+                                      'bulge')
                 df['disk_sed_file_path'] =\
-                    generate_sed_path(df['galaxy_id'], self._sed_subdir, 'disk')
+                    generate_sed_path(df['galaxy_id'], self._sed_subdir,
+                                      'disk')
 
             if self._knots:
                 # adjust disk sed; create knots sed
@@ -623,7 +626,8 @@ class CatalogCreator:
 
                 if self._galaxy_type == 'cosmodc2':
                     compressed = self._make_tophat_columns(compressed,
-                                                           sed_disk_names, 'disk')
+                                                           sed_disk_names,
+                                                           'disk')
                     compressed = self._make_tophat_columns(compressed,
                                                            sed_bulge_names,
                                                            'bulge')
@@ -665,10 +669,11 @@ class CatalogCreator:
         '''
 
         from .skyCatalogs import open_catalog
+        self._sed_gen = None
 
-        self._gal_flux_schema = make_galaxy_flux_schema(self._logname,
-                                                        self._galaxy_type,
-                                                        include_roman_flux=self._include_roman_flux)
+        self._gal_flux_schema =\
+            make_galaxy_flux_schema(self._logname, self._galaxy_type,
+                                    include_roman_flux=self._include_roman_flux)
         self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
 
         if not config_file:
@@ -684,6 +689,16 @@ class CatalogCreator:
         self.object_type = 'galaxy'
         if self._galaxy_type == 'diffsky':
             self.object_type = 'diffsky_galaxy'
+            from .diffsky_sedgen import DiffskySedGenerator
+            # Default values are ok for all the diffsky-specific
+            # parameters: include_nonLSST_flux, sed_parallel, auto_loop,
+            # wave_ang_min, wave_ang_max, rel_err, n_per
+            self._sed_gen = DiffskySedGenerator(logname=self._logname,
+                                                galaxy_truth=self._galaxy_truth,
+                                                output_dir=self._output_dir,
+                                                skip_done=True,
+                                                sky_cat=self._cat)
+
         self._flux_template = self._cat.raw_config['object_types'][self.object_type]['flux_file_template']
 
         self._logger.info('Creating galaxy flux files')
@@ -728,6 +743,14 @@ class CatalogCreator:
         # If there are multiple row groups, each is stored in a separate
         # object collection. Need to loop over them
         object_list = self._cat.get_object_type_by_hp(pixel, self.object_type)
+        if len(object_list) == 0:
+            self._logger.warning(f'Cannot create flux file for pixel {pixel} because main file does not exist or is empty')
+            return
+
+        if self._galaxy_type == 'diffsky':
+            # Generate SEDs if necessary
+            self._sed_gen.generate_pixel(pixel)
+
         writer = None
         global _galaxy_collection
         global _instrument_needed
@@ -778,7 +801,8 @@ class CatalogCreator:
                     # For debugging call directly
                     proc = Process(target=_do_galaxy_flux_chunk,
                                    name=f'proc_{i}',
-                                   args=(conn_wrt, _galaxy_collection, _instrument_needed, lb, u))
+                                   args=(conn_wrt, _galaxy_collection,
+                                         _instrument_needed, lb, u))
                     proc.start()
                     p_list.append(proc)
                     lb = u
