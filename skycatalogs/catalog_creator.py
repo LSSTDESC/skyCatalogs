@@ -553,8 +553,7 @@ class CatalogCreator:
                         'convergence', 'diskEllipticity1', 'diskEllipticity2',
                         'spheroidEllipticity1', 'spheroidEllipticity2',
                         'spheroidHalfLightRadiusArcsec',
-                        'diskHalfLightRadiusArcsec',
-                        'um_source_galaxy_obs_sm']
+                        'diskHalfLightRadiusArcsec', 'um_source_galaxy_obs_sm']
 
         # df is not a dataframe!  It's just a dict
         if not self._mag_cut:
