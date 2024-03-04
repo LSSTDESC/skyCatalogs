@@ -78,6 +78,7 @@ class SsoObject(BaseObject):
                                      galsim.radians)
 
             gobj = gobj.rotate(angle_rad)
+            return {'this_object': gobj}
         else:
             # Treat as point source
             return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
