@@ -92,7 +92,7 @@ class SnanaObject(BaseObject):
         if mjd is None:
             mjd = self._belongs_to._mjd
         if mjd is None:
-            txt = 'SnananObject._get_sed: no mjd specified for this call\n'
+            txt = 'SnananObject.get_observer_sed_component: no mjd specified for this call\n'
             txt += 'nor when generating object list'
             raise ValueError(txt)
         sed, _ = self._get_sed(mjd=mjd)

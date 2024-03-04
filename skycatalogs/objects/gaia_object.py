@@ -203,9 +203,11 @@ class GaiaCollection(ObjectCollection):
         rv1 = np.zeros(len(df))
         epNa = 2400000.5  # "part A" of starting and ending epochs for MJDs.
         ep2b = mjd
-        pm_outputs = erfa.pmsafe(df['coord_ra'], df['coord_dec'],
-                                 df['pm_ra'], df['pm_dec'], df['parallax'],
-                                 rv1, epNa, df['epoch'], epNa, ep2b)
+        pm_outputs = erfa.pmsafe(np.array(df['coord_ra']),
+                                 np.array(df['coord_dec']),
+                                 np.array(df['pm_ra']), np.array(df['pm_dec']),
+                                 np.array(df['parallax']),
+                                 rv1, epNa, np.array(df['epoch']), epNa, ep2b)
         # Update ra, dec values.
         df['coord_ra'] = pm_outputs[0]
         df['coord_dec'] = pm_outputs[1]

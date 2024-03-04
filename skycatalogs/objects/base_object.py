@@ -240,7 +240,7 @@ class BaseObject(object):
             sed = sed.atRedshift(redshift)
         return sed
 
-    def get_gsobject_components(self, gsparams=None, rng=None):
+    def get_gsobject_components(self, gsparams=None, rng=None, exposure=None):
         """
         Return a dictionary of the GSObject components for the
         sky catalogs object, keyed by component name.
@@ -570,7 +570,10 @@ class ObjectCollection(Sequence):
         return id in self._id
 
     def __len__(self):
-        return len(self._id)
+        if self._id is not None:
+            return len(self._id)
+        else:
+            return 0
 
     # def __iter__(self):   Standard impl based on __getitem__ should be ok
     # def __reversed__(self):   Default implementation ok
@@ -654,8 +657,14 @@ class ObjectList(Sequence):
 
     def append_collection(self, coll):
         old = self._total_len
-        self._total_len += len(coll)
-        self._located.append(LocatedCollection(coll, old, self._total_len))
+        if isinstance(coll, ObjectCollection):
+            self._total_len += len(coll)
+            self._located.append(LocatedCollection(coll, old, self._total_len))
+        else:  #  list of collections
+            for c in coll:
+                self._total_len += len(c)
+                self._located.append(LocatedCollection(c, old, self._total_len))
+                old = self._total_len
 
     def append_object_list(self, object_list):
         for e in object_list._located:

@@ -29,11 +29,7 @@ class StarObject(BaseObject):
     def get_observer_sed_component(self, component, mjd=None):
         sed, magnorm = self._get_sed(mjd=mjd)
 
-        # The SED is in units of photons/nm/cm^2/s
-        # -0.9210340371976184 = -np.log(10)/2.5. Use to convert mag to flux
-        flux_500 = np.exp(-0.9210340371976184 * magnorm)
-        sed = sed.withMagnitude(0, self._bp500)
-        sed = sed*flux_500
+        sed = sed.withMagnitude(magnorm, self._bp500)
 
         if sed is not None:
             sed = self._apply_component_extinction(sed)
