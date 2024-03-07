@@ -133,7 +133,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
 
             mask = _compute_region_mask(disk_region, tbl['ra'], tbl['dec'])
             if all(mask):
-                if no_obj_type_return:
+                if no_obj_type_return and no_mjd_return:
                     return None, None, None, None
                 else:    # currently if object type is returned, mjd is not
                     return None, None, None, None, None
