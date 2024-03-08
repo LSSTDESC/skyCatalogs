@@ -1,10 +1,10 @@
 import os
+import sys
 import yaml
 import git
 import logging
+from typing import Any
 from .exceptions import ConfigDuplicateKeyError
-# import jsonschema
-
 from collections import namedtuple
 
 __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
@@ -16,12 +16,73 @@ __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
 CURRENT_SCHEMA_VERSION = '1.2.0'
 
 
+class YamlIncludeLoader(yaml.SafeLoader):
+
+    """YAML Loader that supports file include directives.
+
+    Uses ``!include`` directive in a YAML file to point to another
+    YAML file to be included. The path in the include directive is relative
+    to the top-level file
+
+        storageClasses: !include storageClasses.yaml
+
+    Examples
+    --------
+    >>> with open("document.yaml", "r") as f:
+           data = yaml.load(f, Loader=YamlIncludeLoader)
+
+    Parameters
+    ----------
+    stream :  text io stream
+        The stream to parse.
+
+    This code was adapted from the LSST Science Pipelines Butler.
+    """
+    def __init__(self, filestream):
+        super().__init__(filestream)
+        self._root = os.path.dirname(filestream.name)
+        self.add_constructor("!include", YamlIncludeLoader.include)
+
+    def include(self, node: yaml.Node) -> list[Any] | dict[str, Any]:
+        result: list[Any] | dict[str, Any]
+        if isinstance(node, yaml.ScalarNode):
+            return self.extractFile(self.construct_scalar(node))  # type: ignore[arg-type]
+
+        elif isinstance(node, yaml.SequenceNode):
+            result = []
+            for filename in self.construct_sequence(node):
+                result.append(self.extractFile(filename))
+            return result
+
+        elif isinstance(node, yaml.MappingNode):
+            result = {}
+            for k, v in self.construct_mapping(node).items():
+                if not isinstance(k, str):
+                    raise TypeError(f"Expected only strings in YAML mapping; got {k!r} of type {type(k)}.")
+                result[k] = self.extractFile(v)
+            return result
+
+        else:
+            print("Error:: unrecognised node type in !include statement",
+                  file=sys.stderr)
+            raise yaml.constructor.ConstructorError
+
+    def extractFile(self, filepath: str) -> Any:
+        actual_path = os.path.join(self._root, filepath)
+        print("Opening YAML file via !include: %s", actual_path)
+
+        # Read all the data from the resource
+        with open(actual_path) as f:
+            return yaml.load(f, YamlIncludeLoader)
+
+
 def open_config_file(config_file):
     '''
     Given path to config file, return a Config object
     '''
     with open(config_file) as f:
-        return Config(yaml.safe_load(f))
+        content = yaml.load(f, Loader=YamlIncludeLoader)
+        return Config(content)
 
 
 Tophat = namedtuple('Tophat', ['start', 'width'])
@@ -90,6 +151,9 @@ class Config(DelegatorBase):
         so that [ ] syntax will be handled properly
         '''
         return self._cfg.__getitem__(k)
+
+    def __contains__(self, k):
+        return k in self._cfg
 
     def list_sed_models(self):
         return self._cfg['SED_models'].keys()
@@ -210,8 +274,6 @@ def write_yaml(input_dict, outpath, overwrite=False, logname=None):
 
 def create_config(catalog_name, logname=None):
     return Config({'catalog_name': catalog_name}, logname)
-#                  'schema_version': schema_version,
-#                  'code_version': desc.skycatalogs.__version__}, logname)
 
 
 def assemble_cosmology(cosmology):
