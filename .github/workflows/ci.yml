@@ -43,7 +43,7 @@ jobs:
                 conda info
                 conda list
                 conda install -y --file etc/conda_requirements.txt
-                #  conda info  TEMPORARILY comment out for debugging
+                conda info
 
             - name: Install rubin_sim_data
               run: |
