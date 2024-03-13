@@ -410,9 +410,6 @@ class SkyCatalog(object):
                                               object_class=SsoObject,
                                               collection_class=SsoCollection)
 
-        # if 'gaia_star' in config['object_types']:
-        #     self._initialize_gaia_htm(config['object_types']['gaia_star'])
-
     @property
     def observed_sed_factory(self):
         return self._observed_sed_factory
@@ -435,23 +432,6 @@ class SkyCatalog(object):
     # root_directory) exists.
     def _validate_config(self):
         pass
-
-    # def _initialize_gaia_htm(self, gaia_config):
-    #     '''
-    #     If we're using Butler to access gaia data, nothing to do here.
-    #     Otherwise form dict with keys = {htm's included in the dataset}
-    #     and values {corresponding absolute filepath for fits file for that
-    #     htm}
-    #     Parameters
-    #     ----------
-    #     gaia_config    dict      gaia_star section of skyCatalogs config
-    #     Returns
-    #     -------
-    #     None, but initialize data member _gaia_htm
-    #
-    #     '''
-    #     self._gaia_htm = dict()
-    #     return
 
     def _find_hps_by_type(self, name, type_config):
         '''
