@@ -5,15 +5,23 @@ import itertools
 from collections.abc import Iterable
 from pathlib import PurePath
 import numpy as np
+import numpy.ma as ma
+import pandas as pd
+import healpy
 import erfa
 import astropy.modeling
 from astropy import units as u
 import galsim
-### Next line will have to go
-import lsst.daf.butler as daf_butler
 import lsst.geom
+# ## Next two lines needed only for butler access
+import lsst.daf.butler as daf_butler
 from lsst.meas.algorithms import ReferenceObjectLoader
-from skycatalogs.utils.shapes import Disk, PolygonalRegion
+
+# ## Need these for direct access and processing of fits files
+import lsst.afw.table as afwtable
+from lsst.sphgeom import HtmPixelization
+
+from skycatalogs.utils.shapes import Disk, PolygonalRegion, compute_region_mask
 from skycatalogs.objects.base_object import BaseObject, ObjectCollection
 
 
@@ -127,6 +135,92 @@ class GaiaObject(BaseObject):
         self.use_lut = use_lut
 
 
+def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
+    '''
+    Read data for columns in kyes from fits file belonging to htm_id.
+    Append to arrays in out_dict.  If region is not None, filter out
+    entries not in region before appending.
+
+    Parameters
+    ----------
+    htm_id         int
+    gaia_config    dict     gaia_star portion of skyCatalg config
+    out_dict       dict     out_dict.keys() are the columns to store
+    region         lsst.sphgeom.Region or None
+    silent         bool     if False print warning if file not found.
+                            Default is False.
+    '''
+    f_dir = gaia_config['data_dir']
+    f_name = gaia_config['basename_template'].replace('(?P<htm>\\d+)',
+                                                      f'{htm_id}')
+    f_path = os.path.join(f_dir, f_name)
+    try:
+        f = open(f_path)
+        f.close()
+    except FileNotFoundError as ex:
+        if not silent:
+            print(f'No file for htm id {htm_id}')
+        return
+
+    tbl = afwtable.SimpleCatalog.readFits(f_path)
+    if region is None:
+        for k in out_dict.keys():
+            out_dict[k] += list(tbl.get(k))
+        return
+
+    # Otherwise start with ra, dec and create mask
+    ra_full = tbl.get('coord_ra')
+    dec_full = tbl.get('coord_dec')
+
+    if isinstance(region, Disk):
+        mask = compute_region_mask(region, ra_full, dec_full)
+        if all(mask):
+            return
+
+    elif isinstance(region, PolygonalRegion):
+        # First mask off points outside a bounding circle because it's
+        # relatively fast
+        circle = region._polygon.getBoundingCircle()
+        ra_c, dec_c = healpy.pixelfunc.vec2ang(circle.getCenter())
+        rad_as = circle.getOpeningAngle().asDegrees() * 3600
+        disk = Disk(ra_c, dec_c, rad_as)
+        mask = compute_region_mask(disk, ra_full, dec_full)
+        if all(mask):
+            return
+        if any(mask):
+            ra_compress = ma.array(ra_full, mask=mask).compressed
+            dec_compress = ma.array(dec_full, mask=mask).compressed
+        else:
+            ra_compress = ra_full
+            dec_compress = dec_full
+        poly_mask = compute_region_mask(region, ra_compress, dec_compress)
+        if all(poly_mask):
+            return
+
+        # Get indices of unmasked
+        ixes = np.where(~mask)
+
+        mask[ixes] |= poly_mask
+
+    if any(mask):
+        ra_compress = ma.array(ra_full, mask=mask).compressed
+        dec_compress = ma.array(dec_full, mask=mask).compressed
+    else:
+        ra_compress = ra_full
+        dec_compress = dec_full
+
+    out_dict['coord_ra'] += list(ra_compress)
+    out_dict['coord_dec'] += list(dec_compress)
+
+    for k in out_dict.keys():
+        if k in ('coord_ra', 'coord_dec'):
+            continue
+        full = tbl.get(k)
+        if any(mask):
+            out_dict[k] += list(ma.array(full, mask=mask).compressed())
+        else:
+            out_dict[k] += list(full)
+
 class GaiaCollection(ObjectCollection):
     # Class methods
     _gaia_config = None
@@ -150,7 +244,8 @@ class GaiaCollection(ObjectCollection):
                     Gaia stars
         '''
         if not skycatalog:
-            raise ValueError(f'GaiaCollection.load_collection: skycatalog cannot be None')
+            raise ValueError('GaiaCollection.load_collection: skycatalog cannot be None')
+
         if isinstance(region, Disk):
             ra = lsst.geom.Angle(region.ra, lsst.geom.degrees)
             dec = lsst.geom.Angle(region.dec, lsst.geom.degrees)
@@ -161,37 +256,54 @@ class GaiaCollection(ObjectCollection):
             refcat_region = region._convex_polygon
         else:
             raise TypeError(f'GaiaCollection.load_collection: {region} not supported')
-
-        source_type = 'gaia_star'
-
         if GaiaCollection.get_config() is None:
             gaia_section = skycatalog.raw_config['object_types']['gaia_star']
             GaiaCollection.set_config(gaia_section)
+        gaia_section = GaiaCollection.get_config()
 
-        #  Probably all of the following down to ### must be replaced
-        butler_params = GaiaCollection.get_config()['butler_parameters']
-        butler = daf_butler.Butler(butler_params['repo'],
-                                   collections=butler_params['collections'])
-        refs = set(butler.registry.queryDatasets(butler_params['dstype']))
-        refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
-                   for _ in refs]
-        dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
-        ###
-
-        # Not sure whether I should generate the dataIds and refCats
-        # ReferenceObjectLoader expects or whether ReferenceObjectLoader
-        # references db, in which case it needs to go
-        config = ReferenceObjectLoader.ConfigClass()
-        config.filterMap = {f'{_}': f'phot_{_}_mean' for _ in ('g', 'bp', 'rp')}
-        ref_obj_loader = ReferenceObjectLoader(dataIds=dataIds,
-                                               refCats=refCats,
-                                               config=config)
-
+        source_type = 'gaia_star'
         sed_method = GaiaCollection.get_config().get('sed_method', 'use_lut')
         use_lut = (sed_method.strip().lower() == 'use_lut')
-        band = 'bp'
-        cat = ref_obj_loader.loadRegion(refcat_region, band).refCat
-        df = cat.asAstropy().to_pandas().sort_values('id')
+        if gaia_section['data_file_type'] == 'butler_refcat':
+
+            butler_params = gaia_section['butler_parameters']
+            butler = daf_butler.Butler(butler_params['repo'],
+                                       collections=butler_params['collections'])
+            refs = set(butler.registry.queryDatasets(butler_params['dstype']))
+            refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
+                       for _ in refs]
+            dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
+            config = ReferenceObjectLoader.ConfigClass()
+            config.filterMap = {f'{_}': f'phot_{_}_mean' for _ in ('g', 'bp', 'rp')}
+            ref_obj_loader = ReferenceObjectLoader(dataIds=dataIds,
+                                                   refCats=refCats,
+                                                   config=config)
+
+            band = 'bp'
+            cat = ref_obj_loader.loadRegion(refcat_region, band).refCat
+            df = cat.asAstropy().to_pandas().sort_values('id')
+
+        else:    # access fits files directly
+            # find htms intersecting region
+            level = 7    # really should be derived
+            htm_pix = HtmPixelization(level)
+
+            overlap_ranges = htm_pix.envelope(refcat_region)
+            interior_ranges = htm_pix.interior(refcat_region)
+            partial_ranges = overlap_ranges - interior_ranges
+            keys = ['id', 'coord_ra', 'coord_dec', 'parallax', 'pm_ra',
+                    'pm_dec', 'epoch']
+            keys += [f'phot_{_}_mean_flux' for _ in ('g', 'bp', 'rp')]
+            out_dict = {k: [] for k in keys}
+
+            config = GaiaCollection.get_config()
+            for i_r in interior_ranges:
+                for i_htm in i_r:
+                    _read_fits(i_htm, config, out_dict, region=None)
+            for p_r in partial_ranges:
+                for i_htm in p_r:
+                    _read_fits(i_htm, config, out_dict, region=region)
+            df = pd.DataFrame(out_dict).sort_values('id')
 
         if mjd is None:
             raise RuntimeError("MJD needs to be provided for Gaia "

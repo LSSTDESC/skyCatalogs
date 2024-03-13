@@ -1,9 +1,10 @@
 from collections import namedtuple
 import numpy as np
 from astropy import units as u
+import healpy
 from lsst.sphgeom import ConvexPolygon, UnitVector3d, LonLat
 
-__all__ = ['Box', 'Disk', 'PolygonalRegion']
+__all__ = ['Box', 'Disk', 'PolygonalRegion', 'compute_region_mask']
 
 Box = namedtuple('Box', ['ra_min', 'ra_max', 'dec_min', 'dec_max'])
 
@@ -65,3 +66,43 @@ class PolygonalRegion:
             return mask
         else:
             return np.logical_not(mask)
+
+
+def compute_region_mask(region, ra, dec):
+    '''
+    Compute mask according to region for provided data
+    Parameters
+    ----------
+    region         Supported shape (box, disk, PolygonalRegion)  or None
+    ra,dec         Coordinates for data to be masked, in degrees
+    Returns
+    -------
+    mask of elements in ra, dec arrays to be omitted
+
+    '''
+    mask = None
+    if isinstance(region, Box):
+        mask = np.logical_or((ra < region.ra_min),
+                             (ra > region.ra_max))
+        mask = np.logical_or(mask, (dec < region.dec_min))
+        mask = np.logical_or(mask, (dec > region.dec_max))
+    if isinstance(region, Disk):
+        # CHANGE to use lsst.sphgeom instead of healpy?
+        p_vec = healpy.pixelfunc.ang2vec(ra, dec, lonlat=True)
+
+        c_vec = healpy.pixelfunc.ang2vec(region.ra,
+                                         region.dec,
+                                         lonlat=True)
+        radius_rad = (region.radius_as * u.arcsec).to_value('radian')
+
+        # Rather than comparing arcs, it is equivalent to compare chords
+        # (or square of chord length)
+        obj_chord_sq = np.sum(np.square(p_vec - c_vec), axis=1)
+
+        # This is to be compared to square of chord for angle a corresponding
+        # to disk radius.  That's 4(sin(a/2)^2)
+        rad_chord_sq = 4 * np.square(np.sin(0.5 * radius_rad))
+        mask = obj_chord_sq > rad_chord_sq
+    if isinstance(region, PolygonalRegion):
+        mask = region.get_containment_mask(ra, dec, included=False)
+    return mask
