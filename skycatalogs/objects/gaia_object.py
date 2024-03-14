@@ -74,9 +74,9 @@ class GaiaObject(BaseObject):
         """
         Parameters
         ----------
-        obj_pars: dict-like
+        obj_pars: dict
             Dictionary of object parameters as read directly from the
-            reference catalog.
+            complete object collection
         parent_collection: ObjectCollection
             Parent collection of this object.
         index: int
@@ -86,7 +86,8 @@ class GaiaObject(BaseObject):
         dec = np.degrees(obj_pars['coord_dec'])
         # Form the object id from the GAIA catalog id with the string
         # 'gaia_dr2_' prepended.
-        obj_id = f"gaia_dr2_{obj_pars['id']}"
+        id_prefix = GaiaCollection.get_config()['id_prefix']
+        obj_id = f"{id_prefix}{obj_pars['id']}"
         super().__init__(ra, dec, obj_id, 'gaia_star',
                          belongs_to=parent_collection, belongs_index=index)
         self.use_lut = self._belongs_to._use_lut
@@ -360,7 +361,11 @@ class GaiaCollection(ObjectCollection):
 
     def __getitem__(self, key):
         if isinstance(key, int) or isinstance(key, np.int64):
-            return GaiaObject(self.df.iloc[key], self, key)
+            row = { col: self.df[col][key] for col in ('id', 'coord_ra',
+                                                       'coord_dec',
+                                                       'phot_bp_mean_flux',
+                                                       'phot_rp_mean_flux')}
+            return GaiaObject(row, self, key)
 
         elif type(key) == slice:
             ixdata = [i for i in range(min(key.stop, len(self._id)))]
