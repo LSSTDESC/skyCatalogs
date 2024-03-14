@@ -189,8 +189,8 @@ def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
         if all(mask):
             return
         if any(mask):
-            ra_compress = ma.array(ra_full, mask=mask).compressed
-            dec_compress = ma.array(dec_full, mask=mask).compressed
+            ra_compress = ma.array(ra_full, mask=mask).compressed()
+            dec_compress = ma.array(dec_full, mask=mask).compressed()
         else:
             ra_compress = ra_full
             dec_compress = dec_full
@@ -204,8 +204,8 @@ def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
         mask[ixes] |= poly_mask
 
     if any(mask):
-        ra_compress = ma.array(ra_full, mask=mask).compressed
-        dec_compress = ma.array(dec_full, mask=mask).compressed
+        ra_compress = ma.array(ra_full, mask=mask).compressed()
+        dec_compress = ma.array(dec_full, mask=mask).compressed()
     else:
         ra_compress = ra_full
         dec_compress = dec_full
@@ -221,6 +221,7 @@ def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
             out_dict[k] += list(ma.array(full, mask=mask).compressed())
         else:
             out_dict[k] += list(full)
+
 
 class GaiaCollection(ObjectCollection):
     # Class methods
@@ -361,7 +362,7 @@ class GaiaCollection(ObjectCollection):
 
     def __getitem__(self, key):
         if isinstance(key, int) or isinstance(key, np.int64):
-            row = { col: self.df[col][key] for col in ('id', 'coord_ra',
+            row = {col: self.df[col][key] for col in ('id', 'coord_ra',
                                                        'coord_dec',
                                                        'phot_bp_mean_flux',
                                                        'phot_rp_mean_flux')}
