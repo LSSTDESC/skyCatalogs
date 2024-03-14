@@ -181,10 +181,12 @@ def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
     elif isinstance(region, PolygonalRegion):
         # First mask off points outside a bounding circle because it's
         # relatively fast
-        circle = region._polygon.getBoundingCircle()
-        ra_c, dec_c = healpy.pixelfunc.vec2ang(circle.getCenter())
+        circle = region._convex_polygon.getBoundingCircle()
+        v = circle.getCenter()
+        ra_c, dec_c = healpy.pixelfunc.vec2ang(np.array([v.x(), v.y(), v.z()]),
+                                               lonlat=True)
         rad_as = circle.getOpeningAngle().asDegrees() * 3600
-        disk = Disk(ra_c, dec_c, rad_as)
+        disk = Disk(ra_c[0], dec_c[0], rad_as)
         mask = compute_region_mask(disk, ra_full, dec_full)
         if all(mask):
             return
