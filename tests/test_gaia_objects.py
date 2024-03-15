@@ -18,6 +18,7 @@ CONFIG = {'area_partition': None,
           {'collections': 'refcats',
            'dstype': 'gaia_dr2_20200414',
            'repo': os.path.join(CATALOG_DIR, 'repo')},
+          'id_prefix': 'gaia_dr2_',
           'data_file_type': 'butler_refcat'}
 
 
