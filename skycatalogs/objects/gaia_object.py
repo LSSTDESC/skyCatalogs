@@ -7,7 +7,6 @@ from pathlib import PurePath
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
-import healpy
 import erfa
 import astropy.modeling
 from astropy import units as u
@@ -19,7 +18,7 @@ from lsst.meas.algorithms import ReferenceObjectLoader
 
 # ## Need these for direct access and processing of fits files
 import lsst.afw.table as afwtable
-from lsst.sphgeom import HtmPixelization
+from lsst.sphgeom import HtmPixelization, Circle, LonLat
 
 from skycatalogs.utils.shapes import Disk, PolygonalRegion, compute_region_mask
 from skycatalogs.objects.base_object import BaseObject, ObjectCollection
@@ -158,7 +157,7 @@ def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
     try:
         f = open(f_path)
         f.close()
-    except FileNotFoundError as ex:
+    except FileNotFoundError:
         if not silent:
             print(f'No file for htm id {htm_id}')
         return
@@ -183,10 +182,10 @@ def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
         # relatively fast
         circle = region._convex_polygon.getBoundingCircle()
         v = circle.getCenter()
-        ra_c, dec_c = healpy.pixelfunc.vec2ang(np.array([v.x(), v.y(), v.z()]),
-                                               lonlat=True)
+        ra_c = LonLat.longitudeOf(v).asDegrees()
+        dec_c = LonLat.latitudeOf(v).asDegrees()
         rad_as = circle.getOpeningAngle().asDegrees() * 3600
-        disk = Disk(ra_c[0], dec_c[0], rad_as)
+        disk = Disk(ra_c, dec_c, rad_as)
         mask = compute_region_mask(disk, ra_full, dec_full)
         if all(mask):
             return
@@ -255,7 +254,7 @@ class GaiaCollection(ObjectCollection):
             dec = lsst.geom.Angle(region.dec, lsst.geom.degrees)
             center = lsst.geom.SpherePoint(ra, dec)
             radius = lsst.geom.Angle(region.radius_as, lsst.geom.arcseconds)
-            refcat_region = lsst.sphgeom.Circle(center.getVector(), radius)
+            refcat_region = Circle(center.getVector(), radius)
         elif isinstance(region, PolygonalRegion):
             refcat_region = region._convex_polygon
         else:
@@ -365,9 +364,9 @@ class GaiaCollection(ObjectCollection):
     def __getitem__(self, key):
         if isinstance(key, int) or isinstance(key, np.int64):
             row = {col: self.df[col][key] for col in ('id', 'coord_ra',
-                                                       'coord_dec',
-                                                       'phot_bp_mean_flux',
-                                                       'phot_rp_mean_flux')}
+                                                      'coord_dec',
+                                                      'phot_bp_mean_flux',
+                                                      'phot_rp_mean_flux')}
             return GaiaObject(row, self, key)
 
         elif type(key) == slice:
