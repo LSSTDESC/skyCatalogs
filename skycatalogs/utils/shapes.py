@@ -87,7 +87,8 @@ def compute_region_mask(region, ra, dec):
         mask = np.logical_or(mask, (dec < region.dec_min))
         mask = np.logical_or(mask, (dec > region.dec_max))
     if isinstance(region, Disk):
-        # CHANGE to use lsst.sphgeom instead of healpy?
+        # Use healpy rather than lsst.sphgeom because healpy takes
+        # array inputs
         p_vec = healpy.pixelfunc.ang2vec(ra, dec, lonlat=True)
 
         c_vec = healpy.pixelfunc.ang2vec(region.ra,

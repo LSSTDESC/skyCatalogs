@@ -73,7 +73,7 @@ class GaiaObject(BaseObject):
         """
         Parameters
         ----------
-        obj_pars: dict
+        obj_pars: dict-like
             Dictionary of object parameters as read directly from the
             complete object collection
         parent_collection: ObjectCollection
@@ -137,7 +137,7 @@ class GaiaObject(BaseObject):
 
 def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
     '''
-    Read data for columns in kyes from fits file belonging to htm_id.
+    Read data for columns in keys from fits file belonging to htm_id.
     Append to arrays in out_dict.  If region is not None, filter out
     entries not in region before appending.
 
@@ -159,7 +159,7 @@ def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
         f.close()
     except FileNotFoundError:
         if not silent:
-            print(f'No file for htm id {htm_id}')
+            print(f'No file for requested htm id {htm_id}')
         return
 
     tbl = afwtable.SimpleCatalog.readFits(f_path)
@@ -288,7 +288,7 @@ class GaiaCollection(ObjectCollection):
 
         else:    # access fits files directly
             # find htms intersecting region
-            level = 7    # really should be derived
+            level = gaia_section['area_partition']['level']
             htm_pix = HtmPixelization(level)
 
             overlap_ranges = htm_pix.envelope(refcat_region)
