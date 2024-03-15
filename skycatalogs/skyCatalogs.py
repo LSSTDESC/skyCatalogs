@@ -1,5 +1,4 @@
 import os
-import sys
 import re
 import yaml
 from yamlinclude import YamlIncludeConstructor
@@ -22,6 +21,7 @@ from skycatalogs.utils.sed_tools import SsoSedFactory
 from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
+from skycatalogs.utils.shapes import compute_region_mask
 from skycatalogs.objects.sncosmo_object import SncosmoObject, SncosmoCollection
 from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
@@ -131,7 +131,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
             dec = lon_lat.getLat().asDegrees()
             disk_region = Disk(ra, dec, max_offset)
 
-            mask = _compute_region_mask(disk_region, tbl['ra'], tbl['dec'])
+            mask = compute_region_mask(disk_region, tbl['ra'], tbl['dec'])
             if all(mask):
                 if no_obj_type_return:
                     return None, None, None, None
@@ -141,7 +141,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
             # Get compressed ra, dec
             ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
             dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
-            poly_mask = _compute_region_mask(region, ra_compress, dec_compress)
+            poly_mask = compute_region_mask(region, ra_compress, dec_compress)
 
             # Get indices of unmasked
             ixes = np.where(~mask)
@@ -149,7 +149,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
             # Update bounding box mask with polygonal mask
             mask[ixes] |= poly_mask
         else:
-            mask = _compute_region_mask(region, tbl['ra'], tbl['dec'])
+            mask = compute_region_mask(region, tbl['ra'], tbl['dec'])
 
         if transient_filter:
             time_mask = _compute_transient_mask(mjd, tbl['start_mjd'],
@@ -206,46 +206,6 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
                 return tbl['ra'], tbl['dec'], tbl[id_column], None
         else:
             return tbl['ra'], tbl['dec'], tbl[id_column], tbl['object_type'], None
-
-
-def _compute_region_mask(region, ra, dec):
-    '''
-    Compute mask according to region for provided data
-    Parameters
-    ----------
-    region         Supported shape (box, disk, PolygonalRegion)  or None
-    ra,dec         Coordinates for data to be masked, in degrees
-    Returns
-    -------
-    mask of elements in ra, dec arrays to be omitted
-
-    '''
-    mask = None
-    if isinstance(region, Box):
-        mask = np.logical_or((ra < region.ra_min),
-                             (ra > region.ra_max))
-        mask = np.logical_or(mask, (dec < region.dec_min))
-        mask = np.logical_or(mask, (dec > region.dec_max))
-    if isinstance(region, Disk):
-        # Change positions to 3d vectors to measure distance
-        p_vec = healpy.pixelfunc.ang2vec(ra, dec, lonlat=True)
-
-        c_vec = healpy.pixelfunc.ang2vec(region.ra,
-                                         region.dec,
-                                         lonlat=True)
-        radius_rad = (region.radius_as * u.arcsec).to_value('radian')
-
-        # Rather than comparing arcs, it is equivalent to compare chords
-        # (or square of chord length)
-        obj_chord_sq = np.sum(np.square(p_vec - c_vec), axis=1)
-
-        # This is to be compared to square of chord for angle a corresponding
-        # to disk radius.  That's 4(sin(a/2)^2)
-        rad_chord_sq = 4 * np.square(np.sin(0.5 * radius_rad))
-        mask = obj_chord_sq > rad_chord_sq
-    if isinstance(region, PolygonalRegion):
-        mask = region.get_containment_mask(ra, dec, included=False)
-    return mask
 
 
 def _compute_transient_mask(current_mjd, start_mjd, end_mjd):
@@ -851,278 +811,3 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     with open(config_file) as f:
         return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
                           mp=mp, verbose=verbose)
-
-
-if __name__ == '__main__':
-    import time
-    cfg_file_name = 'skyCatalog.yaml'
-    skycatalog_root = os.getenv('SKYCATALOG_ROOT')
-    catalog_dir = 'reorg'
-    if len(sys.argv) > 1:
-        catalog_dir = sys.argv[1]
-    if len(sys.argv) > 2:
-        cfg_file_name = sys.argv[2]
-
-    cfg_file = os.path.join(skycatalog_root, catalog_dir, cfg_file_name)
-
-    write_sed = False
-    if len(sys.argv) > 3:
-        write_sed = True
-
-    # For tract 3828
-    #   55.73604 < ra < 57.563452
-    #  -37.19001 < dec < -35.702481
-
-    cat = open_catalog(cfg_file, skycatalog_root=skycatalog_root)
-    hps = cat._find_all_hps()
-    print('Found {} healpix pixels '.format(len(hps)))
-    for h in hps:
-        print(h)
-    ra_min_tract = 55.736
-    ra_max_tract = 57.564
-    dec_min_tract = -37.190
-    dec_max_tract = -35.702
-    # ra_min_small = 56.0
-    # ra_max_small = 56.2
-    ra_min_small = 55.9
-    ra_max_small = 56.1
-    dec_min_small = -36.2
-    dec_max_small = -36.0
-
-    sed_fmt = 'lambda: {:.1f}  f_lambda: {:g}'
-
-    rgn = Box(ra_min_small, ra_max_small, dec_min_small, dec_max_small)
-    vertices = [(ra_min_small, dec_min_small), (ra_min_small, dec_max_small),
-                (ra_max_small, dec_max_small), (ra_max_small, dec_min_small)]
-    rgn_poly = PolygonalRegion(vertices_radec=vertices)
-
-    intersect_hps = _get_intersecting_hps('ring', 32, rgn)
-
-    print("For region ", rgn)
-    print("intersecting pixels are ", intersect_hps)
-
-    intersect_poly_hps = _get_intersecting_hps('ring', 32, rgn_poly)
-    print("For region ", rgn_poly)
-    print("intersecting pixels are ", intersect_poly_hps)
-
-    at_slac = os.getenv('HOME').startswith('/sdf/home/')
-    if not at_slac:
-        obj_types = {'star', 'galaxy', 'sncosmo', 'snana'}
-    else:
-        obj_types = {'star', 'galaxy', 'sncosmo', 'snana', 'gaia_star'}
-
-    print('Invoke get_objects_by_region with box region, no gaia')
-    t0 = time.time()
-    object_list = cat.get_objects_by_region(rgn,
-                                            obj_type_set={'star', 'galaxy',
-                                                          'sncosmo'},
-                                            mjd=63200.0)
-    t_done = time.time()
-    print('Took ', t_done - t0)
-    # #### temporary obj_type_set={'galaxy', 'star'} )
-    #                                        obj_type_set=set(['galaxy']) )
-    # Try out get_objects_by_hp with no region
-    # colls = cat.get_objects_by_hp(9812, None, set(['galaxy']) )
-
-    print('Number of collections returned for box:  ',
-          object_list.collection_count)
-    print('Object count for box: ', len(object_list))
-
-    print('Invoke get_objects_by_region with polygonal region')
-    t0 = time.time()
-    object_list_poly = cat.get_objects_by_region(rgn_poly,
-                                                 obj_type_set=obj_types)
-    t_done = time.time()
-    print('Took ', t_done - t0)
-
-    print('Number of collections returned for polygon:  ',
-          object_list_poly.collection_count)
-    assert (object_list.collection_count == object_list_poly.collection_count)
-    print('Object count for polygon: ', len(object_list_poly))
-
-    fudge = 5
-    assert (len(object_list_poly) > len(object_list) - fudge)
-    assert (len(object_list_poly) < len(object_list) + fudge)
-
-    print('Now try inscribed polygon which is not a box')
-    ra_avg = (ra_min_small + ra_max_small) * 0.5
-    dec_avg = (dec_min_small + dec_max_small) * 0.5
-    diamond_vertices = [(ra_min_small, dec_avg), (ra_avg, dec_max_small),
-                        (ra_max_small, dec_avg), (ra_avg, dec_min_small)]
-    rgn_diamond = PolygonalRegion(vertices_radec=diamond_vertices)
-
-    intersect_diamond_hps = _get_intersecting_hps('ring', 32, rgn_diamond)
-    print("for diamond region ", rgn_diamond)
-    print("intersecting pixels are ", intersect_diamond_hps)
-
-    print('Invoke get_objects_by_region with diamond region')
-    t0 = time.time()
-    object_list_diamond = cat.get_objects_by_region(rgn_diamond,
-                                                    obj_type_set=obj_types)
-    t_done = time.time()
-    print('Took ', t_done - t0)
-
-    print('Number of collections returned for diamond:  ',
-          object_list_diamond.collection_count)
-    print('Object count for diamond: ', len(object_list_diamond))
-
-    # ### TEMP FOR DEBUGGING
-    # ## exit(0)
-
-    # For now SIMS_SED_LIBRARY_DIR is undefined at SLAC, making it impossible
-    # to get SEDs for stars. So (crudely) determine whether or not
-    # we're running at SLAC
-
-    colls = object_list.get_collections()
-    got_a_sed = False
-    for c in colls:
-        n_obj = len(c)
-        print("For hpid ", c.get_partition_id(), "found ", n_obj, " objects")
-        if (n_obj) < 1:
-            continue
-        print("First object: ")
-        print(c[0], '\nid=', c[0].id, ' ra=', c[0].ra, ' dec=', c[0].dec,
-              ' belongs_index=', c[0]._belongs_index,
-              ' object_type: ', c[0].object_type)
-
-        if (n_obj < 3):
-            continue
-        print("Slice [1:3]")
-        slice13 = c[1:3]
-        for o in slice13:
-            print('id=', o.id, ' ra=', o.ra, ' dec=', o.dec, ' belongs_index=',
-                  o._belongs_index,  ' object_type: ', o.object_type)
-            print(o.object_type)
-            if o.object_type == 'star':
-                if not at_slac:
-                    print(o.get_instcat_entry())
-                    sed, magnorm = o._get_sed()
-                    print('For star magnorm: ', magnorm)
-                    if magnorm < 1000:
-                        print('Length of sed: ', len(sed.wave_list))
-            elif o.object_type == 'sncosmo':
-                print(o.get_instcat_entry())
-                for b in {'u', 'g', 'r', 'i', 'z', 'y'}:
-                    print(o.get_LSST_flux(b))
-            elif o.object_type == 'galaxy':
-                for cmp in ['disk', 'bulge', 'knots']:
-                    print(cmp)
-                    if cmp in o.subcomponents:
-                        # broken for galaxies currently
-                        # print(o.get_instcat_entry(component=cmp))
-                        sed, _ = o._get_sed(cmp)
-                        if sed:
-                            print('Length of sed table: ', len(sed.wave_list))
-                            if not got_a_sed:
-                                got_a_sed = True
-                                th = o.get_native_attribute(f'sed_val_{cmp}')
-                                print('Tophat values: ', th)
-                                sed, _ = o._get_sed(component=cmp)
-                                print('Simple sed wavelengths:')
-                                print(sed.wave_list)
-                                print('Simple sed values:')
-                                print([sed(w) for w in sed.wave_list])
-                                if write_sed:
-                                    o.write_sed('simple_sed.txt',
-                                                component=cmp)
-                                sed_fine, _ = o._get_sed(component=cmp,
-                                                         resolution=1.0)
-                                print('Bin width = 1 nm')
-                                print('Initial wl values',
-                                      sed_fine.wave_list[:20])
-                                print('Start at bin 100',
-                                      sed_fine.wave_list[100:120])
-                                print('Initial values')
-                                print([sed_fine(w) for w in sed_fine.wave_list[:20]])
-                                print('Start at bin 100')
-                                print([sed_fine(w) for w in sed_fine.wave_list[100:120]])
-                        else:
-                            print('All-zero sed')
-
-                # Try out old wrapper functions
-                print("\nget_dust:")
-                i_av, i_rv, g_av, g_rv = o._get_dust()
-                print(f'i_av={i_av} i_rv={i_rv} g_av={g_av} g_rv={g_rv}')
-                print("\nget_wl_params")
-                g1, g2, mu = o.get_wl_params()
-                print(f'g1={g1} g2={g2} mu={mu}')
-                print("\nget_gsobject_components. Keys of returned dict:")
-                gs_dict = o.get_gsobject_components()
-                print(gs_dict.keys())
-                print("\nget_observer_sed_components.  Keys of returned dict:")
-                o_seds = o.get_observer_sed_components()
-                print(o_seds.keys())
-
-                f = o.get_LSST_flux('i')
-                print(f'Flux for i bandpass: {f}')
-                fluxes = o.get_LSST_fluxes()
-                for k, v in fluxes.items():
-                    print(f'Bandpass {k} has flux {v}')
-
-        if n_obj > 200:
-            print("Object 200")
-            print(c[200], '\nid=', c[200].id, ' ra=', c[200].ra, ' dec=',
-                  c[200].dec,
-                  ' belongs_index=', c[200]._belongs_index)
-        if n_obj > 163997:
-            slice_late = c[163994:163997]
-            print('\nobjects indexed 163994 through 163996')
-            for o in slice_late:
-                print('id=', o.id, ' ra=', o.ra, ' dec=', o.dec,
-                      ' belongs_index=', o._belongs_index)
-
-    print('Total object count: ', len(object_list))
-
-    if len(object_list) == 0:
-        print('Empty object list. All done')
-        exit(0)
-
-    obj = object_list[0]
-    print("Type of element in object_list:", type(obj))
-
-    if object_list[0].object_type == 'galaxy':
-        redshift0 = object_list[0].get_native_attribute('redshift')
-        print('First redshift: ', redshift0)
-
-    sum = 0
-    for obj in object_list:
-        sum = sum + 1
-        if sum > 7216:
-            print("Sum is now ", sum)
-            print("obj id: ", obj.id)
-        if sum > 7220:
-            break
-
-    print(f'Object list len:  {len(object_list)}')
-    print(f'Objects found with "in":  {sum}')
-
-    if len(object_list) < 5:
-        print('Very short object list (< 5 elements).  done')
-        exit(0)
-
-    segment = object_list[2:5]
-    print('Information for slice 2:5 ')
-    for o in segment:
-        print(f'object {o.id} of type {o.object_type} belongs to collection {o._belongs_to}')
-
-    if len(object_list) < 304:
-        print('Object list len < 304.  All done')
-        exit(0)
-    print('\nInformation for slice 285:300')
-    segment = object_list[285:300]
-    for o in segment:
-        print(f'object {o.id} of type {o.object_type} belongs to collection {o._belongs_to}')
-
-    # ixes = ([3,5,8],)
-    ixes = (np.array([3, 5, 8, 300, 303]),)
-    print(f'\nObjects with indexes {ixes[0]}')
-    for o in object_list[ixes]:
-        print(o.id)
-    print('\nObjects in slice [3:9]')
-    for o in object_list[3:9]:
-        print(o.id)
-    print('\nObjects in slice [300:304]')
-    for o in object_list[300:304]:
-        print(o.id)
-
-    print('all done')
