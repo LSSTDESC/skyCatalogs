@@ -9,7 +9,7 @@ skyCatalogs both creates simulated object catalogs (from precursor catalogs)
 and provides a uniform API to the catalogs it makes and to certain other
 catalogs. These catalogs may be used as inputs to image simulation (originally
 only for the Rubin Observatory; since also used in simulations for the
-Roman Obseratory) and as truth catalogs.
+Roman Observatory) and as truth catalogs.
 
 This documentation covers installation and usage instructions for the package.
 
