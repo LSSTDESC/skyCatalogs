@@ -42,6 +42,7 @@ class YamlIncludeLoader(yaml.SafeLoader):
         super().__init__(filestream)
         self._root = os.path.dirname(filestream.name)
         self.add_constructor("!include", YamlIncludeLoader.include)
+        self._current_dir = self._root
 
     def include(self, node: yaml.Node) -> list[Any] | dict[str, Any]:
         result: list[Any] | dict[str, Any]
@@ -68,12 +69,19 @@ class YamlIncludeLoader(yaml.SafeLoader):
             raise yaml.constructor.ConstructorError
 
     def extractFile(self, filepath: str) -> Any:
-        actual_path = os.path.join(self._root, filepath)
+        if filepath.startswith('/'):
+            actual_path = filepath
+        else:
+            actual_path = os.path.join(self._current_dir, filepath)
         print("Opening YAML file via !include: %s", actual_path)
 
+        old_current = self._current_dir
+        self._current_dir = actual_path
         # Read all the data from the resource
         with open(actual_path) as f:
-            return yaml.load(f, YamlIncludeLoader)
+            content = yaml.load(f, YamlIncludeLoader)
+        self._current_dir = old_current
+        return content
 
 
 def open_config_file(config_file):
