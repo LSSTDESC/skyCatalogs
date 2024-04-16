@@ -3,6 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+=======================================================
 skyCatalogs: provides API for simulated object catalogs
 =======================================================
 skyCatalogs both creates simulated object catalogs (from precursor catalogs)
@@ -20,7 +21,7 @@ https://github.com/LSSTDESC/skyCatalogs.
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
-
+   ops-rehearsal-3/galaxies
 
 
 Indices and tables
