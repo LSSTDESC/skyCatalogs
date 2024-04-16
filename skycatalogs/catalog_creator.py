@@ -257,9 +257,9 @@ class CatalogCreator:
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
         _diffsky_cat = 'roman_rubin_2023_v1.1.2_elais'
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
-        # _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cos
+        # _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
         _sn_db = None
-        moDC2_v1.1.4_MS_DDF_healpix.db'
+
 
         _star_parquet = '/global/cfs/cdirs/descssim/postDC2/UW_star_catalog'
 
@@ -859,7 +859,7 @@ class CatalogCreator:
             self.create_pointsource_pixel(p, arrow_schema,
                                           star_cat=self._star_truth,
                                           sn_cat=None)
-                                          # sn_cat=self._sn_truth)
+            # sn_cat=self._sn_truth)
             self._logger.debug(f'Completed pixel {p}')
 
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None,
