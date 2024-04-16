@@ -22,7 +22,7 @@ from skycatalogs.utils.sed_tools import SsoSedFactory
 from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
-from skycatalogs.objects.sncosmo_object import SncosmoObject, SncosmoCollection
+### from skycatalogs.objects.sncosmo_object import SncosmoObject, SncosmoCollection
 from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
 from skycatalogs.objects.diffsky_object import DiffskyObject
@@ -387,11 +387,11 @@ class SkyCatalog(object):
                                               object_class=GaiaObject,
                                               collection_class=GaiaCollection,
                                               custom_load=True)
-        if 'sncosmo' in config['object_types']:
-            self.cat_cxt.register_source_type(
-                'sncosmo',
-                object_class=SncosmoObject,
-                collection_class=SncosmoCollection)
+        # if 'sncosmo' in config['object_types']:
+        #     self.cat_cxt.register_source_type(
+        #         'sncosmo',
+        #         object_class=SncosmoObject,
+        #         collection_class=SncosmoCollection)
         if 'star' in config['object_types']:
             self.cat_cxt.register_source_type('star',
                                               object_class=StarObject)
@@ -700,7 +700,8 @@ class SkyCatalog(object):
         elif object_type in ['snana']:
             columns = ['id', 'ra', 'dec', 'start_mjd', 'end_mjd']
             id_name = 'id'
-        elif object_type in ['star', 'sncosmo']:
+        # elif object_type in ['star', 'sncosmo']:
+        elif object_type in ['star']:
             columns = ['object_type', 'id', 'ra', 'dec']
             id_name = 'id'
         elif object_type in ['sso']:
@@ -907,15 +908,18 @@ if __name__ == '__main__':
 
     at_slac = os.getenv('HOME').startswith('/sdf/home/')
     if not at_slac:
-        obj_types = {'star', 'galaxy', 'sncosmo', 'snana'}
+        # obj_types = {'star', 'galaxy', 'sncosmo', 'snana'}
+        obj_types = {'star', 'galaxy', 'snana'}
     else:
-        obj_types = {'star', 'galaxy', 'sncosmo', 'snana', 'gaia_star'}
+        # obj_types = {'star', 'galaxy', 'sncosmo', 'snana', 'gaia_star'}
+        obj_types = {'star', 'galaxy', 'snana', 'gaia_star'}
 
     print('Invoke get_objects_by_region with box region, no gaia')
     t0 = time.time()
     object_list = cat.get_objects_by_region(rgn,
-                                            obj_type_set={'star', 'galaxy',
-                                                          'sncosmo'},
+                                            obj_type_set={'star', 'galaxy'},
+                                            # obj_type_set={'star', 'galaxy',
+                                            #              'sncosmo'},
                                             mjd=63200.0)
     t_done = time.time()
     print('Took ', t_done - t0)
@@ -1000,10 +1004,10 @@ if __name__ == '__main__':
                     print('For star magnorm: ', magnorm)
                     if magnorm < 1000:
                         print('Length of sed: ', len(sed.wave_list))
-            elif o.object_type == 'sncosmo':
-                print(o.get_instcat_entry())
-                for b in {'u', 'g', 'r', 'i', 'z', 'y'}:
-                    print(o.get_LSST_flux(b))
+            # elif o.object_type == 'sncosmo':
+            #     print(o.get_instcat_entry())
+            #     for b in {'u', 'g', 'r', 'i', 'z', 'y'}:
+            #         print(o.get_LSST_flux(b))
             elif o.object_type == 'galaxy':
                 for cmp in ['disk', 'bulge', 'knots']:
                     print(cmp)
