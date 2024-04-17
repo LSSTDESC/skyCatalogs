@@ -2,5 +2,5 @@
 
 stackvana>=0.2023.32
 gitpython
-pyyaml-include=1.3
+pyyaml-include>=1.3
 sncosmo
