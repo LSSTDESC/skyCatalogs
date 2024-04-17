@@ -64,7 +64,7 @@ jobs:
 
             - name: Install test deps
               run:
-                conda install -y pytest nose || true
+                conda install -y pytest nose
 
             - name: Run tests
               run: |
