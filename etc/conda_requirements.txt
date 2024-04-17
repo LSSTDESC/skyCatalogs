@@ -2,5 +2,5 @@
 
 stackvana>=0.2023.32
 gitpython
-# dust_extinction
+dust_extinction
 # sncosmo
