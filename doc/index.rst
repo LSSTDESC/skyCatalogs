@@ -23,6 +23,7 @@ https://github.com/LSSTDESC/skyCatalogs.
    :caption: Contents:
 
    ops-rehearsal-3/galaxies
+   ops-rehearsal-3/UW_stars
 
 
 Indices and tables
