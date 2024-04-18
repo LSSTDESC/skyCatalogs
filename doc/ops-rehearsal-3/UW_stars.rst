@@ -16,8 +16,8 @@ Name                      Datatype       Units       Description
 ========================  ============   ==========  =========================
 object_type               string                     In practice always 'star'
 id                        string                     Unique object identifier
-ra                        double         degrees     object right ascension
-dec                       double         degrees     object declination
+ra                        double         degrees     Object right ascension
+dec                       double         degrees     Object declination
 host_galaxy_id            int64                      Unused for stars
 magnorm                   double                     To be applied to SED
 sed_filepath              string                     Path to object's SED file
@@ -28,16 +28,19 @@ MW_av                     float                      Extinction parameter
                                                      from F19 dust map
 mura                      double         milarcsec   RA proper motion
                                          per year
-mudec                     double         milarcsec   Declin. propermotion
+mudec                     double         milarcsec   Declin. proper motion
+                                         per year
 radial_velocity           double         km/sec      Radial velocity
 parallax                  double         milarcsec   Parallax
 variability_model         string                     Unused for stars
 salt2_params              int32                      Unused for stars
-is_variable               boolean                    If true remaining
-                                                     columns are meaningful
-period                    double
-mag_amplitude             double
-phase                     double
+is_variable               boolean                    If true, the star has
+                                                     sinusoidal variability
+						     in magnitude
+period                    double         days        period of variability
+mag_amplitude             double                     amplitude of magnitude
+                                                     variability
+phase                     double         radians     phase of variability
 ========================  ============   ==========  =========================
 
 Star flux file
