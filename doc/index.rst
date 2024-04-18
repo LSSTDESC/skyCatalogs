@@ -21,6 +21,7 @@ https://github.com/LSSTDESC/skyCatalogs.
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
    ops-rehearsal-3/galaxies
 
 
