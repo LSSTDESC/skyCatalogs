@@ -13,11 +13,11 @@ SSO main file
 ========================  ============   ==============  ===========================
 Name                      Datatype       Units           Description
 ========================  ============   ==============  ===========================
-id                        string                         Unique object identifier
+id                        string         N/A             Unique object identifier
 mjd                       double         days            Time of observation
 ra                        double         degrees         Object right ascension
 dec                       double         degrees         Object declination
-trailed_source_mag        double                         Mag. normalization for SED
+trailed_source_mag        double         N/A             Mag. normalization for SED
 ra_rate                   double         deg/day         RA rate of change * cos(dec)
 dec_rate                  double         deg/day         Declination rate of change
 ========================  ============   ==============  ===========================
@@ -28,7 +28,7 @@ Galaxy flux file
 =============   =========   ================  ================================
 Name            Datatype    Units             Description
 =============   =========   ================  ================================
-id              string                        Unique object identifier
+id              string      N/A               Unique object identifier
 mjd             double      days              Time of observation (Julian date)
 lsst_flux_u     float       photons/sec/cm^2  Flux integrated over lsst u-band
 lsst_flux_g     float       photons/sec/cm^2  Flux integrated over lsst g-band
