@@ -22,7 +22,7 @@ ra_rate                   double         deg/day         RA rate of change * cos
 dec_rate                  double         deg/day         Declination rate of change
 ========================  ============   ==============  ===========================
 
-Galaxy flux file
+SSO flux file
 ----------------
 
 =============   =========   ================  ================================
