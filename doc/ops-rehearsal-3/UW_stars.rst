@@ -22,7 +22,7 @@ host_galaxy_id            int64                      Unused for stars
 magnorm                   double                     To be applied to SED
 sed_filepath              string                     Path to object's SED file
                                                      relative to env variable
-						     SIMS_SED_LIBRARY_DIR
+                                                     SIMS_SED_LIBRARY_DIR
 MW_rv                     float                      Extinction parameter
 MW_av                     float                      Extinction parameter
                                                      from F19 dust map
@@ -36,7 +36,7 @@ variability_model         string                     Unused for stars
 salt2_params              int32                      Unused for stars
 is_variable               boolean                    If true, the star has
                                                      sinusoidal variability
-						     in magnitude
+                                                     in magnitude
 period                    double         days        period of variability
 mag_amplitude             double                     amplitude of magnitude
                                                      variability

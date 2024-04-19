@@ -49,7 +49,7 @@ ellipticity_2_bulge_true  double                         Ellipticity component 2
                                                          for bulge, not lensed
 sed_val_bulge             list(double)   4.4659e13 W/Hz  Integrated rest-frame AB
                                                          luminosities for tophat
-							 filters (bulge component)
+                                                         filters (bulge component)
 sed_val_disk              list(double)   4.4659e13 W/Hz  Like sed_val_bulge
 bulge_magnorm             double                         Normalization for SED
 disk_magnorm              double                         Normalization for SED
