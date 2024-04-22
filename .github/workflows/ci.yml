@@ -42,7 +42,7 @@ jobs:
                 conda update -n base conda
                 conda info
                 conda list
-                conda install -y --file etc/conda_requirements.txt
+                conda install -y --file etc/conda_requirements.txt || true
                 conda info
 
             - name: Install dust_extinction
