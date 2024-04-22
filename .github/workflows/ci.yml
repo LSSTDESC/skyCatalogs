@@ -45,6 +45,11 @@ jobs:
                 conda install -y --file etc/conda_requirements.txt
                 conda info
 
+            - name: Install dust_extinction
+              run: |
+                conda install -y dust_extinction
+                conda info
+
             - name: Install rubin_sim_data
               run: |
                 mkdir rubin_sim_data
