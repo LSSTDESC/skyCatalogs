@@ -1,0 +1,3 @@
+nside: 32
+ordering: ring
+type: healpix

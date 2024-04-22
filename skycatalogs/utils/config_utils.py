@@ -37,12 +37,17 @@ class YamlIncludeLoader(yaml.SafeLoader):
         The stream to parse.
 
     This code was adapted from the LSST Science Pipelines Butler.
+    See in particular the Loader class in
+    daf_butler/python/lsst/daf/butler/_config.py in the daf_butler repo
+    https://github.com/lsst/daf_butler
     """
     def __init__(self, filestream):
         super().__init__(filestream)
-        self._root = os.path.dirname(filestream.name)
+        self._logger =  logging.getLogger('YamlIncludeLoader')
+        # self._root = os.path.dirname(filestream.name)
+        # self._current_dir = self._root
+        self._current_dir = os.path.dirname(filestream.name)
         self.add_constructor("!include", YamlIncludeLoader.include)
-        self._current_dir = self._root
 
     def include(self, node: yaml.Node) -> list[Any] | dict[str, Any]:
         result: list[Any] | dict[str, Any]
@@ -64,7 +69,7 @@ class YamlIncludeLoader(yaml.SafeLoader):
             return result
 
         else:
-            print("Error:: unrecognised node type in !include statement",
+            self._logger.error("Unrecognised node type in !include statement",
                   file=sys.stderr)
             raise yaml.constructor.ConstructorError
 
@@ -73,14 +78,14 @@ class YamlIncludeLoader(yaml.SafeLoader):
             actual_path = filepath
         else:
             actual_path = os.path.join(self._current_dir, filepath)
-        print("Opening YAML file via !include: %s", actual_path)
+        self._logger.info("Opening YAML file via !include: %s", actual_path)
 
-        old_current = self._current_dir
-        self._current_dir = actual_path
+        # old_current = self._current_dir
+        # self._current_dir = actual_path
         # Read all the data from the resource
         with open(actual_path) as f:
             content = yaml.load(f, YamlIncludeLoader)
-        self._current_dir = old_current
+        # self._current_dir = old_current
         return content
 
 
