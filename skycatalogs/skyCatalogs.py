@@ -1,8 +1,6 @@
 import os
 import sys
 import re
-import yaml
-from yamlinclude import YamlIncludeConstructor
 import logging
 import healpy
 import numpy as np
@@ -845,12 +843,12 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     # Get bandpasses in case we need to compute fluxes
     _ = load_lsst_bandpasses()
     _ = load_roman_bandpasses()
-    base_dir = os.path.dirname(config_file)
-    YamlIncludeConstructor.add_to_loader_class(loader_class=yaml.SafeLoader,
-                                               base_dir=base_dir)
-    with open(config_file) as f:
-        return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
-                          mp=mp, verbose=verbose)
+
+    from skycatalogs.utils.config_utils import open_config_file
+
+    config_dict = open_config_file(config_file)
+    return SkyCatalog(config_dict, skycatalog_root=skycatalog_root, mp=mp,
+                      verbose=verbose)
 
 
 if __name__ == '__main__':
