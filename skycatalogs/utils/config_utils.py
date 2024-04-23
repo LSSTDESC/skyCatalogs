@@ -44,8 +44,6 @@ class YamlIncludeLoader(yaml.SafeLoader):
     def __init__(self, filestream):
         super().__init__(filestream)
         self._logger =  logging.getLogger('YamlIncludeLoader')
-        # self._root = os.path.dirname(filestream.name)
-        # self._current_dir = self._root
         self._current_dir = os.path.dirname(filestream.name)
         self.add_constructor("!include", YamlIncludeLoader.include)
 
@@ -80,12 +78,9 @@ class YamlIncludeLoader(yaml.SafeLoader):
             actual_path = os.path.join(self._current_dir, filepath)
         self._logger.info("Opening YAML file via !include: %s", actual_path)
 
-        # old_current = self._current_dir
-        # self._current_dir = actual_path
         # Read all the data from the resource
         with open(actual_path) as f:
             content = yaml.load(f, YamlIncludeLoader)
-        # self._current_dir = old_current
         return content
 
 
