@@ -21,7 +21,7 @@ dec                       double         degrees         Object declination
 redshift                  double         N/A             Cosmological redshift
                                                          with line-of-sight motion
 redshift_hubble           double         N/A             Cosmological redshift
-peculiar_velocity         double         km/sec?         Peculiar velocity
+peculiar_velocity         double         km/sec          Peculiar velocity
 shear_1                   double         N/A             Shear (gamma) component 1,
                                                          treecorr/Galsim convention
 shear_2                   double         N/A             Shear (gamma) component 2,
