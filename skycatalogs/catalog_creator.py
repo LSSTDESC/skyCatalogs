@@ -259,7 +259,8 @@ class CatalogCreator:
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
         _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
 
-        _star_parquet = '/global/cfs/cdirs/descssim/postDC2/UW_star_catalog'
+#        _star_parquet = '/global/cfs/cdirs/descssim/postDC2/UW_star_catalog'
+        _star_parquet = '/sdf/data/rubin/shared/ops-rehearsal-3/imSim_catalogs/UW_stars'
 
         self._galaxy_stride = galaxy_stride
         if pkg_root:
