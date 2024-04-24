@@ -3,9 +3,12 @@ Galaxy quantities for Roman-Rubin joint simulation
 ++++++++++++++++++++++++++++++++++++++++++++++++++
 Data are partitioned by (nside=32, ring ordering) healpixel. For each pixel
 there is a so-called "main file" (with information largely coming from the
-diffsky galaxy catalog) and a flux file. The latter contains for each
-object only fluxes for lsst and Roman bands and the object id so it can be
-joined with the main file. Both are parquet files. 
+diffsky galaxy catalog), a flux file and a SED file. The flux file contains for
+each object only fluxes for lsst and Roman bands and the object id so it can be
+joined with the main file. Both it and the main file are parquet files. The
+SED file is in hdf5 format. The file names take the form galaxy_<hp>.parquet
+(main file), galaxy_flux_<hp>.parquet (flux file) and galaxy_sed_<hp>.hdf5 for
+SED files.  In all cases <hp> is the id of the healpixel covered by the file.
 
 Galaxy main file
 ----------------
@@ -26,7 +29,7 @@ shear2                         double    N/A      Shear (gamma) component 2,
                                                   treecorr/Galsim convention
 convergence                    double    N/A      Convergence (kappa)
 spheroidHalfLightRadiusArcsec  float     arcsec
-diskHalfLisghtRadiusArcsec     float     arcsec 
+diskHalfLisghtRadiusArcsec     float     arcsec
 diskEllipticity1               double    N/A      Ellipticity component 1
                                                   for disk, not lensed
 diskEllipticity2               double    N/A      Ellipticity component 2
@@ -64,3 +67,12 @@ roman_flux_H158  float      photons/sec/cm^2  Flux integrated over roman H158-ba
 roman_flux_F184  float      photons/sec/cm^2  Flux integrated over roman F184-band
 roman_flux_K213  float      photons/sec/cm^2  Flux integrated over roman K213-band
 ===============  ========   ================  ====================================
+
+Galaxy SED file
+---------------
+
+This file has two sections. One (**meta**) has an array **wave_list**, shape(312),
+of wavelengths (angstroms), which is used for SEDs of all galaxies in the file's healpixel.
+The other section, **galaxy**, contains groups of galaxies.  Each group has entries
+for individual galaxies, keyed by galaxy id. Such an entry is an array, shape(3, 312),
+consisting of SEDs for the three galaxy components (disk, bulge, knot). Units are fnu.
