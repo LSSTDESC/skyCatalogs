@@ -70,3 +70,16 @@ html_theme = 'sphinx_rtd_theme'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# The sphinx_rtd_theme does not properly handle wrapping long lines in
+# table cells when rendering to HTML due to a CSS issue (see
+# https://github.com/readthedocs/sphinx_rtd_theme/issues/1505).  Until
+# the issue is fixed upstream in sphinx_rtd_theme, we can simply
+# override the CSS here.
+rst_prolog = """
+.. raw:: html
+
+   <style>
+   .wy-table-responsive table td,.wy-table-responsive table th{white-space:normal}
+   </style>
+"""
