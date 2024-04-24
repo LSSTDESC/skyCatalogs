@@ -27,6 +27,7 @@ https://github.com/LSSTDESC/skyCatalogs.
    ops-rehearsal-3/SSO
    roman-rubin-1.1.2/diffsky_galaxy
    roman-rubin-1.1.2/UW_stars
+   roman-rubin-1.1.2/snana
 
 
 Indices and tables
