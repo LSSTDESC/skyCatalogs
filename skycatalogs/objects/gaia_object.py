@@ -135,7 +135,7 @@ class GaiaObject(BaseObject):
         self.use_lut = use_lut
 
 
-def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
+def _read_fits(htm_id, gaia_config, out_dict, logger, region=None):
     '''
     Read data for columns in keys from fits file belonging to htm_id.
     Append to arrays in out_dict.  If region is not None, filter out
@@ -147,19 +147,13 @@ def _read_fits(htm_id, gaia_config, out_dict, region=None, silent=True):
     gaia_config    dict     gaia_star portion of skyCatalg config
     out_dict       dict     out_dict.keys() are the columns to store
     region         lsst.sphgeom.Region or None
-    silent         bool     if False print warning if file not found.
-                            Default is False.
     '''
     f_dir = gaia_config['data_dir']
     f_name = gaia_config['basename_template'].replace('(?P<htm>\\d+)',
                                                       f'{htm_id}')
     f_path = os.path.join(f_dir, f_name)
-    try:
-        f = open(f_path)
-        f.close()
-    except FileNotFoundError:
-        if not silent:
-            print(f'No file for requested htm id {htm_id}')
+    if not os.path.isfile(f_path):
+        logger.info(f'No file for requested htm id {htm_id}')
         return
 
     tbl = afwtable.SimpleCatalog.readFits(f_path)
@@ -302,10 +296,12 @@ class GaiaCollection(ObjectCollection):
             config = GaiaCollection.get_config()
             for i_r in interior_ranges:
                 for i_htm in i_r:
-                    _read_fits(i_htm, config, out_dict, region=None)
+                    _read_fits(i_htm, config, out_dict, skycatalog._logger,
+                               region=None)
             for p_r in partial_ranges:
                 for i_htm in p_r:
-                    _read_fits(i_htm, config, out_dict, region=region)
+                    _read_fits(i_htm, config, out_dict, skycatalog._logger,
+                               region=region)
             df = pd.DataFrame(out_dict).sort_values('id')
 
         if mjd is None:
