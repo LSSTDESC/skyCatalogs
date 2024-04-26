@@ -303,6 +303,8 @@ class SkyCatalog(object):
 
             self._cat_dir = os.path.join(sky_root, config['catalog_dir'])
 
+        self._sky_root = os.path.abspath(sky_root)
+
         self._logger.info(f'Catalog data will be read from {self._cat_dir}')
         # There may be more to do at this point but not too much.
         # In particular, don't read in anything from data files

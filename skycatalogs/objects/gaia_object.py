@@ -81,8 +81,10 @@ class GaiaObject(BaseObject):
         index: int
             Index of this object in the parent collection
         """
-        ra = np.degrees(obj_pars['coord_ra'])
-        dec = np.degrees(obj_pars['coord_dec'])
+        # ra = np.degrees(obj_pars['coord_ra'])
+        # dec = np.degrees(obj_pars['coord_dec'])
+        ra = obj_pars['ra_deg']
+        dec = obj_pars['dec_deg']
         # Form the object id from the GAIA catalog id with the string
         # 'gaia_dr2_' prepended.
         id_prefix = GaiaCollection.get_config()['id_prefix']
@@ -135,23 +137,27 @@ class GaiaObject(BaseObject):
         self.use_lut = use_lut
 
 
-def _read_fits(htm_id, gaia_config, out_dict, logger, region=None):
+def _read_fits(htm_id, gaia_config, sky_root, out_dict, logger, region=None):
     '''
     Read data for columns in keys from fits file belonging to htm_id.
     Append to arrays in out_dict.  If region is not None, filter out
     entries not in region before appending.
+    Note ra, dec must be in degrees for filtering, but
+    coord_ra and coord_dec as stored in out_dict are in radians.
 
     Parameters
     ----------
     htm_id         int
     gaia_config    dict     gaia_star portion of skyCatalg config
+    sky_root       string   absolute skycatalog_root path.  Data
+                            is found relative to this
     out_dict       dict     out_dict.keys() are the columns to store
     region         lsst.sphgeom.Region or None
     '''
     f_dir = gaia_config['data_dir']
     f_name = gaia_config['basename_template'].replace('(?P<htm>\\d+)',
                                                       f'{htm_id}')
-    f_path = os.path.join(f_dir, f_name)
+    f_path = os.path.join(sky_root, f_dir, f_name)
     if not os.path.isfile(f_path):
         logger.info(f'No file for requested htm id {htm_id}')
         return
@@ -166,8 +172,11 @@ def _read_fits(htm_id, gaia_config, out_dict, logger, region=None):
     ra_full = tbl.get('coord_ra')
     dec_full = tbl.get('coord_dec')
 
+    ra_full_deg = np.degrees(ra_full)
+    dec_full_deg = np.degrees(dec_full)
+
     if isinstance(region, Disk):
-        mask = compute_region_mask(region, ra_full, dec_full)
+        mask = compute_region_mask(region, ra_full_deg, dec_full_deg)
         if all(mask):
             return
 
@@ -180,7 +189,7 @@ def _read_fits(htm_id, gaia_config, out_dict, logger, region=None):
         dec_c = LonLat.latitudeOf(v).asDegrees()
         rad_as = circle.getOpeningAngle().asDegrees() * 3600
         disk = Disk(ra_c, dec_c, rad_as)
-        mask = compute_region_mask(disk, ra_full, dec_full)
+        mask = compute_region_mask(disk, ra_full_deg, dec_full_deg)
         if all(mask):
             return
         if any(mask):
@@ -189,7 +198,8 @@ def _read_fits(htm_id, gaia_config, out_dict, logger, region=None):
         else:
             ra_compress = ra_full
             dec_compress = dec_full
-        poly_mask = compute_region_mask(region, ra_compress, dec_compress)
+        poly_mask = compute_region_mask(region, np.degrees(ra_compress),
+                                        np.degrees(dec_compress))
         if all(poly_mask):
             return
 
@@ -242,7 +252,6 @@ class GaiaCollection(ObjectCollection):
         '''
         if not skycatalog:
             raise ValueError('GaiaCollection.load_collection: skycatalog cannot be None')
-
         if isinstance(region, Disk):
             ra = lsst.geom.Angle(region.ra, lsst.geom.degrees)
             dec = lsst.geom.Angle(region.dec, lsst.geom.degrees)
@@ -296,12 +305,12 @@ class GaiaCollection(ObjectCollection):
             config = GaiaCollection.get_config()
             for i_r in interior_ranges:
                 for i_htm in i_r:
-                    _read_fits(i_htm, config, out_dict, skycatalog._logger,
-                               region=None)
+                    _read_fits(i_htm, config, skycatalog._sky_root, out_dict,
+                               skycatalog._logger, region=None)
             for p_r in partial_ranges:
                 for i_htm in p_r:
-                    _read_fits(i_htm, config, out_dict, skycatalog._logger,
-                               region=region)
+                    _read_fits(i_htm, config, skycatalog._sky_root,
+                               out_dict, skycatalog._logger, region=region)
             df = pd.DataFrame(out_dict).sort_values('id')
 
         if mjd is None:
@@ -329,6 +338,11 @@ class GaiaCollection(ObjectCollection):
         # Update ra, dec values.
         df['coord_ra'] = pm_outputs[0]
         df['coord_dec'] = pm_outputs[1]
+
+        # and also store degrees version
+        # is there any reason to keep coord_ra & coord_dec?
+        df['ra_deg'] = np.degrees(pm_outputs[0])
+        df['dec_deg'] = np.degrees(pm_outputs[1])
 
         return GaiaCollection(df, skycatalog, source_type, use_lut, mjd)
 
@@ -359,8 +373,8 @@ class GaiaCollection(ObjectCollection):
 
     def __getitem__(self, key):
         if isinstance(key, int) or isinstance(key, np.int64):
-            row = {col: self.df[col][key] for col in ('id', 'coord_ra',
-                                                      'coord_dec',
+            row = {col: self.df[col][key] for col in ('id', 'ra_deg',
+                                                      'dec_deg',
                                                       'phot_bp_mean_flux',
                                                       'phot_rp_mean_flux')}
             return GaiaObject(row, self, key)
