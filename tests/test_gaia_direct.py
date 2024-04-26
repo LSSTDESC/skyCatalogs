@@ -11,7 +11,6 @@ from skycatalogs.objects import GaiaCollection
 PACKAGE_DIR = os.path.dirname(os.path.abspath(str(Path(__file__).parent)))
 SKYCATALOG_ROOT = os.path.join(PACKAGE_DIR, "skycatalogs", "data")
 CATALOG_DIR = os.path.join(PACKAGE_DIR, "skycatalogs", "data", "ci_sample")
-# CATALOG_DIR = os.path.join(os.getenv('SKYCATALOG_ROOT'), 'gaia')
 
 CONFIG = {'area_partition': None,
           'butler_parameters':
@@ -25,7 +24,6 @@ def get_gaia_data(butler_params):
     butler = daf_butler.Butler(butler_params['repo'],
                                collections=[butler_params['collections']])
     refs = set(butler.registry.queryDatasets(butler_params['dstype']))
-    # return pd.concat(butler.get(_).asAstropy().to_pandas() for _ in refs)
     return pd.concat(butler.get(_).asAstropy().to_pandas() for _ in refs)
 
 class GaiaObjectTestCase(unittest.TestCase):
@@ -34,13 +32,6 @@ class GaiaObjectTestCase(unittest.TestCase):
         '''
         Open the catalog; establish config
         '''
-        # skycatalog_root = os.path.join(Path(__file__).resolve().parents[1],
-        #                               'skycatalogs', 'data')
-        # self._skycatalog_root = skycatalog_root
-        # cfg_path = os.path.join(skycatalog_root, 'ci_sample', 'skyCatalog.yaml')
-        # For testing reading fits directly
-        # skycatalog_root = os.getenv('SKYCATALOG_ROOT')
-        # cfg_path = os.path.join(skycatalog_root, 'gaia', 'gaia_skyCatalog.yaml')
         skycatalog_root = SKYCATALOG_ROOT
         cfg_path = os.path.join(skycatalog_root, 'ci_sample',
                                 'gaia_skyCatalog.yaml')
