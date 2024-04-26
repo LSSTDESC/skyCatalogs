@@ -1,0 +1,27 @@
+catalog_dir: ci_sample
+catalog_name: gaia_skyCatalog
+object_types:
+  gaia_star:
+    area_partition:
+      level: 7
+      type: htm
+    #butler_parameters:
+    #  collections: HSC/defaults
+    #  dstype: gaia_dr2_20200414
+    #data_file_type: butler_refcat
+    id_prefix: gaia_dr2_
+    data_file_type: fits
+    data_dir: ci_sample/repo/refcats/gaia_dr2_20200414
+    basename_template: gaia_dr2_20200414_(?P<htm>\d+)_refcats.fits
+    sed_method: use_lut
+provenance:
+  inputs:
+  skyCatalogs_repo:
+    git_branch: gaia_bypass
+    git_hash: 3a87b5e825dbc8f692f9713b0b761a9ad6896364
+    git_status:
+    - UNCOMMITTED_FILES
+  versioning:
+    code_version: 1.7.0-rc3
+    schema_version: 1.2.0
+skycatalog_root: /sdf/home/j/jrb/rubin-user/skycatalog_root
