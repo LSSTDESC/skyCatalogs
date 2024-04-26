@@ -1,0 +1,18 @@
+catalog_dir: for_imsim_subpixel
+catalog_name: skyCatalog
+galaxy_magnitude_cut: 29.0
+knots_magnitude_cut: 27.0
+object_types:
+  gaia_star: !include gaia_sdf.yaml
+  galaxy: !include subdir/galaxy_include.yaml
+  star: !include star.yaml
+provenance:
+  skyCatalogs_repo:
+    git_branch: u/jrbogart/nsides
+    git_hash: f0539b4397159f87010bc47785d03434b541232d
+    git_status:
+    - UNTRACKED_FILES
+  versioning:
+    code_version: 1.7.0-rc3
+    schema_version: 1.2.0
+skycatalog_root: /pscratch/sd/j/jrbogart/desc/skycatalogs

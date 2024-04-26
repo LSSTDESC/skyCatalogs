@@ -1,0 +1,7 @@
+# butler refcat available only at SLAC sdf
+    area_partition: None
+    butler_parameters:
+      collections: HSC/defaults
+      dstype: gaia_dr2_20200414
+    data_file_type: butler_refcat
+    sed_method: use_lut

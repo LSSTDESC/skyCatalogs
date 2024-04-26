@@ -1,7 +1,5 @@
 import os
 import re
-import yaml
-from yamlinclude import YamlIncludeConstructor
 import logging
 import healpy
 import numpy as np
@@ -133,7 +131,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
 
             mask = compute_region_mask(disk_region, tbl['ra'], tbl['dec'])
             if all(mask):
-                if no_obj_type_return:
+                if no_obj_type_return and no_mjd_return:
                     return None, None, None, None
                 else:    # currently if object type is returned, mjd is not
                     return None, None, None, None, None
@@ -807,9 +805,9 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     # Get bandpasses in case we need to compute fluxes
     _ = load_lsst_bandpasses()
     _ = load_roman_bandpasses()
-    base_dir = os.path.dirname(config_file)
-    YamlIncludeConstructor.add_to_loader_class(loader_class=yaml.SafeLoader,
-                                               base_dir=base_dir)
-    with open(config_file) as f:
-        return SkyCatalog(yaml.safe_load(f), skycatalog_root=skycatalog_root,
-                          mp=mp, verbose=verbose)
+
+    from skycatalogs.utils.config_utils import open_config_file
+
+    config_dict = open_config_file(config_file)
+    return SkyCatalog(config_dict, skycatalog_root=skycatalog_root, mp=mp,
+                      verbose=verbose)
