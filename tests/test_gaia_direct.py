@@ -12,12 +12,9 @@ PACKAGE_DIR = os.path.dirname(os.path.abspath(str(Path(__file__).parent)))
 SKYCATALOG_ROOT = os.path.join(PACKAGE_DIR, "skycatalogs", "data")
 CATALOG_DIR = os.path.join(PACKAGE_DIR, "skycatalogs", "data", "ci_sample")
 
-CONFIG = {'area_partition': None,
-          'butler_parameters':
-          {'collections': 'refcats',
-           'dstype': 'gaia_dr2_20200414',
-           'repo': os.path.join(CATALOG_DIR, 'repo')},
-          'data_file_type': 'butler_refcat'}
+BUTLER_PARAMETERS = {'collections': 'refcats',
+                     'dstype': 'gaia_dr2_20200414',
+                     'repo': os.path.join(CATALOG_DIR, 'repo')}
 
 
 def get_gaia_data(butler_params):
@@ -25,6 +22,7 @@ def get_gaia_data(butler_params):
                                collections=[butler_params['collections']])
     refs = set(butler.registry.queryDatasets(butler_params['dstype']))
     return pd.concat(butler.get(_).asAstropy().to_pandas() for _ in refs)
+
 
 class GaiaObjectTestCase(unittest.TestCase):
     """TestCase class for GaiaObjects"""
@@ -38,7 +36,7 @@ class GaiaObjectTestCase(unittest.TestCase):
         self._cat = skyCatalogs.open_catalog(cfg_path,
                                              skycatalog_root=skycatalog_root)
 
-        self.df = get_gaia_data(CONFIG['butler_parameters'])
+        self.df = get_gaia_data(BUTLER_PARAMETERS)
 
     def tearDown(self):
         pass
@@ -49,7 +47,7 @@ class GaiaObjectTestCase(unittest.TestCase):
         region = skyCatalogs.Disk(ra, dec, radius*3600.0)
 
         # make a quadrilateral in case we want to try out
-	# masking for a polygonal region
+        # masking for a polygonal region
         # ra_min = -0.7
         # ra_max =  0.7
         # dec_min = -0.8
@@ -61,7 +59,6 @@ class GaiaObjectTestCase(unittest.TestCase):
         #             (ra_max, dec_min)]
         # rgn_poly = skyCatalogs.PolygonalRegion(vertices_radec=vertices)
 
-
         # Use start of proper motion epoch, so ra, dec values should
         # be unchanged from refcat values.
         epoch_a_values = set(self.df['epoch'])
@@ -69,7 +66,7 @@ class GaiaObjectTestCase(unittest.TestCase):
         mjd0 = epoch_a_values.pop()
         object_list = GaiaCollection.load_collection(region, self._cat,
                                                      mjd=mjd0)
-	# First try a particular case
+        # First try a particular case
         # fixed = 2831
         # the_list.insert(0, fixed)
         # for index in np.random.choice(range(len(object_list)), size=20):
@@ -89,7 +86,8 @@ class GaiaObjectTestCase(unittest.TestCase):
         # calculated proper motion offsets are at least 10% larger
         # than the naive estimates.
         mjd = 60584.  # 2024-10-01 00:00:00
-        object_list = GaiaCollection.load_collection(region, self._cat, mjd=mjd)
+        object_list = GaiaCollection.load_collection(region, self._cat,
+                                                     mjd=mjd)
         for index in np.random.choice(range(len(object_list)), size=20):
             obj = object_list[index]
             gaia_id = obj.id.split('_')[-1]
