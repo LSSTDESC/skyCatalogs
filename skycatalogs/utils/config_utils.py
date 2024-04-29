@@ -1,7 +1,6 @@
 import os
 import sys
 import yaml
-import git
 import logging
 from typing import Any
 from .exceptions import ConfigDuplicateKeyError
@@ -317,6 +316,7 @@ def assemble_SED_models(bins):
 
 
 def assemble_provenance(pkg_root, inputs={}, schema_version=None):
+    import git
 
     if not schema_version:
         schema_version = CURRENT_SCHEMA_VERSION

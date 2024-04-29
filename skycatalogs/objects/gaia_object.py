@@ -5,14 +5,22 @@ import itertools
 from collections.abc import Iterable
 from pathlib import PurePath
 import numpy as np
+import numpy.ma as ma
+import pandas as pd
 import erfa
 import astropy.modeling
 from astropy import units as u
 import galsim
-import lsst.daf.butler as daf_butler
 import lsst.geom
+# ## Next two lines needed only for butler access
+import lsst.daf.butler as daf_butler
 from lsst.meas.algorithms import ReferenceObjectLoader
-from skycatalogs.utils.shapes import Disk, PolygonalRegion
+
+# ## Need these for direct access and processing of fits files
+import lsst.afw.table as afwtable
+from lsst.sphgeom import HtmPixelization, Circle, LonLat
+
+from skycatalogs.utils.shapes import Disk, PolygonalRegion, compute_region_mask
 from skycatalogs.objects.base_object import BaseObject, ObjectCollection
 
 
@@ -67,17 +75,20 @@ class GaiaObject(BaseObject):
         ----------
         obj_pars: dict-like
             Dictionary of object parameters as read directly from the
-            reference catalog.
+            complete object collection
         parent_collection: ObjectCollection
             Parent collection of this object.
         index: int
             Index of this object in the parent collection
         """
-        ra = np.degrees(obj_pars['coord_ra'])
-        dec = np.degrees(obj_pars['coord_dec'])
+        # ra = np.degrees(obj_pars['coord_ra'])
+        # dec = np.degrees(obj_pars['coord_dec'])
+        ra = obj_pars['ra_deg']
+        dec = obj_pars['dec_deg']
         # Form the object id from the GAIA catalog id with the string
         # 'gaia_dr2_' prepended.
-        obj_id = f"gaia_dr2_{obj_pars['id']}"
+        id_prefix = GaiaCollection.get_config()['id_prefix']
+        obj_id = f"{id_prefix}{obj_pars['id']}"
         super().__init__(ra, dec, obj_id, 'gaia_star',
                          belongs_to=parent_collection, belongs_index=index)
         self.use_lut = self._belongs_to._use_lut
@@ -126,6 +137,97 @@ class GaiaObject(BaseObject):
         self.use_lut = use_lut
 
 
+def _read_fits(htm_id, gaia_config, sky_root, out_dict, logger, region=None):
+    '''
+    Read data for columns in keys from fits file belonging to htm_id.
+    Append to arrays in out_dict.  If region is not None, filter out
+    entries not in region before appending.
+    Note ra, dec must be in degrees for filtering, but
+    coord_ra and coord_dec as stored in out_dict are in radians.
+
+    Parameters
+    ----------
+    htm_id         int
+    gaia_config    dict     gaia_star portion of skyCatalg config
+    sky_root       string   absolute skycatalog_root path.  Data
+                            is found relative to this
+    out_dict       dict     out_dict.keys() are the columns to store
+    region         lsst.sphgeom.Region or None
+    '''
+    f_dir = gaia_config['data_dir']
+    f_name = gaia_config['basename_template'].replace('(?P<htm>\\d+)',
+                                                      f'{htm_id}')
+    f_path = os.path.join(sky_root, f_dir, f_name)
+    if not os.path.isfile(f_path):
+        logger.info(f'No file for requested htm id {htm_id}')
+        return
+
+    tbl = afwtable.SimpleCatalog.readFits(f_path)
+    if region is None:
+        for k in out_dict.keys():
+            out_dict[k] += list(tbl.get(k))
+        return
+
+    # Otherwise start with ra, dec and create mask
+    ra_full = tbl.get('coord_ra')
+    dec_full = tbl.get('coord_dec')
+
+    ra_full_deg = np.degrees(ra_full)
+    dec_full_deg = np.degrees(dec_full)
+
+    if isinstance(region, Disk):
+        mask = compute_region_mask(region, ra_full_deg, dec_full_deg)
+        if all(mask):
+            return
+
+    elif isinstance(region, PolygonalRegion):
+        # First mask off points outside a bounding circle because it's
+        # relatively fast
+        circle = region._convex_polygon.getBoundingCircle()
+        v = circle.getCenter()
+        ra_c = LonLat.longitudeOf(v).asDegrees()
+        dec_c = LonLat.latitudeOf(v).asDegrees()
+        rad_as = circle.getOpeningAngle().asDegrees() * 3600
+        disk = Disk(ra_c, dec_c, rad_as)
+        mask = compute_region_mask(disk, ra_full_deg, dec_full_deg)
+        if all(mask):
+            return
+        if any(mask):
+            ra_compress = ma.array(ra_full, mask=mask).compressed()
+            dec_compress = ma.array(dec_full, mask=mask).compressed()
+        else:
+            ra_compress = ra_full
+            dec_compress = dec_full
+        poly_mask = compute_region_mask(region, np.degrees(ra_compress),
+                                        np.degrees(dec_compress))
+        if all(poly_mask):
+            return
+
+        # Get indices of unmasked
+        ixes = np.where(~mask)
+
+        mask[ixes] |= poly_mask
+
+    if any(mask):
+        ra_compress = ma.array(ra_full, mask=mask).compressed()
+        dec_compress = ma.array(dec_full, mask=mask).compressed()
+    else:
+        ra_compress = ra_full
+        dec_compress = dec_full
+
+    out_dict['coord_ra'] += list(ra_compress)
+    out_dict['coord_dec'] += list(dec_compress)
+
+    for k in out_dict.keys():
+        if k in ('coord_ra', 'coord_dec'):
+            continue
+        full = tbl.get(k)
+        if any(mask):
+            out_dict[k] += list(ma.array(full, mask=mask).compressed())
+        else:
+            out_dict[k] += list(full)
+
+
 class GaiaCollection(ObjectCollection):
     # Class methods
     _gaia_config = None
@@ -149,42 +251,67 @@ class GaiaCollection(ObjectCollection):
                     Gaia stars
         '''
         if not skycatalog:
-            raise ValueError(f'GaiaCollection.load_collection: skycatalog cannot be None')
+            raise ValueError('GaiaCollection.load_collection: skycatalog cannot be None')
         if isinstance(region, Disk):
             ra = lsst.geom.Angle(region.ra, lsst.geom.degrees)
             dec = lsst.geom.Angle(region.dec, lsst.geom.degrees)
             center = lsst.geom.SpherePoint(ra, dec)
             radius = lsst.geom.Angle(region.radius_as, lsst.geom.arcseconds)
-            refcat_region = lsst.sphgeom.Circle(center.getVector(), radius)
+            refcat_region = Circle(center.getVector(), radius)
         elif isinstance(region, PolygonalRegion):
             refcat_region = region._convex_polygon
         else:
             raise TypeError(f'GaiaCollection.load_collection: {region} not supported')
-
-        source_type = 'gaia_star'
-
         if GaiaCollection.get_config() is None:
             gaia_section = skycatalog.raw_config['object_types']['gaia_star']
             GaiaCollection.set_config(gaia_section)
+        gaia_section = GaiaCollection.get_config()
 
-        butler_params = GaiaCollection.get_config()['butler_parameters']
-        butler = daf_butler.Butler(butler_params['repo'],
-                                   collections=butler_params['collections'])
-        refs = set(butler.registry.queryDatasets(butler_params['dstype']))
-        refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
-                   for _ in refs]
-        dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
-        config = ReferenceObjectLoader.ConfigClass()
-        config.filterMap = {f'{_}': f'phot_{_}_mean' for _ in ('g', 'bp', 'rp')}
-        ref_obj_loader = ReferenceObjectLoader(dataIds=dataIds,
-                                               refCats=refCats,
-                                               config=config)
-
+        source_type = 'gaia_star'
         sed_method = GaiaCollection.get_config().get('sed_method', 'use_lut')
         use_lut = (sed_method.strip().lower() == 'use_lut')
-        band = 'bp'
-        cat = ref_obj_loader.loadRegion(refcat_region, band).refCat
-        df = cat.asAstropy().to_pandas().sort_values('id')
+        if gaia_section['data_file_type'] == 'butler_refcat':
+
+            butler_params = gaia_section['butler_parameters']
+            butler = daf_butler.Butler(butler_params['repo'],
+                                       collections=butler_params['collections'])
+            refs = set(butler.registry.queryDatasets(butler_params['dstype']))
+            refCats = [daf_butler.DeferredDatasetHandle(butler, _, {})
+                       for _ in refs]
+            dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
+            config = ReferenceObjectLoader.ConfigClass()
+            config.filterMap = {f'{_}': f'phot_{_}_mean' for _ in ('g', 'bp', 'rp')}
+            ref_obj_loader = ReferenceObjectLoader(dataIds=dataIds,
+                                                   refCats=refCats,
+                                                   config=config)
+
+            band = 'bp'
+            cat = ref_obj_loader.loadRegion(refcat_region, band).refCat
+            df = cat.asAstropy().to_pandas().sort_values('id')
+
+        else:    # access fits files directly
+            # find htms intersecting region
+            level = gaia_section['area_partition']['level']
+            htm_pix = HtmPixelization(level)
+
+            overlap_ranges = htm_pix.envelope(refcat_region)
+            interior_ranges = htm_pix.interior(refcat_region)
+            partial_ranges = overlap_ranges - interior_ranges
+            keys = ['id', 'coord_ra', 'coord_dec', 'parallax', 'pm_ra',
+                    'pm_dec', 'epoch']
+            keys += [f'phot_{_}_mean_flux' for _ in ('g', 'bp', 'rp')]
+            out_dict = {k: [] for k in keys}
+
+            config = GaiaCollection.get_config()
+            for i_r in interior_ranges:
+                for i_htm in i_r:
+                    _read_fits(i_htm, config, skycatalog._sky_root, out_dict,
+                               skycatalog._logger, region=None)
+            for p_r in partial_ranges:
+                for i_htm in p_r:
+                    _read_fits(i_htm, config, skycatalog._sky_root,
+                               out_dict, skycatalog._logger, region=region)
+            df = pd.DataFrame(out_dict).sort_values('id')
 
         if mjd is None:
             raise RuntimeError("MJD needs to be provided for Gaia "
@@ -211,6 +338,11 @@ class GaiaCollection(ObjectCollection):
         # Update ra, dec values.
         df['coord_ra'] = pm_outputs[0]
         df['coord_dec'] = pm_outputs[1]
+
+        # and also store degrees version
+        # is there any reason to keep coord_ra & coord_dec?
+        df['ra_deg'] = np.degrees(pm_outputs[0])
+        df['dec_deg'] = np.degrees(pm_outputs[1])
 
         return GaiaCollection(df, skycatalog, source_type, use_lut, mjd)
 
@@ -241,7 +373,11 @@ class GaiaCollection(ObjectCollection):
 
     def __getitem__(self, key):
         if isinstance(key, int) or isinstance(key, np.int64):
-            return GaiaObject(self.df.iloc[key], self, key)
+            row = {col: self.df[col][key] for col in ('id', 'ra_deg',
+                                                      'dec_deg',
+                                                      'phot_bp_mean_flux',
+                                                      'phot_rp_mean_flux')}
+            return GaiaObject(row, self, key)
 
         elif type(key) == slice:
             ixdata = [i for i in range(min(key.stop, len(self._id)))]

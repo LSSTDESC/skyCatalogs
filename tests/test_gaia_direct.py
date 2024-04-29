@@ -12,14 +12,9 @@ PACKAGE_DIR = os.path.dirname(os.path.abspath(str(Path(__file__).parent)))
 SKYCATALOG_ROOT = os.path.join(PACKAGE_DIR, "skycatalogs", "data")
 CATALOG_DIR = os.path.join(PACKAGE_DIR, "skycatalogs", "data", "ci_sample")
 
-
-CONFIG = {'area_partition': None,
-          'butler_parameters':
-          {'collections': 'refcats',
-           'dstype': 'gaia_dr2_20200414',
-           'repo': os.path.join(CATALOG_DIR, 'repo')},
-          'id_prefix': 'gaia_dr2_',
-          'data_file_type': 'butler_refcat'}
+BUTLER_PARAMETERS = {'collections': 'refcats',
+                     'dstype': 'gaia_dr2_20200414',
+                     'repo': os.path.join(CATALOG_DIR, 'repo')}
 
 
 def get_gaia_data(butler_params):
@@ -35,15 +30,13 @@ class GaiaObjectTestCase(unittest.TestCase):
         '''
         Open the catalog; establish config
         '''
-        skycatalog_root = os.path.join(Path(__file__).resolve().parents[1],
-                                       'skycatalogs', 'data')
-        self._skycatalog_root = skycatalog_root
-        cfg_path = os.path.join(skycatalog_root, 'ci_sample', 'skyCatalog.yaml')
+        skycatalog_root = SKYCATALOG_ROOT
+        cfg_path = os.path.join(skycatalog_root, 'ci_sample',
+                                'gaia_skyCatalog.yaml')
         self._cat = skyCatalogs.open_catalog(cfg_path,
                                              skycatalog_root=skycatalog_root)
 
-        self.df = get_gaia_data(CONFIG['butler_parameters'])
-        GaiaCollection.set_config(CONFIG)
+        self.df = get_gaia_data(BUTLER_PARAMETERS)
 
     def tearDown(self):
         pass
@@ -53,6 +46,19 @@ class GaiaObjectTestCase(unittest.TestCase):
         radius = 1
         region = skyCatalogs.Disk(ra, dec, radius*3600.0)
 
+        # make a quadrilateral in case we want to try out
+        # masking for a polygonal region
+        # ra_min = -0.7
+        # ra_max =  0.7
+        # dec_min = -0.8
+        # dec_max = 0.6
+
+        # vertices = [(ra_min, dec_min),
+        #             (ra_min - 0.1, dec_max),
+        #             (ra_max, dec_max),
+        #             (ra_max, dec_min)]
+        # rgn_poly = skyCatalogs.PolygonalRegion(vertices_radec=vertices)
+
         # Use start of proper motion epoch, so ra, dec values should
         # be unchanged from refcat values.
         epoch_a_values = set(self.df['epoch'])
@@ -60,7 +66,12 @@ class GaiaObjectTestCase(unittest.TestCase):
         mjd0 = epoch_a_values.pop()
         object_list = GaiaCollection.load_collection(region, self._cat,
                                                      mjd=mjd0)
-        for index in np.random.choice(range(len(object_list)), size=20):
+        # First try a particular case
+        # fixed = 2831
+        # the_list.insert(0, fixed)
+        # for index in np.random.choice(range(len(object_list)), size=20):
+        the_list = list(np.random.choice(range(len(object_list)), size=20))
+        for index in the_list:
             obj = object_list[index]
             gaia_id = obj.id.split('_')[-1]
             df = self.df.query(f"id=={gaia_id}")
@@ -75,7 +86,8 @@ class GaiaObjectTestCase(unittest.TestCase):
         # calculated proper motion offsets are at least 10% larger
         # than the naive estimates.
         mjd = 60584.  # 2024-10-01 00:00:00
-        object_list = GaiaCollection.load_collection(region, self._cat, mjd=mjd)
+        object_list = GaiaCollection.load_collection(region, self._cat,
+                                                     mjd=mjd)
         for index in np.random.choice(range(len(object_list)), size=20):
             obj = object_list[index]
             gaia_id = obj.id.split('_')[-1]
