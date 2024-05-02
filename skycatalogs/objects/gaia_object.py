@@ -85,9 +85,9 @@ class GaiaObject(BaseObject):
         # dec = np.degrees(obj_pars['coord_dec'])
         ra = obj_pars['ra_deg']
         dec = obj_pars['dec_deg']
-        # Form the object id from the GAIA catalog id with the string
-        # 'gaia_dr2_' prepended.
-        id_prefix = GaiaCollection.get_config()['id_prefix']
+        # Form the object id from the GAIA catalog id with a string
+        # like 'gaia_dr2_' prepended.
+        id_prefix = GaiaCollection._id_prefix
         obj_id = f"{id_prefix}{obj_pars['id']}"
         super().__init__(ra, dec, obj_id, 'gaia_star',
                          belongs_to=parent_collection, belongs_index=index)
@@ -235,7 +235,7 @@ class GaiaCollection(ObjectCollection):
     @classmethod
     def set_config(cls, config):
         GaiaCollection._gaia_config = config
-
+        GaiaCollection._id_prefix = config['id_prefix']
     @classmethod
     def get_config(cls):
         return GaiaCollection._gaia_config
