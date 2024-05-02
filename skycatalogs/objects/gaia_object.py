@@ -350,7 +350,6 @@ class GaiaCollection(ObjectCollection):
         self.df = df
         self._sky_catalog = sky_catalog
         self._partition_id = None
-        self._id = np.array([f"gaia_dr2_{df.iloc[key]['id']}" for key in range(len(df))])
         self._mask = None
         self._object_type_unique = source_type
         self._use_lut = use_lut
@@ -372,22 +371,19 @@ class GaiaCollection(ObjectCollection):
         return self._mjd
 
     def __getitem__(self, key):
+        cols = ('id', 'ra_deg', 'dec_deg', 'phot_bp_mean_flux',
+                'phot_rp_mean_flux')
         if isinstance(key, int) or isinstance(key, np.int64):
-            row = {col: self.df[col][key] for col in ('id', 'ra_deg',
-                                                      'dec_deg',
-                                                      'phot_bp_mean_flux',
-                                                      'phot_rp_mean_flux')}
+            row = {col: self.df[col][key] for col in cols}
             return GaiaObject(row, self, key)
 
         elif type(key) == slice:
-            ixdata = [i for i in range(min(key.stop, len(self._id)))]
+            ixdata = [i for i in range(min(key.stop, len(self.df['id'])))]
             ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
-            return [self._object_class(self.df.iloc[i], self, i) for i in ixes]
+            return [self.__getitem__(i) for i in ixes]
 
         elif type(key) == tuple and isinstance(key[0], Iterable):
-            #  check it's a list of int-like?
-            return [self._object_class(self.df.iloc[i], self,
-                                       i) for i in key[0]]
+            return [self.__getitem__(i) for i in key[0]]
 
     def __len__(self):
         return len(self.df)
