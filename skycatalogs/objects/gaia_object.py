@@ -377,10 +377,11 @@ class GaiaCollection(ObjectCollection):
             row = {col: self.df[col][key] for col in cols}
             return GaiaObject(row, self, key)
 
-        elif type(key) == slice:
-            ixdata = [i for i in range(min(key.stop, len(self.df['id'])))]
-            ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
-            return [self.__getitem__(i) for i in ixes]
+        elif isinstance(key, slice):
+            # ixdata = [i for i in range(min(key.stop, len(self.df['id'])))]
+            # ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
+            # return [self.__getitem__(i) for i in ixes]
+            return [self.__getitem__(i) for i in range(len(self.df))[key]]
 
         elif type(key) == tuple and isinstance(key[0], Iterable):
             return [self.__getitem__(i) for i in key[0]]

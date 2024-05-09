@@ -600,17 +600,10 @@ class ObjectCollection(Sequence):
         elif type(key) == slice:
             if key.start is None:
                 key.start = 0
-            ixdata = [i for i in range(min(key.stop, len(self._ra)))]
-            ixes = itertools.islice(ixdata, key.start, key.stop, key.step)
-            return [self._object_class(self._ra[i], self._dec[i], self._id[i],
-                                       object_type, self, i)
-                    for i in ixes]
+            return [self.__getitem__(i) for i in range(self.__len__())[key]]
 
         elif type(key) == tuple and isinstance(key[0], Iterable):
-            #  check it's a list of int-like?
-            return [self._object_class(self._ra[i], self._dec[i], self._id[i],
-                                       object_type, self, i)
-                    for i in key[0]]
+            return[self.__getitem__(i) for i in key[0]]
 
     def get_partition_id(self):
         return self._partition_id
@@ -725,8 +718,8 @@ class ObjectList(Sequence):
         If key is a slice return a list of object
         '''
         one_only = isinstance(key, int) or isinstance(key, np.int64)
-        is_slice = type(key) == slice
-        is_list = type(key) == tuple and isinstance(key[0], Iterable)
+        is_slice = isinstance(key, slice)
+        is_list = isinstance(key, tuple) and isinstance(key[0], Iterable)
 
         if one_only:
             start = key
