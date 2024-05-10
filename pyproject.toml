@@ -19,7 +19,6 @@ dependencies = [
     'astropy',
     'pyarrow',
     'pandas',
-    'sncosmo',
 ]
 requires-python = ">=3.7" # For setuptools >= 61.0 support
 

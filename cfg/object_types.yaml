@@ -66,7 +66,7 @@ object_types :
       internal_extinction: CCM
       MW_extinction: F19
       spatial_model:  knots
-      
+
   star:
       file_template: 'pointsource_(?P<healpix>\d+).parquet'
       flux_file_template: 'pointsource_flux_(?P<healpix>\d+).parquet'
@@ -75,15 +75,6 @@ object_types :
         { type: healpix, ordering: ring, nside: 32}
       sed_model: file_nm
       sed_file_root_env_var: SIMS_SED_LIBRARY_DIR
-      MW_extinction: F19
-      internal_extinction: None
-  sncosmo:
-      file_template: 'pointsource_(?P<healpix>\d+).parquet'
-      data_file_type: parquet
-      area_partition:
-        { type: healpix, ordering: ring, nside: 32}
-
-      sed_model: sncosmo
       MW_extinction: F19
       internal_extinction: None
   gaia_star:

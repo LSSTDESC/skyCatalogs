@@ -227,7 +227,7 @@ def _do_star_flux_chunk(send_conn, star_collection, instrument_needed,
 class CatalogCreator:
     def __init__(self, parts, area_partition=None, skycatalog_root=None,
                  catalog_dir='.', galaxy_truth=None,
-                 star_truth=None, sn_truth=None,
+                 star_truth=None,
                  config_path=None, catalog_name='skyCatalog',
                  output_type='parquet', mag_cut=None,
                  sed_subdir='galaxyTopHatSED', knots_mag_cut=27.0,
@@ -892,13 +892,11 @@ class CatalogCreator:
         for p in self._parts:
             self._logger.debug(f'Point sources. Starting on pixel {p}')
             self.create_pointsource_pixel(p, arrow_schema,
-                                          star_cat=self._star_truth,
-                                          sn_cat=self._sn_truth)
+                                          star_cat=self._star_truth)
             self._logger.debug(f'Completed pixel {p}')
 
-    def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None,
-                                 sn_cat=None):
-        if not star_cat and not sn_cat:
+    def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None):
+        if not star_cat:
             self._logger.info('No point source inputs specified')
             return
 
@@ -946,45 +944,6 @@ class CatalogCreator:
             self._logger.debug('Created arrow table from star dataframe')
 
             writer.write_table(out_table)
-
-        if sn_cat:
-            # Get data for this pixel
-            cols = ','.join(['snid_in as id', 'snra_in as ra',
-                             'sndec_in as dec', 'galaxy_id as host_galaxy_id'])
-
-            params = ','.join(['z_in as z', 't0_in as t0, x0_in as x0',
-                               'x1_in as x1', 'c_in as c'])
-
-            q1 = f'select {cols} from sne_params where hpid={pixel} '
-            q2 = f'select {params} from sne_params where hpid={pixel} '
-            with sqlite3.connect(sn_cat) as conn:
-                sn_df = pd.read_sql_query(q1, conn)
-                params_df = pd.read_sql_query(q2, conn)
-
-            nobj = len(sn_df['ra'])
-            if nobj > 0:
-                sn_df['object_type'] = np.full((nobj,), self._sn_object_type)
-
-                sn_df['MW_rv'] = make_MW_extinction_rv(sn_df['ra'],
-                                                       sn_df['dec'])
-                sn_df['MW_av'] = make_MW_extinction_av(sn_df['ra'],
-                                                       sn_df['dec'])
-
-                # Add fillers for columns not relevant for sn
-                sn_df['sed_filepath'] = np.full((nobj), '')
-                sn_df['magnorm'] = np.full((nobj,), None)
-                sn_df['mura'] = np.full((nobj,), None)
-                sn_df['mudec'] = np.full((nobj,), None)
-                sn_df['radial_velocity'] = np.full((nobj,), None)
-                sn_df['parallax'] = np.full((nobj,), None)
-                sn_df['variability_model'] = np.full((nobj,), 'salt2_extended')
-
-                # Form array of struct from params_df
-                sn_df['salt2_params'] = params_df.to_records(index=False)
-                out_table = pa.Table.from_pandas(sn_df, schema=arrow_schema)
-                self._logger.debug('Created arrow table from sn dataframe')
-
-                writer.write_table(out_table)
 
         writer.close()
         if self._provenance == 'yaml':
@@ -1174,8 +1133,6 @@ class CatalogCreator:
         config.add_key('knots_magnitude_cut', self._knots_mag_cut)
 
         inputs = {'galaxy_truth': self._galaxy_truth}
-        if self._sn_truth:
-            inputs['sn_truth'] = self._sn_truth
         if self._star_truth:
             inputs['star_truth'] = self._star_truth
         if self._sso_truth:

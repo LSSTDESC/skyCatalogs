@@ -94,7 +94,6 @@ object_types:
 provenance:
   inputs:
     galaxy_truth: cosmodc2_v1.1.4_image_addon_knots
-    sn_truth: /global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db
     star_truth: /global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db
   skyCatalogs_repo:
     git_branch: master

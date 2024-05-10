@@ -2,4 +2,4 @@
 
 stackvana>=0.2023.32
 gitpython
-sncosmo
+# sncosmo
