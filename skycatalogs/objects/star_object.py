@@ -2,6 +2,7 @@ import os
 import numpy as np
 import galsim
 from .base_object import BaseObject
+from ..utils import normalize_sed
 
 __all__ = ['StarObject']
 
@@ -29,7 +30,7 @@ class StarObject(BaseObject):
     def get_observer_sed_component(self, component, mjd=None):
         sed, magnorm = self._get_sed(mjd=mjd)
 
-        sed = sed.withMagnitude(magnorm, self._bp500)
+        sed = normalize_sed(sed, magnorm)
 
         if sed is not None:
             sed = self._apply_component_extinction(sed)

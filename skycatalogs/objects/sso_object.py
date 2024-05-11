@@ -4,6 +4,7 @@ import numpy as np
 import galsim
 from .base_object import BaseObject, ObjectCollection
 from lsst.sphgeom import UnitVector3d, LonLat
+from ..utils import normalize_sed
 
 EXPOSURE_DEFAULT = 30.0         # seconds
 __all__ = ['SsoObject', 'SsoCollection', 'EXPOSURE_DEFAULT']
@@ -92,7 +93,7 @@ class SsoObject(BaseObject):
             raise ValueError(txt)
 
         sed, magnorm = self._get_sed(mjd=mjd)
-        sed = sed.withMagnitude(magnorm, self._bp500)
+        sed = normalize_sed(sed, magnorm)
 
         # no extinction
         return sed

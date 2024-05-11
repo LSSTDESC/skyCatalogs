@@ -89,9 +89,6 @@ class BaseObject(object):
     Likely need a variant for SSO.
     '''
 
-    _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501], [0, 1, 0]),
-                             wave_type='nm').withZeropoint('AB')
-
     def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index):
         '''
         Save at least minimum info needed a fixed (not SSO) object to
