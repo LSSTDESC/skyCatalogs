@@ -1,7 +1,6 @@
 import os
 import warnings
 from functools import wraps
-import itertools
 from collections.abc import Iterable
 from pathlib import PurePath
 import numpy as np
@@ -157,7 +156,10 @@ def _read_fits(htm_id, gaia_config, sky_root, out_dict, logger, region=None):
     f_dir = gaia_config['data_dir']
     f_name = gaia_config['basename_template'].replace('(?P<htm>\\d+)',
                                                       f'{htm_id}')
-    f_path = os.path.join(sky_root, f_dir, f_name)
+    if os.path.isabs(f_dir):
+        f_path = os.path.join(f_dir, f_name)
+    else:
+        f_path = os.path.join(sky_root, f_dir, f_name)
     if not os.path.isfile(f_path):
         logger.info(f'No file for requested htm id {htm_id}')
         return
@@ -236,6 +238,7 @@ class GaiaCollection(ObjectCollection):
     def set_config(cls, config):
         GaiaCollection._gaia_config = config
         GaiaCollection._id_prefix = config['id_prefix']
+
     @classmethod
     def get_config(cls):
         return GaiaCollection._gaia_config
