@@ -195,7 +195,7 @@ class BaseObject(object):
 
         Returns
         -------
-        A pair (sed, mag_norm)
+        galsim.SED object
 
         Must be implemented by subclass
         '''
@@ -203,7 +203,7 @@ class BaseObject(object):
 
     def write_sed(self, sed_file_path, component=None, resolution=None,
                   mjd=None):
-        sed, _ = self._get_sed(component=component, resolution=None, mjd=None)
+        sed = self._get_sed(component=component, resolution=None, mjd=None)
 
         wl = sed.wave_list
         flambda = [sed(w) for w in wl]

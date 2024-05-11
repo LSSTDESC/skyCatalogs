@@ -25,7 +25,7 @@ class DiffskyObject(BaseObject):
 
         Returns
         -------
-        A pair (sed, mag_norm)
+        galsim.SED object
         '''
 
         if component not in ['disk', 'bulge', 'knots']:
@@ -39,8 +39,7 @@ class DiffskyObject(BaseObject):
             sky_cat = self._belongs_to._sky_catalog
             self._seds = sky_cat.observed_sed_factory.create(pixel, self.id, z_h, z)
 
-        magnorm = None
-        return self._seds[component], magnorm
+        return self._seds[component]
 
     def get_knot_size(self,z):
         """
@@ -147,7 +146,7 @@ class DiffskyObject(BaseObject):
         return obj_dict
 
     def get_observer_sed_component(self, component, mjd=None, resolution=None):
-        sed, _ = self._get_sed(component)
+        sed = self._get_sed(component)
         if sed is not None:
             sed = self._apply_component_extinction(sed)
         return sed

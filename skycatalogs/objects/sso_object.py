@@ -28,7 +28,7 @@ class SsoObject(BaseObject):
 
     def _get_sed(self, mjd=None):
         '''
-        returns a SED and magnorm
+        returns the SED
         mjd is required
         '''
         if SsoObject._solar_sed is None:
@@ -38,7 +38,8 @@ class SsoObject(BaseObject):
             # directly or are there other effects to be applied?
             # Have to find it by looking for entry for this id, this mjd
             # Do we look for specific entry or do we allow interpolation?
-        return SsoObject._solar_sed, self.get_native_attribute('trailed_source_mag')
+        magnorm = self.get_native_attribute('trailed_source_mag')
+        return normalize_sed(SsoObject._solar_sed, magnorm)
 
     def get_gsobject_components(self, gsparams=None, rng=None,
                                 streak=True):
@@ -92,8 +93,7 @@ class SsoObject(BaseObject):
             txt += 'nor when generating object list'
             raise ValueError(txt)
 
-        sed, magnorm = self._get_sed(mjd=mjd)
-        sed = normalize_sed(sed, magnorm)
+        sed = self._get_sed(mjd=mjd)
 
         # no extinction
         return sed

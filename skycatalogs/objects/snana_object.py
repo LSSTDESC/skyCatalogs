@@ -32,9 +32,9 @@ class SnanaObject(BaseObject):
         mjd_start = self.get_native_attribute('start_mjd')
         mjd_end = self.get_native_attribute('end_mjd')
         if mjd < mjd_start or mjd > mjd_end:
-            return None, 0.0
+            return None
 
-        return self._linear_interp_SED(mjd), 0.0
+        return self._linear_interp_SED(mjd)
 
     def _apply_flux_correction(self, flux, snana_band, mjd):
         def _flux_ratio(mag):
@@ -95,7 +95,7 @@ class SnanaObject(BaseObject):
             txt = 'SnananObject.get_observer_sed_component: no mjd specified for this call\n'
             txt += 'nor when generating object list'
             raise ValueError(txt)
-        sed, _ = self._get_sed(mjd=mjd)
+        sed = self._get_sed(mjd=mjd)
         if sed is not None:
             sed = self._apply_component_extinction(sed)
         return sed

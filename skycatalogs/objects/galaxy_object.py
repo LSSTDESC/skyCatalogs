@@ -12,17 +12,16 @@ class GalaxyObject(BaseObject):
 
     def _get_sed(self, component=None, resolution=None):
         '''
-        Return sed and mag_norm for a galaxy component or for a star
+        Return sed for a galaxy component
         Parameters
         ----------
         component    one of 'bulge', 'disk', 'knots' for now. Other components
-                     may be supported.  Ignored for stars
-        resolution   desired resolution of lambda in nanometers. Ignored
-                     for stars.
+                     may be supported.
+        resolution   desired resolution of lambda in nanometers.
 
         Returns
         -------
-        A pair (sed, mag_norm)
+        galsim.SED object
         '''
         if component not in ['disk', 'bulge', 'knots']:
             raise ValueError(f'Cannot fetch SED for component type {component}')
@@ -33,7 +32,7 @@ class GalaxyObject(BaseObject):
 
         # if values are all zeros or nearly no point in trying to convert
         if max(th_val) < np.finfo('float').resolution:
-            return None, 0.0
+            return None
 
         z_h = self.get_native_attribute('redshift_hubble')
         z = self.get_native_attribute('redshift')
@@ -41,9 +40,7 @@ class GalaxyObject(BaseObject):
         sky_cat = self._belongs_to._sky_catalog
         sed = sky_cat.observed_sed_factory.create(th_val, z_h, z,
                                                   resolution=resolution)
-        magnorm = sky_cat.observed_sed_factory.magnorm(th_val, z_h)
-
-        return sed, magnorm
+        return sed
 
     def get_knot_size(self,z):
         """
@@ -146,7 +143,7 @@ class GalaxyObject(BaseObject):
 
 
     def get_observer_sed_component(self, component, mjd=None, resolution=None):
-        sed, _ = self._get_sed(component=component, resolution=resolution)
+        sed = self._get_sed(component=component, resolution=resolution)
         if sed is not None:
             sed = self._apply_component_extinction(sed)
 

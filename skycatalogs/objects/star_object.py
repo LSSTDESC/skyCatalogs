@@ -20,7 +20,7 @@ class StarObject(BaseObject):
         fpath = os.path.join(os.getenv('SIMS_SED_LIBRARY_DIR'),
                              self.get_native_attribute('sed_filepath'))
 
-        return self._get_sed_from_file(fpath), mag_norm
+        return normalize_sed(self._get_sed_from_file(fpath), mag_norm)
 
     def get_gsobject_components(self, gsparams=None, rng=None):
         if gsparams is not None:
@@ -28,9 +28,7 @@ class StarObject(BaseObject):
         return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
 
     def get_observer_sed_component(self, component, mjd=None):
-        sed, magnorm = self._get_sed(mjd=mjd)
-
-        sed = normalize_sed(sed, magnorm)
+        sed = self._get_sed(mjd=mjd)
 
         if sed is not None:
             sed = self._apply_component_extinction(sed)

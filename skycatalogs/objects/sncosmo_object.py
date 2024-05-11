@@ -14,9 +14,8 @@ class SncosmoObject(BaseObject):
         sn = SncosmoModel(params=params)
 
         if mjd < sn.mintime() or mjd > sn.maxtime():
-            return None, 0.0
-        # Already normalized so magnorm is zero
-        return sn.get_sed(mjd), 0.0
+            return None
+        return sn.get_sed(mjd)
 
     def get_gsobject_components(self, gsparams=None, rng=None):
         if gsparams is not None:
@@ -30,7 +29,7 @@ class SncosmoObject(BaseObject):
             txt = 'SncosmoObject._get_sed: no mjd specified for this call\n'
             txt += 'nor when generating object list'
             raise ValueError(txt)
-        sed, _ = self._get_sed(mjd=mjd)
+        sed = self._get_sed(mjd=mjd)
         if sed is not None:
             sed = self._apply_component_extinction(sed)
         return sed
