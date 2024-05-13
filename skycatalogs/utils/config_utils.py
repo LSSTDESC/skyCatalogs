@@ -71,7 +71,7 @@ class YamlIncludeLoader(yaml.SafeLoader):
             raise yaml.constructor.ConstructorError
 
     def extractFile(self, filepath: str) -> Any:
-        if filepath.startswith('/'):
+        if os.path.isabs(filepath):
             actual_path = filepath
         else:
             actual_path = os.path.join(self._current_dir, filepath)
