@@ -89,9 +89,6 @@ class BaseObject(object):
     Likely need a variant for SSO.
     '''
 
-    _bp500 = galsim.Bandpass(galsim.LookupTable([499, 500, 501], [0, 1, 0]),
-                             wave_type='nm').withZeropoint('AB')
-
     def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index):
         '''
         Save at least minimum info needed a fixed (not SSO) object to
@@ -198,7 +195,7 @@ class BaseObject(object):
 
         Returns
         -------
-        A pair (sed, mag_norm)
+        galsim.SED object
 
         Must be implemented by subclass
         '''
@@ -206,7 +203,7 @@ class BaseObject(object):
 
     def write_sed(self, sed_file_path, component=None, resolution=None,
                   mjd=None):
-        sed, _ = self._get_sed(component=component, resolution=None, mjd=None)
+        sed = self._get_sed(component=component, resolution=None, mjd=None)
 
         wl = sed.wave_list
         flambda = [sed(w) for w in wl]

@@ -12,7 +12,8 @@ from dust_extinction.parameter_averages import F19
 import galsim
 
 __all__ = ['TophatSedFactory', 'DiffskySedFactory', 'SsoSedFactory',
-           'MilkyWayExtinction', 'get_star_sed_path', 'generate_sed_path']
+           'MilkyWayExtinction', 'get_star_sed_path', 'generate_sed_path',
+           'normalize_sed']
 
 
 class TophatSedFactory:
@@ -331,3 +332,35 @@ def generate_sed_path(ids, subdir, cmp):
     '''
     r = [f'{subdir}/{cmp}_{id}.txt' for id in ids]
     return r
+
+
+def normalize_sed(sed, magnorm, wl=500*u.nm):
+    """
+    Set the normalization of a GalSim SED object given a monochromatic
+    magnitude at a reference wavelength.
+
+    Parameters
+    ----------
+    sed : galsim.SED
+        The GalSim SED object.
+    magnorm : float
+        The monochromatic magnitude at the reference wavelength.
+    wl : astropy.units.nm
+        The reference wavelength.
+
+    Returns
+    -------
+    galsim.SED : The renormalized SED object.
+    """
+    # Compute the flux density from magnorm in units of erg/cm^2/s/nm.
+    fnu = (magnorm * u.ABmag).to_value(u.erg/u.s/u.cm**2/u.Hz)
+    flambda = fnu * (astropy.constants.c/wl**2).to_value(u.Hz/u.nm)
+
+    # GalSim expects the flux density in units of photons/cm^2/s/nm,
+    # so divide flambda by the photon energy at the reference
+    # wavelength.
+    hnu = (astropy.constants.h * astropy.constants.c / wl).to_value(u.erg)
+
+    flux_density = flambda/hnu
+
+    return sed.withFluxDensity(flux_density, wl)
