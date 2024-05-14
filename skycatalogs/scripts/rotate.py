@@ -32,6 +32,10 @@ class FieldRotator(object):
 
     def __init__(self, ra0, dec0, ra1, dec1):
         """
+        The source of the code in this class can be found here:
+
+        https://github.com/LSSTDESC/sims_GCRCatSimInterface/blob/master/python/desc/sims/GCRCatSimInterface/ProtoDC2DatabaseEmulator.py#L41
+
         Parameters
         ----------
         ra0, dec0 are the coordinates of the original field
@@ -118,9 +122,6 @@ class FieldRotator(object):
         c = c/norm
         s = s/norm
 
-        # nprime = np.array([c*north[0]-s*north[1],
-        #                    s*north[0]+c*north[1]])
-
         yz_rotation = np.array([[1.0, 0.0, 0.0],
                                 [0.0, c, -s],
                                 [0.0, s, c]])
@@ -176,17 +177,23 @@ class GalaxyRotator:
             hps_distinct.append(sorted(distinct))
             field_distinct = set.union(field_distinct, distinct)
 
-        # hp_sorted = sorted(field_distinct)
         native = colls[0].native_columns
 
         for i, c in enumerate(colls):
-            to_get = [n for n in native if (n != 'ra') and (n != 'dec') and (n != 'MW_av') and n != 'sed_val_bulge' and n != 'sed_val_disk']
+            to_get = [n for n in native if n not in ('ra', 'dec', 'MW_av',
+                                                     'sed_val_bulge',
+                                                     'sed_val_disk')]
             dat = c.get_native_attributes(to_get)
             dat['ra'] = new_ra[i]
             dat['dec'] = new_dec[i]
             dat['MW_av'] = new_av_ext[i]
             dat['hp'] = hps[i]
-            # special handling for for tophat SEDs
+
+            # Special handling for for tophat SEDs.  The np.array
+            # normally returned by get_native_attribute causes problems
+            # when, as in this case, the elements of the array are
+            # themselves arrays.  The result cannot be written back
+            # out to a parquet file.
             for k in ['sed_val_bulge', 'sed_val_disk', 'sed_val_knots']:
                 dat[k] = c.get_native_attribute(k, no_np=True)
 
@@ -205,7 +212,6 @@ class GalaxyRotator:
 
         # Now write out healpixels for this collection (sets of healpixels
         # belonging to different fields are disjoint)
-        # for hp in hps_distinct:
         print('Generating data for pixels ', field_distinct)
         for hp in field_distinct:
             outpath = os.path.join(output_dir, f'galaxy_{hp}.parquet')

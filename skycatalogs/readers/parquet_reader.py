@@ -54,6 +54,10 @@ class ParquetReader:
         mask       if not None, use it and return compressed array
         no_np      if true, do not return as np.array.
 
+        NOTE: In most cases returning the data as an np.array is convenient
+              for the caller, but if the elements of a column are themselves
+              each an array the resulting np.array cannot be used for certain
+              purposes, such as writing back out to a parquet file.
 
         Returns
         -------
