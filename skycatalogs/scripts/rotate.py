@@ -25,6 +25,9 @@ FIELD_NAMES = ['COSMOS', 'DEEP_AO', 'DESI_SV3_R1',
 FIELD_RA = [150.1, 216.0, 179.6, 95.0, 125.0, 225.0, 250.0, 280.0, 300.0]
 FIELD_DEC = [2.1819444444444445, -12.5, 0.0, -25.0, -15.0, -40.0, 2.0,
              -48.0, -41.0]
+OPS4_NEW_NAMES = ['DEEP_B0', 'ELAIS_S1']
+OPS4_NEW_RA = [310.00, 9.45]
+OPS4_NEW_DEC = [-19.0, -44.0]
 DISK_RADIUS_DG = 1.4
 
 
@@ -233,15 +236,17 @@ class GalaxyRotator:
 
 
 input_config = '/pscratch/sd/j/jrbogart/desc/skycatalogs/rehearsal/skyCatalog.yaml'
-rotated_dir = '/pscratch/sd/j/jrbogart/desc/skycatalogs/rotated'
+rotated_dir = '/pscratch/sd/j/jrbogart/desc/skycatalogs/rotated_ops4'
 cat = open_catalog(input_config)
 NSIDE = 32    # should really read from config
 
-# For Ops rehearsal Did first field in a separate run
-# for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(DC2_RA[1:], DC2_DEC[1:], FIELD_RA[1:],
-#                                               FIELD_DEC[1:], FIELD_NAMES[1:]):
-for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(DC2_RA, DC2_DEC, FIELD_RA,
-                                              FIELD_DEC, FIELD_NAMES):
+# For ops rehearsal 3
+# for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(DC2_RA, DC2_DEC, FIELD_RA,
+#                                               FIELD_DEC, FIELD_NAMES):
+# Additional fiels for ops rehearsal 4
+for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(DC2_RA, DC2_DEC, OPS4_NEW_RA,
+                                              OPS4_NEW_DEC, OPS4_NEW_NAMES):
+
     disk = Disk(dc2_ra, dc2_dec, DISK_RADIUS_DG * 3600)
     obj_list = cat.get_object_type_by_region(disk, 'galaxy')
     print('Field ', name)
