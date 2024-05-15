@@ -46,12 +46,18 @@ class ParquetReader:
     def n_row_groups(self):
         return self._meta.num_row_groups
 
-    def read_columns(self, cols, mask, row_group=-1):
+    def read_columns(self, cols, mask, row_group=-1, no_np=False):
         '''
         Parameters
         -----------
         cols       list of column names belonging to the file
         mask       if not None, use it and return compressed array
+        no_np      if true, do not return as np.array.
+
+        NOTE: In most cases returning the data as an np.array is convenient
+              for the caller, but if the elements of a column are themselves
+              each an array the resulting np.array cannot be used for certain
+              purposes, such as writing back out to a parquet file.
 
         Returns
         -------
@@ -76,6 +82,9 @@ class ParquetReader:
             if mask is not None:
                 c_data = ma.array(c_data, mask=mask).compressed()
 
-            d[c] = np.array([_ for _ in c_data])
+            if not no_np:
+                d[c] = np.array([_ for _ in c_data])
+            else:
+                d[c] = [_ for _ in c_data]
 
         return d

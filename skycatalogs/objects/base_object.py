@@ -492,7 +492,7 @@ class ObjectCollection(Sequence):
             return ['this_object']
         return subs
 
-    def get_native_attribute(self, attribute_name):
+    def get_native_attribute(self, attribute_name, no_np=False):
         '''
         Retrieve a particular attribute for a collection
         If we already have it, just return it.  Otherwise attempt
@@ -506,7 +506,7 @@ class ObjectCollection(Sequence):
         for r in self._rdrs:
             if attribute_name in r.columns:
                 d = r.read_columns([attribute_name], self._mask,
-                                   row_group=self._row_group)
+                                   row_group=self._row_group, no_np=no_np)
                 if not d:
                     return None
                 val = d[attribute_name]
@@ -522,7 +522,7 @@ class ObjectCollection(Sequence):
         final_d = dict()
         for r in self._rdrs:
             to_read = remaining.intersection(r.columns)
-            d = r.read_columns(to_read, self._mask)
+            d = r.read_columns(to_read, self._mask, row_group=self._row_group)
             remaining.difference_update(to_read)
             for k in d:
                 final_d[k] = d[k]
