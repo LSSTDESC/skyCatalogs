@@ -168,16 +168,16 @@ def _do_galaxy_flux_chunk(send_conn, galaxy_collection, instrument_needed,
     if 'lsst' in instrument_needed:
         all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in o_list]
         all_fluxes_transpose = zip(*all_fluxes)
-        for i, band in enumerate(LSST_BANDS):
-            v = all_fluxes_transpose.__next__()
-            out_dict[f'lsst_flux_{band}'] = v
+        colnames = [f'lsst_flux_{band}' for band in LSST_BANDS]
+        flux_dict = dict(zip(colnames, all_fluxes_transpose))
+        out_dict.update(flux_dict)
 
     if 'roman' in instrument_needed:
         all_fluxes = [o.get_roman_fluxes(as_dict=False) for o in o_list]
         all_fluxes_transpose = zip(*all_fluxes)
-        for i, band in enumerate(ROMAN_BANDS):
-            v = all_fluxes_transpose.__next__()
-            out_dict[f'roman_flux_{band}'] = v
+        colnames = [f'roman_flux_{band}' for band in ROMAN_BANDS]
+        flux_dict = dict(zip(colnames, all_fluxes_transpose))
+        out_dict.update(flux_dict)
 
     if send_conn:
         send_conn.send(out_dict)
@@ -188,10 +188,13 @@ def _do_galaxy_flux_chunk(send_conn, galaxy_collection, instrument_needed,
 def _do_star_flux_chunk(send_conn, star_collection, instrument_needed,
                         l_bnd, u_bnd):
     '''
-    end_conn         output connection
-    star_collection  information from main file
-    instrument_needed List of which calculations should be done
-    l_bnd, u_bnd     demarcates slice to process
+    send_conn         output connection, used to send results to
+                      parent process
+    star_collection   ObjectCollection. Information from main skyCatalogs
+                      star file
+    instrument_needed List of which calculations should be done. Currently
+                      supported instrument names are 'lsst' and 'roman'
+    l_bnd, u_bnd      demarcates slice to process
 
     returns
                     dict with keys id, lsst_flux_u, ... lsst_flux_y
@@ -203,16 +206,16 @@ def _do_star_flux_chunk(send_conn, star_collection, instrument_needed,
     if 'lsst' in instrument_needed:
         all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in o_list]
         all_fluxes_transpose = zip(*all_fluxes)
-        for i, band in enumerate(LSST_BANDS):
-            v = all_fluxes_transpose.__next__()
-            out_dict[f'lsst_flux_{band}'] = v
+        colnames = [f'lsst_flux_{band}' for band in LSST_BANDS]
+        flux_dict = dict(zip(colnames, all_fluxes_transpose))
+        out_dict.update(flux_dict)
 
     if 'roman' in instrument_needed:
         all_fluxes = [o.get_roman_fluxes(as_dict=False) for o in o_list]
         all_fluxes_transpose = zip(*all_fluxes)
-        for i, band in enumerate(ROMAN_BANDS):
-            v = all_fluxes_transpose.__next__()
-            out_dict[f'roman_flux_{band}'] = v
+        colnames = [f'roman_flux_{band}' for band in ROMAN_BANDS]
+        flux_dict = dict(zip(colnames, all_fluxes_transpose))
+        out_dict.update(flux_dict)
 
     if send_conn:
         send_conn.send(out_dict)
@@ -1041,8 +1044,7 @@ class CatalogCreator:
         # NOTE: For now there is only one collection in the object list
         #       because stars are in a single row group
         object_list = self._cat.get_object_type_by_hp(pixel, 'star')
-        obj_coll = object_list.get_collections()[0]
-        _star_collection = obj_coll
+        _star_collection = object_list.get_collections()[0]
 
         l_bnd = 0
         u_bnd = len(_star_collection)
