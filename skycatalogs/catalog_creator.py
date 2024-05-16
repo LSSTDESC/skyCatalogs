@@ -773,8 +773,6 @@ class CatalogCreator:
             self._sed_gen.generate_pixel(pixel)
 
         writer = None
-        global _galaxy_collection
-        global _instrument_needed
         _instrument_needed = []
         for field in self._gal_flux_needed:
             if 'lsst' in field and 'lsst' not in _instrument_needed:
@@ -1028,9 +1026,6 @@ class CatalogCreator:
         # For schema use self._ps_flux_schema
         # output_template should be derived from value for flux_file_template
         #  in main catalog config.  Cheat for now
-
-        global _star_collection
-
         output_filename = f'pointsource_flux_{pixel}.parquet'
         output_path = os.path.join(self._output_dir, output_filename)
 
