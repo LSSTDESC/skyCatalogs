@@ -150,7 +150,13 @@ class Config(DelegatorBase):
             d = d[i]
             if not isinstance(d, dict):
                 raise ValueError(f'intermediate {d} is not a dict')
-        return d[path_items[-1]]
+
+        if path_items[-1] in d:
+            return d[path_items[-1]]
+        else:
+            if silent:
+                return None
+            raise ValueError(f'Item {i} not found')
 
     def add_key(self, k, v):
         '''
