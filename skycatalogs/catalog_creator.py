@@ -424,9 +424,9 @@ class CatalogCreator:
             if not self._no_flux:
                 self.create_pointsource_flux_catalog()
         elif catalog_type == ('sso'):
-            if not self._flux_only:
+            if not self._no_main:
                 self._sso_creator.create_sso_catalog()
-            if not self._main_only:
+            if not self._no_flux:
                 self._sso_creator.create_sso_flux_catalog()
 
         else:
