@@ -295,12 +295,16 @@ class CatalogCreator:
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
         _diffsky_cat = 'roman_rubin_2023_v1.1.2_elais'
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
-        _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
+        # _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
 
 #        _star_parquet = '/global/cfs/cdirs/descssim/postDC2/UW_star_catalog'
         _star_parquet = '/sdf/data/rubin/shared/ops-rehearsal-3/imSim_catalogs/UW_stars'
 
         self._galaxy_stride = galaxy_stride
+
+        # Temporary. Should add a separate star_stride argument or change name
+        # e.g. galaxy_stride --> catalog_stride
+        self._star_stride = galaxy_stride
         if pkg_root:
             self._pkg_root = pkg_root
         else:
@@ -322,9 +326,9 @@ class CatalogCreator:
             else:
                 self._galaxy_truth = _diffsky_cat
 
-        self._sn_truth = sn_truth
-        if self._sn_truth is None:
-            self._sn_truth = _sn_db
+        # self._sn_truth = sn_truth
+        # if self._sn_truth is None:
+        #    self._sn_truth = _sn_db
 
         self._sn_object_type = sn_object_type
 
@@ -398,7 +402,7 @@ class CatalogCreator:
         dat[cmp + '_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for (s, z)
                                  in zip(sed_vals, dat['redshiftHubble'])]
         for k in names:
-            del(dat[k])
+            del dat[k]
         return dat
 
     def create(self, catalog_type):
@@ -792,6 +796,7 @@ class CatalogCreator:
 
         writer = None
         _instrument_needed = []
+        rg_written = 0
         for field in self._gal_flux_needed:
             if 'lsst' in field and 'lsst' not in _instrument_needed:
                 _instrument_needed.append('lsst')
@@ -805,7 +810,6 @@ class CatalogCreator:
                 _ = object_coll.get_native_attribute(att)
             l_bnd = 0
             u_bnd = len(object_coll)
-            rg_written = 0
 
             self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
 
@@ -897,11 +901,12 @@ class CatalogCreator:
 
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None):
         if not star_cat:
-            self._logger.info('No point source inputs specified')
+            self._logger.info('No star input specified')
             return
 
         output_filename = f'pointsource_{pixel}.parquet'
         output_path = os.path.join(self._output_dir, output_filename)
+        stride = self._star_stride
 
         if os.path.exists(output_path):
             if not self._skip_done:
@@ -912,38 +917,53 @@ class CatalogCreator:
 
         writer = pq.ParquetWriter(output_path, arrow_schema)
 
-        if star_cat:
-            # Get data for this pixel
-            if self._star_input_fmt == 'sqlite':
-                cols = ','.join(['format("%s",simobjid) as id', 'ra',
-                                 'decl as dec', 'magNorm as magnorm', 'mura',
-                                 'mudecl as mudec',
-                                 'radialVelocity as radial_velocity',
-                                 'parallax',
-                                 'sedFilename as sed_filepath', 'ebv'])
-                q = f'select {cols} from stars where hpid={pixel} '
-                with sqlite3.connect(star_cat) as conn:
-                    star_df = pd.read_sql_query(q, conn)
-            elif self._star_input_fmt == 'parquet':
-                star_df = _star_parquet_reader(self._star_truth, pixel,
-                                               arrow_schema)
-            nobj = len(star_df['id'])
-            self._logger.debug(f'Found {nobj} stars')
-            star_df['sed_filepath'] = get_star_sed_path(star_df['sed_filepath'])
-            star_df['object_type'] = np.full((nobj,), 'star')
-            star_df['host_galaxy_id'] = np.zeros((nobj,), np.int64())
+        # Get data for this pixel
+        if self._star_input_fmt == 'sqlite':
+            cols = ','.join(['format("%s",simobjid) as id', 'ra',
+                             'decl as dec', 'magNorm as magnorm', 'mura',
+                             'mudecl as mudec',
+                             'radialVelocity as radial_velocity',
+                             'parallax',
+                             'sedFilename as sed_filepath', 'ebv'])
+            q = f'select {cols} from stars where hpid={pixel} '
+            with sqlite3.connect(star_cat) as conn:
+                star_df = pd.read_sql_query(q, conn)
+        elif self._star_input_fmt == 'parquet':
+            star_df = _star_parquet_reader(self._star_truth, pixel,
+                                           arrow_schema)
+        nobj = len(star_df['id'])
+        self._logger.debug(f'Found {nobj} stars')
+        if nobj == 0:
+            return
+        star_df['sed_filepath'] = get_star_sed_path(star_df['sed_filepath'])
+        star_df['object_type'] = np.full((nobj,), 'star')
+        star_df['host_galaxy_id'] = np.zeros((nobj,), np.int64())
 
-            star_df['MW_rv'] = np.full((nobj,), _MW_rv_constant, np.float32())
+        star_df['MW_rv'] = np.full((nobj,), _MW_rv_constant, np.float32())
 
-            # NOTE MW_av calculation for stars does not use SFD dust map
-            star_df['MW_av'] = star_df['ebv'] * _MW_rv_constant
+        # NOTE MW_av calculation for stars does not use SFD dust map
+        star_df['MW_av'] = star_df['ebv'] * _MW_rv_constant
 
-            star_df['variability_model'] = np.full((nobj,), '')
-            star_df['salt2_params'] = np.full((nobj,), None)
-            out_table = pa.Table.from_pandas(star_df, schema=arrow_schema)
+        star_df['variability_model'] = np.full((nobj,), '')
+        star_df['salt2_params'] = np.full((nobj,), None)
+
+        last_row_ix = nobj - 1
+        u_bnd = min(stride, nobj)
+        l_bnd = 0
+        rg_written = 0
+
+        while u_bnd > l_bnd:
+            out_dict = {k: star_df[k][l_bnd: u_bnd] for k in star_df.columns}
+            out_df = pd.DataFrame.from_dict(out_dict)
+
+            out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
             self._logger.debug('Created arrow table from star dataframe')
 
+            # write a row broup
             writer.write_table(out_table)
+            rg_written += 1
+            l_bnd = u_bnd
+            u_bnd = min(l_bnd + stride, last_row_ix + 1)
 
         writer.close()
         if self._provenance == 'yaml':
@@ -1012,77 +1032,77 @@ class CatalogCreator:
             else:
                 self._logger.info(f'Skipping regeneration of {output_path}')
                 return
-
-        # NOTE: For now there is only one collection in the object list
-        #       because stars are in a single row group
-        object_list = self._cat.get_object_type_by_hp(pixel, 'star')
-        _star_collection = object_list.get_collections()[0]
-
-        l_bnd = 0
-        u_bnd = len(_star_collection)
         n_parallel = self._flux_parallel
 
-        if n_parallel == 1:
-            n_per = u_bnd - l_bnd
-        else:
-            n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
-        fields_needed = self._ps_flux_schema.names
-        instrument_needed = ['lsst']       # for now
-
+        object_list = self._cat.get_object_type_by_hp(pixel, 'star')
         writer = None
+        instrument_needed = ['lsst']       # for now
         rg_written = 0
+        fields_needed = self._ps_flux_schema.names
 
-        lb = l_bnd
-        u = min(l_bnd + n_per, u_bnd)
-        readers = []
+        for i in range(object_list.collection_count):
+            _star_collection = object_list.get_collections()[i]
 
-        if n_parallel == 1:
-            out_dict = _do_star_flux_chunk(None, _star_collection,
-                                           instrument_needed, lb, u)
-        else:
-            # Expect to be able to do about 1500/minute/process
+            l_bnd = 0
+            u_bnd = len(_star_collection)
+            out_dict = {}
+
             out_dict = {}
             for field in fields_needed:
                 out_dict[field] = []
 
-            tm = max(int((n_per*60)/500), 5)  # Give ourselves a cushion
-            self._logger.info(f'Using timeout value {tm} for {n_per} sources')
-            p_list = []
-            for i in range(n_parallel):
-                conn_rd, conn_wrt = Pipe(duplex=False)
-                readers.append(conn_rd)
+            if n_parallel == 1:
+                n_per = u_bnd - l_bnd
+            else:
+                n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
 
-                # For debugging call directly
-                proc = Process(target=_do_star_flux_chunk,
-                               name=f'proc_{i}',
-                               args=(conn_wrt, _star_collection,
-                                     instrument_needed, lb, u))
-                proc.start()
-                p_list.append(proc)
-                lb = u
-                u = min(lb + n_per, u_bnd)
+            lb = l_bnd
+            u = min(l_bnd + n_per, u_bnd)
+            readers = []
 
-            self._logger.debug('Processes started')
-            for i in range(n_parallel):
-                ready = readers[i].poll(tm)
-                if not ready:
-                    self._logger.error(f'Process {i} timed out after {tm} sec')
-                    sys.exit(1)
-                dat = readers[i].recv()
-                for field in fields_needed:
-                    out_dict[field] += dat[field]
-            for p in p_list:
-                p.join()
+            if n_parallel == 1:
+                out_dict = _do_star_flux_chunk(None, _star_collection,
+                                               instrument_needed, lb, u)
+            else:
+                # Expect to be able to do about 1500/minute/process
 
-        out_df = pd.DataFrame.from_dict(out_dict)
-        out_table = pa.Table.from_pandas(out_df,
-                                         schema=self._ps_flux_schema)
+                tm = max(int((n_per*60)/500), 5)  # Give ourselves a cushion
+                self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+                p_list = []
+                for i in range(n_parallel):
+                    conn_rd, conn_wrt = Pipe(duplex=False)
+                    readers.append(conn_rd)
 
-        if not writer:
-            writer = pq.ParquetWriter(output_path, self._ps_flux_schema)
-        writer.write_table(out_table)
+                    # For debugging call directly
+                    proc = Process(target=_do_star_flux_chunk,
+                                   name=f'proc_{i}',
+                                   args=(conn_wrt, _star_collection,
+                                         instrument_needed, lb, u))
+                    proc.start()
+                    p_list.append(proc)
+                    lb = u
+                    u = min(lb + n_per, u_bnd)
 
-        rg_written += 1
+                self._logger.debug('Processes started')
+                for i in range(n_parallel):
+                    ready = readers[i].poll(tm)
+                    if not ready:
+                        self._logger.error(f'Process {i} timed out after {tm} sec')
+                        sys.exit(1)
+                    dat = readers[i].recv()
+                    for field in fields_needed:
+                        out_dict[field] += dat[field]
+                for p in p_list:
+                    p.join()
+
+            out_df = pd.DataFrame.from_dict(out_dict)
+            out_table = pa.Table.from_pandas(out_df,
+                                             schema=self._ps_flux_schema)
+
+            if not writer:
+                writer = pq.ParquetWriter(output_path, self._ps_flux_schema)
+            writer.write_table(out_table)
+            rg_written += 1
 
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
