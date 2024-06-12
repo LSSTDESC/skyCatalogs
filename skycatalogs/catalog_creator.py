@@ -20,7 +20,7 @@ from .utils.star_parquet_input import _star_parquet_reader
 from .utils.parquet_schema_utils import make_galaxy_schema
 from .utils.parquet_schema_utils import make_galaxy_flux_schema
 from .utils.parquet_schema_utils import make_star_flux_schema
-from .utils.parquet_schema_utils import make_pointsource_schema
+from .utils.parquet_schema_utils import make_star_schema
 from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.base_object import LSST_BANDS
 from .objects.base_object import ROMAN_BANDS
@@ -890,7 +890,7 @@ class CatalogCreator:
         -------
         None
         """
-        arrow_schema = make_pointsource_schema()
+        arrow_schema = make_star_schema()
         #  Need a way to indicate which object types to include; deal with that
         #  later.  For now, default is stars + sn
         for p in self._parts:
