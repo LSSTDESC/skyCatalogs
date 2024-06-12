@@ -237,7 +237,10 @@ class GaiaCollection(ObjectCollection):
     @classmethod
     def set_config(cls, config):
         GaiaCollection._gaia_config = config
-        GaiaCollection._id_prefix = config['id_prefix']
+        if 'id_prefix' in config.keys():
+            GaiaCollection._id_prefix = config['id_prefix']
+        else:
+            GaiaCollection._id_prefix = '_gaia'
 
     @classmethod
     def get_config(cls):
@@ -245,13 +248,14 @@ class GaiaCollection(ObjectCollection):
 
     @ignore_erfa_warnings
     @staticmethod
-    def load_collection(region, skycatalog, mjd=None):
+    def load_collection(region, skycatalog, mjd=None, exposure=None):
         '''
         region      One of Disk, PolygonalRegion from skyCatalogs.utils.shapes.
                     Box is not currently supported
         skycatalog  An instance of the SkyCatalog class
         mjd         Time at which objects are to be assembled. Ignored for
                     Gaia stars
+        exposure    exposure length.  Ignored for Gaia stars
         '''
         if not skycatalog:
             raise ValueError('GaiaCollection.load_collection: skycatalog cannot be None')
