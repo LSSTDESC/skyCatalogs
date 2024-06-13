@@ -70,6 +70,10 @@ class SsoObject(BaseObject):
             init_v = UnitVector3d(LonLat.fromDegrees(ra, dec))
             final_v = UnitVector3d(LonLat.fromDegrees(ra_final, dec_final))
             length = np.degrees(np.arccos(init_v.dot(final_v))) * 3600.0
+            if length * trail_width == 0:
+                # Treat as a point source.
+                return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
+
             gobj = galsim.Box(length, trail_width, gsparams=gsparams)
 
             # now rotate to direction of (ra_rate, dec_rate)
