@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 import itertools
 import numpy as np
+import math
 import galsim
 from .base_object import BaseObject, ObjectCollection
 from lsst.sphgeom import UnitVector3d, LonLat
@@ -58,8 +59,8 @@ class SsoObject(BaseObject):
             dec = self.dec
             # Convert from (arc?)degrees/day to degrees/sec
             ra_rate = self.get_native_attribute('ra_rate')/SECONDS_PER_DAY
-            # Take out factor of cos(dec).
-            ra_rate_raw = ra_rate/np.cos(dec)
+            # Take out factor of cos(dec). np.cos expects radians
+            ra_rate_raw = ra_rate/np.cos(math.radians(dec))
             dec_rate = self.get_native_attribute('dec_rate')/SECONDS_PER_DAY
             # ra_final is approximate since really ra_rate is a function
             # of dec, but average dec_rate is small so
