@@ -69,7 +69,17 @@ class SsoObject(BaseObject):
 
             init_v = UnitVector3d(LonLat.fromDegrees(ra, dec))
             final_v = UnitVector3d(LonLat.fromDegrees(ra_final, dec_final))
-            length = np.degrees(np.arccos(init_v.dot(final_v))) * 3600.0
+            cos_sep = init_v.dot(final_v)
+            if cos_sep > 1.0:
+                # Handle values like cos_sep = 1.0000000000000002
+                length = 0.0
+            else:
+                length = np.degrees(np.arccos(cos_sep)) * 3600.0
+            if np.isnan(length):
+                # This will raise if cos_sep < -1.0. A value of cos_sep = -1.0
+                # is almost certainly unphysical, so we want to catch these cases.
+                raise ValueError("SSO streak length is nan")
+
             if length * trail_width == 0:
                 # Treat as a point source.
                 return {'this_object': galsim.DeltaFunction(gsparams=gsparams)}
