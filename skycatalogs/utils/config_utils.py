@@ -290,8 +290,9 @@ def create_config(catalog_name, logname=None):
 
 
 def assemble_cosmology(cosmology):
-    d = {k: cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
-                                                    'n_s')}
+    # d = {k: cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
+    #                                                 'n_s')}
+    d = {k: cosmology.__getattribute__(k) for k in ('Om0', 'Ob0')}
     d['H0'] = float(cosmology.H0.value)
     return d
 
@@ -315,18 +316,25 @@ def assemble_object_types(pkg_root, galaxy_nside=32):
 
 
 def assemble_SED_models(bins):
-    tophat_d = {'units': 'angstrom', 'bin_parameters': ['start', 'width']}
-    tophat_d['bins'] = bins
+    # tophat_d = {'units': 'angstrom', 'bin_parameters': ['start', 'width']}
+    # tophat_d['bins'] = bins
+    to_return = dict()
     file_nm_d = {'units': 'nm'}
-    return {'tophat': tophat_d, 'file_nm': file_nm_d}
+    # return {'tophat': tophat_d, 'file_nm': file_nm_d}
+    to_return['file_nm'] = file_nm_d
+    if bins:
+        tophat_d = {'units': 'angstrom', 'bin_parameters': ['start', 'width']}
+        tophat_d['bins'] = bins
+        to_return['tophat'] = tophat_d
+    return to_return
 
-
-def assemble_provenance(pkg_root, inputs={}, schema_version=None):
+def assemble_provenance(pkg_root, inputs={}, run_options=None,
+                        schema_version=None):
     import git
+    import skycatalogs
 
     if not schema_version:
         schema_version = CURRENT_SCHEMA_VERSION
-    import skycatalogs
     version_d = {'schema_version': schema_version}
     if '__version__' in dir(skycatalogs):
         code_version = skycatalogs.__version__
@@ -350,12 +358,20 @@ def assemble_provenance(pkg_root, inputs={}, schema_version=None):
         status.append('CLEAN')
     git_d['git_status'] = status
 
-    if inputs:
-        return {'versioning': version_d, 'skyCatalogs_repo': git_d,
-                'inputs': inputs}
-    else:
-        return{'versioning': version_d, 'skyCatalogs_repo': git_d}
+    to_return = dict()
+    to_return['versioning'] = version_d
+    to_return['skyCatalogs_repo'] = git_d
 
+    if inputs:
+        # return {'versioning': version_d, 'skyCatalogs_repo': git_d,
+        #         'inputs': inputs}
+        to_return['inputs'] = inputs
+    # else:
+    #     return{'versioning': version_d, 'skyCatalogs_repo': git_d}
+    if run_options:
+        to_return['run_options'] = run_options
+
+    return to_return
 
 # In config just keep track of models by object type. Information
 # about the parameters they require is internal to the code.

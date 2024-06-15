@@ -237,7 +237,8 @@ class CatalogCreator:
                  galaxy_stride=1000000, provenance=None,
                  dc2=False, sn_object_type='sncosmo', galaxy_type='cosmodc2',
                  include_roman_flux=False, star_input_fmt='sqlite',
-                 sso_truth=None, sso_sed=None, sso_partition='healpixel'):
+                 sso_truth=None, sso_sed=None, sso_partition='healpixel',
+                 run_options=None):
         """
         Store context for catalog creation
 
@@ -374,6 +375,10 @@ class CatalogCreator:
         self._sso_truth = self._sso_creator.sso_truth
         self._sso_sed = self._sso_creator.sso_sed
         self._sso_partition = sso_partition
+        self._run_options = run_options
+
+        # Do we need this?
+        self._sed_bins = None
 
     def _make_tophat_columns(self, dat, names, cmp):
         '''
@@ -1131,8 +1136,13 @@ class CatalogCreator:
         config = create_config(self._catalog_name, self._logname)
         if self._global_partition is not None:
             config.add_key('area_partition', self._area_partition)
-        config.add_key('skycatalog_root', self._skycatalog_root)
-        config.add_key('catalog_dir', self._catalog_dir)
+        # These will be covered in run_options so no need to add
+        # separately
+        # config.add_key('skycatalog_root', self._skycatalog_root)
+        # config.add_key('catalog_dir', self._catalog_dir)
+
+        #   Do we need this?
+        config.add_key('active_skycatalog_root', self._skycatalog_root)
 
         if self._galaxy_type == 'cosmodc2':
             config.add_key('SED_models',
@@ -1143,8 +1153,9 @@ class CatalogCreator:
                        assemble_object_types(self._pkg_root,
                                              galaxy_nside=self._galaxy_nside))
 
-        config.add_key('galaxy_magnitude_cut', self._mag_cut)
-        config.add_key('knots_magnitude_cut', self._knots_mag_cut)
+        # Following will be in run_options
+        # config.add_key('galaxy_magnitude_cut', self._mag_cut)
+        # config.add_key('knots_magnitude_cut', self._knots_mag_cut)
 
         inputs = {'galaxy_truth': self._galaxy_truth}
         if self._star_truth:
@@ -1152,8 +1163,9 @@ class CatalogCreator:
         if self._sso_truth:
             inputs['sso_truth'] = self._sso_truth
             inputs['sso_sed'] = self._sso_sed
-        config.add_key('provenance', assemble_provenance(self._pkg_root,
-                                                         inputs=inputs))
+        config.add_key('provenance',
+                       assemble_provenance(self._pkg_root, inputs=inputs,
+                                           run_options=self._run_options))
 
         self._written_config = config.write_config(self._config_path,
                                                    overwrite=overwrite)
@@ -1165,5 +1177,6 @@ class CatalogCreator:
         '''
         outpath = datafile_path.rsplit('.', 1)[0] + '_provenance.yaml'
 
-        prov = assemble_provenance(self._pkg_root, inputs=None)
+        prov = assemble_provenance(self._pkg_root, inputs=None,
+                                   run_options=self._run_options)
         write_yaml(prov, outpath)
