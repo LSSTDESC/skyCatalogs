@@ -1,7 +1,6 @@
 import os
 import sys
 from multiprocessing import Process, Pipe
-import numpy as np
 import sqlite3
 import pandas as pd
 import pyarrow as pa
@@ -56,11 +55,13 @@ def _do_sso_flux_chunk(send_conn, sso_collection, instrument_needed,
 
 
 class SsoCatalogCreator:
-    _sso_truth = '/sdf/home/j/jrb/rubin-user/sso/input/20feb2024'
+    # _sso_truth = '/sdf/home/j/jrb/rubin-user/sso/input/20feb2024'
+    _sso_truth = '/sdf/data/rubin/shared/ops-rehearsals/ops-rehearsal-4/imSim_catalogs/inputs/sso'
     _sso_sed = '/sdf/home/j/jrb/rubin-user/sso/sed/solar_sed.db'
+    _sso_db_tbl = 'results'
 
     def __init__(self, catalog_creator, output_dir,
-                 sso_truth=None, sso_sed=None):
+                 sso_truth=None, sso_sed=None, sso_db_tbl=None):
         '''
         Parameters
         ----------
@@ -79,16 +80,21 @@ class SsoCatalogCreator:
         if sso_sed is None:           # use default path
             self._sso_sed = SsoCatalogCreator._sso_sed
 
+        self._sso_db_tbl = sso_db_tbl
+        if sso_db_tbl is None:
+            # correct for default input file
+            self._sso_db_tbl = SsoCatalogCreator._sso_db_tbl
+
         self._row_group_size = _DEFAULT_ROW_GROUP_SIZE
 
-        tbl = 'pp_results'
-        mjd_c = 'FieldMJD_TAI'
+        tbl = self._sso_db_tbl
+        mjd_c = 'fieldMJD_TAI'
         self._mjd_q = f'select min({mjd_c}), max({mjd_c}), count({mjd_c}) from {tbl}'
         self._dfhp_query = f'''select ObjID as id, {mjd_c} as mjd,
-                 "AstRA(deg)" as ra, "AstDec(deg)" as dec,
-                 "AstRARate(deg/day)" as ra_rate,
-                 "AstDecRate(deg/day)" as dec_rate,
-                 TrailedSourceMag as trailed_source_mag from {tbl}
+                 "RA_deg" as ra, "Dec_deg" as dec,
+                 "RARateCosDec_deg_day" as ra_rate,
+                 "DecRate_deg_day" as dec_rate,
+                 trailedSourceMag as trailed_source_mag from {tbl}
                  where healpix = (?)
                  order by mjd, ObjID'''
 
@@ -127,8 +133,8 @@ class SsoCatalogCreator:
 
     def _get_hps(self, filepath):
 
-        with sqlite3.connect(filepath) as conn:
-            df = pd.read_sql_query('select distinct healpix from pp_results',
+        with sqlite3.connect(f'file:{filepath}?mode=ro', uri=True) as conn:
+            df = pd.read_sql_query(f'select distinct healpix from {self._sso_db_tbl}',
                                    conn)
         return set(df['healpix'])
 
@@ -136,7 +142,7 @@ class SsoCatalogCreator:
         df_list = []
         for f in hps_by_file:
             if hp in hps_by_file[f]:
-                conn = sqlite3.connect(f)
+                conn = sqlite3.connect(f'file:{f}?mode=ro', uri=True)
                 one_df = pd.read_sql_query(self._dfhp_query, conn,
                                            params=(hp,))
                 df_list.append(one_df)
@@ -189,7 +195,7 @@ class SsoCatalogCreator:
         None
         '''
 
-        global _sso_collection
+        # global _sso_collection
         output_filename = f'sso_flux_{pixel}.parquet'
         output_path = os.path.join(self._catalog_creator._output_dir,
                                    output_filename)
