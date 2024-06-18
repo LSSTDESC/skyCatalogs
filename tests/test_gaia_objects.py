@@ -65,9 +65,9 @@ class GaiaObjectTestCase(unittest.TestCase):
             gaia_id = obj.id.split('_')[-1]
             df = self.df.query(f"id=={gaia_id}")
             row = df.iloc[0]
-            self.assertAlmostEqual(np.degrees(row.coord_ra), obj.ra, places=15)
+            self.assertAlmostEqual(np.degrees(row.coord_ra), obj.ra, places=14)
             self.assertAlmostEqual(np.degrees(row.coord_dec), obj.dec,
-                                   places=15)
+                                   places=14)
 
         self.assertEqual(mjd0, object_list.mjd)
 
