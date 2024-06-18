@@ -12,7 +12,6 @@ from skycatalogs.objects.base_object import ObjectList, ObjectCollection
 from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from skycatalogs.objects.sso_object import SsoObject, SsoCollection
 from skycatalogs.objects.sso_object import EXPOSURE_DEFAULT
-# from skycatalogs.objects.sso_object import find_sso_files
 from skycatalogs.readers import ParquetReader
 from skycatalogs.utils.sed_tools import TophatSedFactory, DiffskySedFactory
 from skycatalogs.utils.sed_tools import SsoSedFactory
@@ -20,7 +19,6 @@ from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
 from skycatalogs.utils.shapes import compute_region_mask
-from skycatalogs.objects.sncosmo_object import SncosmoObject, SncosmoCollection
 from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
 from skycatalogs.objects.diffsky_object import DiffskyObject
@@ -347,11 +345,6 @@ class SkyCatalog(object):
                                               object_class=GaiaObject,
                                               collection_class=GaiaCollection,
                                               custom_load=True)
-        if 'sncosmo' in config['object_types']:
-            self.cat_cxt.register_source_type(
-                'sncosmo',
-                object_class=SncosmoObject,
-                collection_class=SncosmoCollection)
         if 'star' in config['object_types']:
             self.cat_cxt.register_source_type('star',
                                               object_class=StarObject)
@@ -660,7 +653,7 @@ class SkyCatalog(object):
         elif object_type in ['snana']:
             columns = ['id', 'ra', 'dec', 'start_mjd', 'end_mjd']
             id_name = 'id'
-        elif object_type in ['star', 'sncosmo']:
+        elif object_type in ['star']:
             columns = ['object_type', 'id', 'ra', 'dec']
             id_name = 'id'
         elif object_type in ['sso']:
