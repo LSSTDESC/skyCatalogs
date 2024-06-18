@@ -295,8 +295,6 @@ class CatalogCreator:
         _cosmo_cat = 'cosmodc2_v1.1.4_image_addon_knots'
         _diffsky_cat = 'roman_rubin_2023_v1.1.2_elais'
         _star_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db'
-        # _sn_db = '/global/cfs/cdirs/lsst/groups/SSim/DC2/cosmoDC2_v1.1.4/sne_cosmoDC2_v1.1.4_MS_DDF_healpix.db'
-
 #        _star_parquet = '/global/cfs/cdirs/descssim/postDC2/UW_star_catalog'
         _star_parquet = '/sdf/data/rubin/shared/ops-rehearsal-3/imSim_catalogs/UW_stars'
 
@@ -325,10 +323,6 @@ class CatalogCreator:
                 self._galaxy_truth = _cosmo_cat
             else:
                 self._galaxy_truth = _diffsky_cat
-
-        # self._sn_truth = sn_truth
-        # if self._sn_truth is None:
-        #    self._sn_truth = _sn_db
 
         self._sn_object_type = sn_object_type
 
