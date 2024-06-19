@@ -25,6 +25,8 @@ FIELD_NAMES = ['COSMOS', 'DEEP_AO', 'DESI_SV3_R1',
 FIELD_RA = [150.1, 216.0, 179.6, 95.0, 125.0, 225.0, 250.0, 280.0, 300.0]
 FIELD_DEC = [2.1819444444444445, -12.5, 0.0, -25.0, -15.0, -40.0, 2.0,
              -48.0, -41.0]
+OPS4_NEW_DC2_RA = [54.0, 59.0]
+OPS4_NEW_DC2_DEC = [-32.5, -38.0]
 OPS4_NEW_NAMES = ['DEEP_B0', 'ELAIS_S1']
 OPS4_NEW_RA = [310.00, 9.45]
 OPS4_NEW_DEC = [-19.0, -44.0]
@@ -244,8 +246,10 @@ NSIDE = 32    # should really read from config
 # for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(DC2_RA, DC2_DEC, FIELD_RA,
 #                                               FIELD_DEC, FIELD_NAMES):
 # Additional fiels for ops rehearsal 4
-for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(DC2_RA, DC2_DEC, OPS4_NEW_RA,
-                                              OPS4_NEW_DEC, OPS4_NEW_NAMES):
+for dc2_ra, dc2_dec, f_ra, f_dec, name in zip(OPS4_NEW_DC2_RA,
+                                              OPS4_NEW_DC2_DEC,
+                                              OPS4_NEW_RA, OPS4_NEW_DEC,
+                                              OPS4_NEW_NAMES):
 
     disk = Disk(dc2_ra, dc2_dec, DISK_RADIUS_DG * 3600)
     obj_list = cat.get_object_type_by_region(disk, 'galaxy')
