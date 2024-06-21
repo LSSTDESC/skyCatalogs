@@ -15,6 +15,7 @@ from .utils.sed_tools import generate_sed_path
 from .utils.config_utils import create_config, assemble_SED_models
 from .utils.config_utils import assemble_MW_extinction, assemble_cosmology
 from .utils.config_utils import assemble_object_types, assemble_provenance
+from .utils.config_utils import assemble_file_metadata
 from .utils.config_utils import write_yaml
 from .utils.star_parquet_input import _star_parquet_reader
 from .utils.parquet_schema_utils import make_galaxy_schema
@@ -455,10 +456,16 @@ class CatalogCreator:
         # Save cosmology in case we need to write parameters out later
         self._cosmology = gal_cat.cosmology
 
+        inputs = {'galaxy_truth': self._galaxy_truth}
+        file_metadata = assemble_file_metadata(self._pkg_root,
+                                               inputs=inputs,
+                                               run_options=self._run_options)
+
         arrow_schema = make_galaxy_schema(self._logname,
                                           sed_subdir=self._sed_subdir,
                                           knots=self._knots,
-                                          galaxy_type=self._galaxy_type)
+                                          galaxy_type=self._galaxy_type,
+                                          metadata_input=file_metadata)
 
         for p in self._parts:
             self._logger.info(f'Starting on pixel {p}')
@@ -713,9 +720,13 @@ class CatalogCreator:
         from .skyCatalogs import open_catalog
         self._sed_gen = None
 
+        file_metadata = assemble_file_metadata(self._pkg_root,
+                                               run_options=self._run_options,
+                                               flux_file=True)
         self._gal_flux_schema =\
             make_galaxy_flux_schema(self._logname, self._galaxy_type,
-                                    include_roman_flux=self._include_roman_flux)
+                                    include_roman_flux=self._include_roman_flux,
+                                    metadata_input=file_metadata)
         self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
 
         if not config_file:
@@ -889,7 +900,12 @@ class CatalogCreator:
         -------
         None
         """
-        arrow_schema = make_star_schema()
+        inputs = {'star_truth': self._star_truth}
+        file_metadata = assemble_file_metadata(self._pkg_root,
+                                               inputs=inputs,
+                                               run_options=self._run_options)
+
+        arrow_schema = make_star_schema(metadata_input=file_metadata)
         #  Need a way to indicate which object types to include; deal with that
         #  later.  For now, default is stars + sn
         for p in self._parts:
@@ -987,7 +1003,12 @@ class CatalogCreator:
 
         from .skyCatalogs import open_catalog
 
-        self._ps_flux_schema = make_star_flux_schema(self._logname)
+        file_metadata = assemble_file_metadata(self._pkg_root,
+                                               run_options=self._run_options,
+                                               flux_file=True)
+
+        self._ps_flux_schema = make_star_flux_schema(self._logname,
+                                                     metadata_input=file_metadata)
         if not config_file:
             config_file = self.write_config(path_only=True)
 
@@ -1136,13 +1157,12 @@ class CatalogCreator:
         config = create_config(self._catalog_name, self._logname)
         if self._global_partition is not None:
             config.add_key('area_partition', self._area_partition)
-        # These will be covered in run_options so no need to add
-        # separately
-        # config.add_key('skycatalog_root', self._skycatalog_root)
-        # config.add_key('catalog_dir', self._catalog_dir)
 
-        #   Do we need this?
-        config.add_key('active_skycatalog_root', self._skycatalog_root)
+        # Even though the following keys are also in the run options
+        # section they need to be here so that the flux creation code
+        # can find them
+        config.add_key('catalog_dir', self._catalog_dir)
+        config.add_key('skycatalog_root', self._skycatalog_root)
 
         if self._galaxy_type == 'cosmodc2':
             config.add_key('SED_models',
