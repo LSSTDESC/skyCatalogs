@@ -14,6 +14,7 @@ import logging
 import yaml
 from skycatalogs.catalog_creator import CatalogCreator
 from skycatalogs.utils.common_utils import print_date, log_callinfo
+from skycatalogs.utils.common_utils import callinfo_to_dict
 
 parser = argparse.ArgumentParser(description='''
 Create Sky Catalogs. By default create a galaxy catalog for a
@@ -111,6 +112,7 @@ if args.options_file:
                 args.__setattr__(k, opt_dict[k])
             else:
                 raise ValueError(f'Unknown attribute "{k}" in options file {args.options_file}')
+
 logname = 'skyCatalogs.creator'
 logger = logging.getLogger(logname)
 logger.setLevel(args.log_level)
@@ -134,6 +136,8 @@ if args.provenance:
 else:
     provenance = None
 
+opt_dict = callinfo_to_dict(args)
+
 creator = CatalogCreator(parts, area_partition=None,
                          skycatalog_root=skycatalog_root,
                          catalog_dir=args.catalog_dir,
@@ -153,7 +157,8 @@ creator = CatalogCreator(parts, area_partition=None,
                          galaxy_truth=args.galaxy_truth,
                          include_roman_flux=args.include_roman_flux,
                          star_input_fmt=args.star_input_fmt,
-                         sso_truth=args.sso_truth, sso_sed=args.sso_sed)
+                         sso_truth=args.sso_truth, sso_sed=args.sso_sed,
+                         run_options=opt_dict)
 if len(parts) > 0:
     logger.info(f'Starting with healpix pixel {parts[0]}')
 elif args.sso:

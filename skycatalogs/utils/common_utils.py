@@ -5,7 +5,8 @@ from datetime import datetime as dt
 import sys
 import logging
 
-__all__ = ['print_callinfo', 'log_callinfo', 'print_date', 'print_dated_msg', 'TIME_TO_SECOND_FMT']
+__all__ = ['print_callinfo', 'log_callinfo', 'callinfo_to_dict', 'print_date',
+           'print_dated_msg', 'TIME_TO_SECOND_FMT']
 
 TIME_TO_SECOND_FMT = '%Y-%m-%d %H:%M:%S'
 
@@ -45,6 +46,18 @@ def log_callinfo(prog, args, logname):
             nm = 'args.' + e
             log_out += '    {}: {}\n'.format(e, eval(nm))
     logger.info(log_out)
+
+def callinfo_to_dict(args):
+    """
+    Make a dict out of program arguments.  Each option value is
+    either a simple atomic type or a list
+    """
+    a_dict = dict()
+    for e in dir(args):
+        if not e.startswith('_'):
+            v = eval('args.' + e)
+            a_dict[e] = v
+    return a_dict
 
 def print_date(to_second=True, file=None):
     """
