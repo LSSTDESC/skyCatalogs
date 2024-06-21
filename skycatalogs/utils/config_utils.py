@@ -292,9 +292,8 @@ def create_config(catalog_name, logname=None):
 
 
 def assemble_cosmology(cosmology):
-    # d = {k: cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
-    #                                                 'n_s')}
-    d = {k: cosmology.__getattribute__(k) for k in ('Om0', 'Ob0')}
+    d = {k: cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
+                                                    'n_s') if k in dir(cosmology)}
     d['H0'] = float(cosmology.H0.value)
     return d
 
