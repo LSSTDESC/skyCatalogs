@@ -359,9 +359,10 @@ class SkyCatalog(object):
             self.cat_cxt.register_source_type('diffsky_galaxy',
                                               object_class=DiffskyObject)
         if 'sso' in config['object_types']:
-            self.cat_cxt.register_source_type('sso',
-                                              object_class=SsoObject,
-                                              collection_class=SsoCollection)
+            if self._sso_sed_factory:
+                self.cat_cxt.register_source_type('sso',
+                                                  object_class=SsoObject,
+                                                  collection_class=SsoCollection)
 
     @property
     def observed_sed_factory(self):
@@ -639,7 +640,10 @@ class SkyCatalog(object):
                               exposure=EXPOSURE_DEFAULT):
         object_list = ObjectList()
 
-        #  Do we need to check more specifically by object type?
+        if not self.cat_cxt.lookup_collection_type(object_type):
+            msg = f'object type {object_type} not available for this catalog'
+            self._logger.warning(msg)
+            return object_list
         # if hp not in self._hp_info:
         if hp not in self.hps_by_type(object_type):
             msg = f'In SkyCatalog.get_object_type_by_hp, healpix {hp}  '
