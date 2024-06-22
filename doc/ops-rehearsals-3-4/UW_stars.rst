@@ -1,6 +1,6 @@
-+++++++++++++++++++++++++++++++++++++
-Star quantities for ops-rehearsal-3
-+++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++
+Star quantities for ops-rehearsals 3 and 4
+++++++++++++++++++++++++++++++++++++++++++
 Data are partitioned by (nside=32, ring ordering) healpixel. For each pixel
 there is a so-called "main file" (with information largely coming from the
 UW star catalog) and a flux file. The latter contains for each object only
