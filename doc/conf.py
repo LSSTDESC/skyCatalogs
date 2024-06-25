@@ -30,12 +30,12 @@ def load_skycatalogs_version():
 
     spec = importlib.util.spec_from_file_location(
         "skycatalogs_version",
-        os.path.join(os.path.dirname(__file__), "..", "skyCatalogs",
+        os.path.join(os.path.dirname(__file__), "..", "skycatalogs",
                      "_version.py"),
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module    
+    return module
 
 
 # -- General configuration ---------------------------------------------------
@@ -64,7 +64,8 @@ release = skycatalogs_version.__version__
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+# Normally want this theme, but may need to comment out if module not available
+  html_theme = 'sphinx_rtd_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
