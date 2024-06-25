@@ -22,9 +22,10 @@ https://github.com/LSSTDESC/skyCatalogs.
    :maxdepth: 2
    :caption: Contents:
 
-   ops-rehearsal-3/galaxies
-   ops-rehearsal-3/UW_stars
-   ops-rehearsal-3/SSO
+   installation
+   ops-rehearsals-3-4/galaxies
+   ops-rehearsals-3-4/UW_stars
+   ops-rehearsals-3-4/SSO
    roman-rubin-1.1.2/diffsky_galaxy
    roman-rubin-1.1.2/UW_stars
    roman-rubin-1.1.2/snana
