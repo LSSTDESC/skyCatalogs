@@ -65,7 +65,7 @@ release = skycatalogs_version.__version__
 # a list of builtin themes.
 #
 # Normally want this theme, but may need to comment out if module not available
-  html_theme = 'sphinx_rtd_theme'
+html_theme = 'sphinx_rtd_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
