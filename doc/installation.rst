@@ -90,13 +90,13 @@ You should now be able to import the code you need from the skyCatalogs package,
 
 .. code-block:: python
 
-   from skycatalogs import skyCatalogs
-   from skyCatalogs.utils.shapes import Disk
+   from skycatalogs.skyCatalogs import open_catalog
+   from skycatalogs.utils.shapes import Disk
 
    skycatalog_root = "path_to/skycatalog_files"  # folder containing catalog
    config_file = "some_folder/skyCatalog.yaml"
 
-   cat = skyCatalogs.open_catalog(config_file, skycatalog_root=skycatalog_root)
+   cat = open_catalog(config_file, skycatalog_root=skycatalog_root)
 
    # define disk at ra, dec = 45.0, -9.0 of radius 100 arcseconds
    disk = disk(45.0, -9.0, 100.0)
