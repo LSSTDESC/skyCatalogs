@@ -644,7 +644,6 @@ class SkyCatalog(object):
             msg = f'object type {object_type} not available for this catalog'
             self._logger.warning(msg)
             return object_list
-        # if hp not in self._hp_info:
         if hp not in self.hps_by_type(object_type):
             msg = f'In SkyCatalog.get_object_type_by_hp, healpix {hp}  '
             msg += f'intersects region but has no data file for {object_type}'

@@ -1173,10 +1173,6 @@ class CatalogCreator:
                        assemble_object_types(self._pkg_root,
                                              galaxy_nside=self._galaxy_nside))
 
-        # Following will be in run_options
-        # config.add_key('galaxy_magnitude_cut', self._mag_cut)
-        # config.add_key('knots_magnitude_cut', self._knots_mag_cut)
-
         inputs = {'galaxy_truth': self._galaxy_truth}
         if self._star_truth:
             inputs['star_truth'] = self._star_truth

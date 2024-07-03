@@ -317,11 +317,8 @@ def assemble_object_types(pkg_root, galaxy_nside=32):
 
 
 def assemble_SED_models(bins):
-    # tophat_d = {'units': 'angstrom', 'bin_parameters': ['start', 'width']}
-    # tophat_d['bins'] = bins
     to_return = dict()
     file_nm_d = {'units': 'nm'}
-    # return {'tophat': tophat_d, 'file_nm': file_nm_d}
     to_return['file_nm'] = file_nm_d
     if bins:
         tophat_d = {'units': 'angstrom', 'bin_parameters': ['start', 'width']}
