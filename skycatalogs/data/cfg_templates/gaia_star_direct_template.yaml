@@ -1,0 +1,8 @@
+sed_method: use_lut
+id_prefix: gaia_dr2_
+area_partition:
+    level: 7
+    type: htm
+data_file_type: fits
+data_dir: /sdf/group/rubin/datasets/refcats/htm/v1/gaia_dr2_20200414
+basename_template: (?P<htm>\d+).fits

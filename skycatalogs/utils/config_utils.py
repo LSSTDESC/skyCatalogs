@@ -14,7 +14,7 @@ __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
            'assemble_provenance', 'assemble_variability_models', 'write_yaml',
            'get_file_metadata', 'CURRENT_SCHEMA_VERSION']
 
-CURRENT_SCHEMA_VERSION = '1.2.0'
+CURRENT_SCHEMA_VERSION = '1.3.0'
 
 
 class YamlIncludeLoader(yaml.SafeLoader):
