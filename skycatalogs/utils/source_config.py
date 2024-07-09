@@ -15,6 +15,8 @@ _SKYCATALOGS_DIR = _FILE_PATH[:_FILE_PATH.rindex('/skycatalogs')]
 
 _TEMPLATE_DIR = os.path.join(_SKYCATALOGS_DIR, 'skycatalogs', 'data',
                              'cfg_templates')
+
+
 def create_galaxy_config(provenance, cosmology, tophat_bins,
                          area_partition=None, data_file_type=None):
     '''
@@ -36,7 +38,8 @@ The resulting dict looks much like the file galaxy_template.yaml under
 skycatalogs/cfg_templates with added tophat bins, provenance and cosmology
 
     '''
-    opt_dict = {'area_partition': area_partition, 'data_file_type': data_file_type}
+    opt_dict = {'area_partition': area_partition,
+                'data_file_type': data_file_type}
     data = _generic_create('galaxy_template.yaml', provenance,
                            opt_dict)
 
@@ -170,6 +173,7 @@ def create_snana_config(provenance, area_partition=None, data_file_type=None):
     opt_dict = {'area_partition': area_partition,
                 'data_file_type': data_file_type}
     return _generic_create('snana_template.yaml', provenance, opt_dict)
+
 
 def create_sso_config(provenance, area_partition=None, data_file_type=None):
     opt_dict = {'area_partition': area_partition,

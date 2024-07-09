@@ -183,6 +183,13 @@ class SsoCatalogCreator:
         for h in todo:
             self._write_hp(h, hps_by_file, arrow_schema)
 
+        # Add config information for sso
+        prov = assemble_provenance(self._catalog_creator._pkg_root,
+                                   inputs={'sso_truth': ,
+                                           'sso_sed'},
+                                   run_options=self._catalog_creator._run_options)
+        self._catalog_creator.config_writer.write_configs('sso', prov)
+
     def _create_sso_flux_pixel(self, pixel, arrow_schema):
         '''
         Create parquet file for a single healpix pixel, containing

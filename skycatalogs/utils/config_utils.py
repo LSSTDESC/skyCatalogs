@@ -7,12 +7,20 @@ import logging
 from typing import Any
 from .exceptions import ConfigDuplicateKeyError
 from collections import namedtuple
+from .source_config import create_galaxy_config
+from skycatalogs.utils.source_config import create_diffsky_galaxy_config
+from .source_config import create_star_config
+from .source_config import create_sso_config
+from .source_config import create_snana_config
+from .source_config import create_gaia_star_butler_config
+from .source_config import create_gaia_star_direct_config
 
 __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
            'assemble_SED_models', 'assemble_MW_extinction',
-           'assemble_cosmology', 'assemble_object_types',
-           'assemble_provenance', 'assemble_variability_models', 'write_yaml',
-           'get_file_metadata', 'CURRENT_SCHEMA_VERSION']
+           'assemble_cosmology',       # 'assemble_object_types',
+           'assemble_provenance',   # 'write_yaml',
+           'get_file_metadata', 'CURRENT_SCHEMA_VERSION',
+           'YamlPassthruIncludeLoader', 'ConfigWriter']
 
 CURRENT_SCHEMA_VERSION = '1.3.0'
 
@@ -83,6 +91,59 @@ class YamlIncludeLoader(yaml.SafeLoader):
         with open(actual_path) as f:
             content = yaml.load(f, YamlIncludeLoader)
         return content
+
+
+class YamlPassthruIncludeLoader(yaml.SafeLoader):
+
+    """YAML Loader that just returns !include value as is as a string
+
+
+    Examples
+    --------
+    >>> with open("document.yaml", "r") as f:
+           data = yaml.load(f, Loader=YamlIncludeLoader)
+
+    Parameters
+    ----------
+    stream :  text io stream
+        The stream to parse.
+
+    This code was adapted from the LSST Science Pipelines Butler.
+    See in particular the Loader class in
+    daf_butler/python/lsst/daf/butler/_config.py in the daf_butler repo
+    https://github.com/lsst/daf_butler
+    """
+    def __init__(self, filestream):
+        super().__init__(filestream)
+        self._logger = logging.getLogger('YamlPassthruIncludeLoader')
+        self._current_dir = os.path.dirname(filestream.name)
+        self.add_constructor("!include", YamlPassthruIncludeLoader.include)
+
+    def include(self, node: yaml.Node) -> list[Any] | dict[str, Any]:
+        result: list[Any] | dict[str, Any]
+        if isinstance(node, yaml.ScalarNode):
+            return str(node)
+            # return self.extractFile(self.construct_scalar(node))  # type: ignore[arg-type]
+
+        elif isinstance(node, yaml.SequenceNode):
+            result = []
+            for filename in self.construct_sequence(node):
+                # result.append(self.extractFile(filename))
+                result.append(filename)
+            return result
+
+        elif isinstance(node, yaml.MappingNode):
+            result = {}
+            for k, v in self.construct_mapping(node).items():
+                if not isinstance(k, str):
+                    raise TypeError(f"Expected only strings in YAML mapping; got {k!r} of type {type(k)}.")
+                result[k] = str(v)              # self.extractFile(v)
+            return result
+
+        else:
+            self._logger.error("Unrecognised node type in !include statement",
+                               file=sys.stderr)
+            raise yaml.constructor.ConstructorError
 
 
 def open_config_file(config_file):
@@ -243,48 +304,28 @@ class Config(DelegatorBase):
             raise ConfigDuplicateKeyError(k)
         self._cfg[k] = v
 
-    def write_config(self, dirpath, filename=None, overwrite=False):
-        '''
-        Export self to yaml document and write to specified directory.
-        If filename is None the file will be named after catalog_name
+    # def write_config(self, dirpath, filename=None, overwrite=False):
+    #     '''
+    #     Export self to yaml document and write to specified directory.
+    #     If filename is None the file will be named after catalog_name
 
-        Parameters
-        ----------
-        dirpath        Directory to which file will be written
-        filename       If supplied, use for filename
-        overwrite      By default do not overwrite existing file with same path
+    #     Parameters
+    #     ----------
+    #     dirpath        Directory to which file will be written
+    #     filename       If supplied, use for filename
+    #     overwrite      By default do not overwrite existing file with same path
 
-        Return
-        ------
-        Full path of output config
-        '''
-        # ##self.validate()   skip for now
+    #     Return
+    #     ------
+    #     Full path of output config
+    #     '''
+    #     # ##self.validate()   skip for now
 
-        if not filename:
-            filename = self._cfg['catalog_name'] + '.yaml'
+    #     if not filename:
+    #         filename = self._cfg['catalog_name'] + '.yaml'
 
-        return write_yaml(self._cfg, os.path.join(dirpath, filename),
-                          overwrite=overwrite, logname=self._logname)
-
-
-def write_yaml(input_dict, outpath, overwrite=False, logname=None):
-    if not overwrite:
-        try:
-            with open(outpath, mode='x') as f:
-                yaml.dump(input_dict, f)
-        except FileExistsError:
-            txt = 'Config.write_yaml: Will not overwrite pre-existing config '
-            if logname:
-                logger = logging.getLogger(logname)
-                logger.warning(txt + outpath)
-            else:
-                print(txt + outpath)
-            return
-    else:
-        with open(outpath, mode='w') as f:
-            yaml.dump(input_dict, f)
-
-    return outpath
+    #     return write_yaml(self._cfg, os.path.join(dirpath, filename),
+    #                       overwrite=overwrite, logname=self._logname)
 
 
 def create_config(catalog_name, logname=None):
@@ -304,18 +345,19 @@ def assemble_MW_extinction():
     return {'r_v': rv, 'a_v': av}
 
 
-def assemble_object_types(pkg_root, galaxy_nside=32):
-    '''
-    Include all supported object types even though a particular catalog
-    might not use them all
-    '''
-    t_path = os.path.join(pkg_root, 'cfg', 'object_types.yaml')
-    with open(t_path) as f:
-        d = yaml.safe_load(f)
-        d['object_types']['galaxy']['area_partition']['nside'] = galaxy_nside
-        return d['object_types']
+# # won't need this
+# def assemble_object_types(pkg_root, galaxy_nside=32):
+#     '''
+#     Include all supported object types even though a particular catalog
+#     might not use them all
+#     '''
+#     t_path = os.path.join(pkg_root, 'cfg', 'object_types.yaml')
+#     with open(t_path) as f:
+#         d = yaml.safe_load(f)
+#         d['object_types']['galaxy']['area_partition']['nside'] = galaxy_nside
+#         return d['object_types']
 
-
+# this will change or be eliminated
 def assemble_SED_models(bins):
     to_return = dict()
     file_nm_d = {'units': 'nm'}
@@ -386,32 +428,6 @@ def assemble_file_metadata(pkg_root, inputs=None, run_options=None,
         to_return['flux_dependencies']['galsim_version'] = galsim_version
     return to_return
 
-# In config just keep track of models by object type. Information
-# about the parameters they require is internal to the code.
-_AGN_MODELS = ['agn_random_walk']
-
-
-def assemble_variability_models(object_types):
-    '''
-    Add information about all known variability models for supplied object
-    types.
-    Parameters
-    ----------
-    object_types: iterable of (pointsource) object type names
-
-    Returns
-    -------
-    A dict with object type names for keys.  Values are also dicts with
-    keys = model name and values defining struct of parameters for that
-    model, e.g. ordered dict with parameter names for keys and parameter
-    data types for values
-    '''
-    models = dict()
-    if 'agn' in object_types:
-        models['agn'] = _AGN_MODELS
-
-    return models
-
 
 def get_file_metadata(fpath, key='provenance'):
     '''
@@ -425,3 +441,176 @@ def get_file_metadata(fpath, key='provenance'):
     if key.encode() in meta:
         to_return[key] = json.loads(meta[key.encode()])
     return to_return
+
+
+def read_yaml(inpath, silent=True, resolve_include=True):
+    '''
+    Parameters
+    ----------
+    inpath     string            path to file
+    silent     boolean           if file not found and silent is true,
+                                 return None.  Else raise exception
+
+    Returns
+    -------
+    dict representing contents of file, or None if silent and file not found
+    '''
+    if resolve_include:
+        ldr = YamlIncludeLoader
+    else:
+        ldr = YamlPassthruIncludeLoader
+    with open(inpath, mode='r') as f:
+        try:
+            data = yaml.load(f, Loader=ldr)
+            return data
+        except FileNotFoundError as ex:
+            if silent:
+                return None
+            else:
+                raise ex
+
+
+class ConfigWriter():
+    '''
+    Saves a little context needed by utilities
+    '''
+    def __init__(self, skycatalog_root, catalog_dir, top_name,
+                 overwrite=False, logname=None):
+        self._skycatalog_root = skycatalog_root
+        self._catalog_dir = catalog_dir
+        self._out_dir = os.path.join(skycatalog_root, catalog_dir)
+        self._top_name = top_name
+        self._overwrite = overwrite
+        if not logname:
+            logname = 'skyCatalogs:ConfigUtils'
+        self._logger = logging.getLogger(logname)
+
+        # associate fragment name with config builder
+        self._make_frag = {'star': create_star_config,
+                           'galaxy': create_galaxy_config,
+                           'diffsky_galaxy': create_diffsky_galaxy_config,
+                           'sso': create_sso_config,
+                           'snana': create_snana_config,
+                           'gaia_star_butler': create_gaia_star_butler_config,
+                           'gaia_star_direct': create_gaia_star_direct_config}
+
+    def write_yaml(self, input_dict, outpath):
+        if not self._overwrite:
+            try:
+                with open(outpath, mode='x') as f:
+                    yaml.dump(input_dict, f)
+            except FileExistsError:
+                txt = 'write_yaml: Will not overwrite pre-existing config'
+                if self._logname:
+                    logger = logging.getLogger(self._logname)
+                    logger.warning(txt + outpath)
+                else:
+                    print(txt + outpath)
+                return
+        else:
+            with open(outpath, mode='w') as f:
+                yaml.dump(input_dict, f)
+
+        return outpath
+
+    def find_schema_version(self, top):
+        if 'schema_version' not in top.keys():
+            return None
+        return top['schema_version']
+
+    def schema_compatible(self, schema_version):
+        # For now just require that major versions match
+        # Schema designations are of the form M.m.p where M, m  and p are
+        # integers denoting major, minor and patch version
+        current = CURRENT_SCHEMA_VERSION.split('.')
+        incoming = schema_version.split('.')
+        return current[0] == incoming[0]
+
+    def write_configs(self, object_type, provenance, cosmology=None,
+                      tophat_bins=None, fragment_name=None, id_prefix=None,
+                      butler_parameters=None, basename_template=None):
+        '''
+        Write yaml fragment for specified object type and write or update
+        top yaml file if
+        * fragment doesn't already exist
+        * or overwrite is true
+
+        Parameters
+        ----------
+        object_type   string       An object type
+        provenance    dict
+        cosmology     dict         Ignored for all but galaxy, diffsky_galaxy
+        tophat_bins   list         Ignored for all but galaxy
+        fragment_name string       Name (not include '.yaml') of file to be
+                                   written.  Defaults to object_type
+        id_prefix     string       Ignored for all but gaia_star
+        butler_parameters dict     Ignored for all but gaia_star (via butler)
+        basename_template string   Ignored for all but giaa_star (direct FITS)
+        '''
+        overwrite = self._overwrite
+        top_path = os.path.join(self._out_dir, self._top_name + '.yaml')
+
+        top = self.read_yaml(top_path, silent=True, resolve_include=False)
+        if top:
+            top_exists = True
+            object_type_exists = object_type in top['object_types']
+            schema_version = self.find_schema_version(top)
+        else:
+            top_exists = False
+            object_type_exists = False
+            schema_version = None
+
+        if top_exists:
+            if not self.schema_compatible(schema_version):
+                if not overwrite:
+                    raise RuntimeError('Incompatible skyCatalogs config versions')
+                else:
+                    self._logger.warning('Overwriting config with incompatible schema version')
+            if object_type_exists and not overwrite:
+                return
+
+        # Generate and write fragment for the object type
+        if not fragment_name:
+            fragment_name = object_type
+        if fragment_name in {'star', 'sso', 'snana'}:
+            frag = self._make_frag['fragment_name'](provenance)
+        elif fragment_name == 'diffsky_galaxy':
+            frag = self._make_frag['fragment_name'](provenance, cosmology)
+        elif fragment_name == 'galaxy':
+            frag = self._make_frag['fragment_name'](provenance, cosmology,
+                                                    tophat_bins)
+        elif fragment_name == 'gaia_star_butler':
+            frag = self._make_frag['fragment_name'](provenance,
+                                                    id_prefix=id_prefix,
+                                                    butler_parameters=butler_parameters)
+        elif fragment_name == 'gaia_star_direct':
+            frag = self._make_frag['fragment_name'](provenance,
+                                                    id_prefix=id_prefix,
+                                                    basename_template=basename_template)
+        else:
+            raise ValueError(f'ConfigWriter.write_configs: unknown fragment {fragment_name}')
+        basen = fragment_name + '.yaml'
+        frag_path = os.path.join(self._out_dir, basen)
+        self.write_yaml(frag, frag_path)
+
+        # Write or update top file if necessary
+        value = '!include ' + basen
+        if top_exists and not overwrite:
+            if object_type_exists and top['object_types'][object_type] == value:
+                # No change necessary
+                return
+
+            # Otherwise need to add or modify value for our object type
+            top['object_types'][object_type] = value
+            self.write_yaml(top, top_path)
+            return
+
+        # Write out top file from scratch, ignoring other object types
+        # which may have been referenced in older version
+        top_dict = {'skycatalog_root': self._skycatalog_root,
+                    'catalog_dir': self._catalog_dir,
+                    'catalog_name': self._top_name,
+                    'schema_version': CURRENT_SCHEMA_VERSION}
+        objs = {object_type: value}
+        top_dict['object_types'] = objs
+        self.write_yaml(top_dict, top_path)
