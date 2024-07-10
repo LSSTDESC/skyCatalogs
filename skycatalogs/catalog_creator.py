@@ -235,7 +235,7 @@ class CatalogCreator:
                  knots=True, logname='skyCatalogs.creator',
                  pkg_root=None, skip_done=False, no_main=False,
                  no_flux=False, flux_parallel=16, galaxy_nside=32,
-                 galaxy_stride=1000000, provenance=None,
+                 galaxy_stride=1000000,
                  dc2=False, sn_object_type='sncosmo', galaxy_type='cosmodc2',
                  include_roman_flux=False, star_input_fmt='sqlite',
                  sso_truth=None, sso_sed=None, sso_partition='healpixel',
@@ -279,7 +279,6 @@ class CatalogCreator:
         flux_parallel   Number of processes to divide work of computing fluxes
         galaxy_nside    Healpix configuration value "nside" for galaxy output
         galaxy_stride   Max number of rows per galaxy row group
-        provenance      Whether to write per-output-file git repo provenance
         dc2             Whether to adjust values to provide input comparable
                         to that for the DC2 run
         sn_object_type  Which object type to use for SNe.
@@ -369,7 +368,6 @@ class CatalogCreator:
         self._no_flux = no_flux
         self._flux_parallel = flux_parallel
         self._galaxy_nside = galaxy_nside
-        self._provenance = provenance
         self._dc2 = dc2
         self._include_roman_flux = include_roman_flux
         self._obs_sed_factory = None
@@ -699,9 +697,6 @@ class CatalogCreator:
                                      arrow_schema=arrow_schema,
                                      stride=stride, to_rename=to_rename)
 
-        if self._provenance == 'yaml':
-            self.write_provenance_file(output_path)
-
     def create_galaxy_flux_catalog(self, config_file=None):
         '''
         Create a second file per healpixel containing just galaxy id and
@@ -883,8 +878,6 @@ class CatalogCreator:
 
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
-        if self._provenance == 'yaml':
-            self.write_provenance_file(output_path)
 
     def create_pointsource_catalog(self):
 
@@ -980,9 +973,6 @@ class CatalogCreator:
             u_bnd = min(l_bnd + stride, last_row_ix + 1)
 
         writer.close()
-        if self._provenance == 'yaml':
-            self.write_provenance_file(output_path)
-
         return
 
     def create_pointsource_flux_catalog(self, config_file=None):
@@ -1125,8 +1115,6 @@ class CatalogCreator:
 
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
-        if self._provenance == 'yaml':
-            self.write_provenance_file(output_path)
 
     def write_config(self, overwrite=False, path_only=False):
         '''
@@ -1184,14 +1172,3 @@ class CatalogCreator:
 
         self._written_config = config.write_config(self._config_path,
                                                    overwrite=overwrite)
-
-    def write_provenance_file(self, datafile_path):
-        '''
-        Write git provenance to a yaml file with name derived from a
-        just-written datafile name
-        '''
-        outpath = datafile_path.rsplit('.', 1)[0] + '_provenance.yaml'
-
-        prov = assemble_provenance(self._pkg_root, inputs=None,
-                                   run_options=self._run_options)
-        write_yaml(prov, outpath)

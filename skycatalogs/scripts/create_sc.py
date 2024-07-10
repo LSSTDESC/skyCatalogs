@@ -65,10 +65,6 @@ parser.add_argument('--no-flux', action='store_true',
                     help='If supplied do not create flux files.')
 parser.add_argument('--flux-parallel', default=16, type=int,
                     help='Number of processes to run in parallel when computing fluxes')
-parser.add_argument('--provenance', '--prov', choices=['yaml'], help='''
-                     Persist git provenance information for each file
-                     written. Only supported format currently is as a
-                     small yaml file, written to the data directory.''')
 parser.add_argument('--options-file', default=None, help='''
                     path to yaml file associating option names with values.
                     Values for any options included will take precedence.''')
@@ -131,10 +127,6 @@ if not skycatalog_root:
     skycatalog_root = os.getenv('SKYCATALOG_ROOT')
 
 parts = args.pixels
-if args.provenance:
-    provenance = args.provenance
-else:
-    provenance = None
 
 opt_dict = callinfo_to_dict(args)
 
@@ -152,7 +144,6 @@ creator = CatalogCreator(parts, area_partition=None,
                          flux_parallel=args.flux_parallel,
                          galaxy_nside=args.galaxy_nside,
                          galaxy_stride=args.galaxy_stride,
-                         provenance=provenance,
                          dc2=args.dc2, galaxy_type=args.galaxy_type,
                          galaxy_truth=args.galaxy_truth,
                          include_roman_flux=args.include_roman_flux,
