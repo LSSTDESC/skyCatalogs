@@ -289,6 +289,8 @@ class CatalogCreator:
         sso_truth       Directory containing Sorcha output
         sso_sed         Path to sed file to be used for all SSOs
         sso_partition   Whether to partition by time or by healpixels
+        run_options     The options the outer script (create_sc.py) was
+                        called with
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -377,9 +379,7 @@ class CatalogCreator:
         self._sso_sed = self._sso_creator.sso_sed
         self._sso_partition = sso_partition
         self._run_options = run_options
-
-        # Do we need this?
-        self._sed_bins = None
+        self._tophat_sed_bins = None
 
     def _make_tophat_columns(self, dat, names, cmp):
         '''
@@ -589,7 +589,7 @@ class CatalogCreator:
             # Find sed bin definition and all the tophat quantities needed
             all_q = gal_cat.list_all_quantities()
             sed_bins, sed_bulge_names, sed_disk_names = _get_tophat_info(all_q)
-            self._sed_bins = sed_bins
+            self._tophat_sed_bins = sed_bins
 
             th_fact = TophatSedFactory(sed_bins,
                                        assemble_cosmology(self._cosmology))
@@ -906,8 +906,7 @@ class CatalogCreator:
                                                run_options=self._run_options)
 
         arrow_schema = make_star_schema(metadata_input=file_metadata)
-        #  Need a way to indicate which object types to include; deal with that
-        #  later.  For now, default is stars + sn
+
         for p in self._parts:
             self._logger.debug(f'Point sources. Starting on pixel {p}')
             self.create_pointsource_pixel(p, arrow_schema,
@@ -1166,7 +1165,7 @@ class CatalogCreator:
 
         if self._galaxy_type == 'cosmodc2':
             config.add_key('SED_models',
-                           assemble_SED_models(self._sed_bins))
+                           assemble_SED_models(self._tophat_sed_bins))
         config.add_key('MW_extinction_values', assemble_MW_extinction())
         config.add_key('Cosmology', assemble_cosmology(self._cosmology))
         config.add_key('object_types',

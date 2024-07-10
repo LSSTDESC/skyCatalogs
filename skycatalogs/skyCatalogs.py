@@ -334,6 +334,9 @@ class SkyCatalog(object):
                                                                     'sso_sed.db')
 
             self._sso_sed_factory = SsoSedFactory(self._sso_sed_path)
+            if not self._sso_sed_factory:
+                self._logger.warning('SSO appear in the list of available object types but supporting files do not exist')
+                self._logger.warning('SSOs will not be present in object lists')
         self._extinguisher = MilkyWayExtinction()
 
         # Make our properties accessible to BaseObject, etc.

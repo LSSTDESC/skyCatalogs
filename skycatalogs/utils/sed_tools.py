@@ -221,7 +221,7 @@ class SsoSedFactory():
         "wavelength" (units angstroms) and "flux" (units flambda)
         '''
         if not sed_path:
-            # print a warning message?
+            # SSO cannot be supported here
             return None
 
         if fmt != 'db':

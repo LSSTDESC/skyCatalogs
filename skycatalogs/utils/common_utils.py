@@ -5,28 +5,11 @@ from datetime import datetime as dt
 import sys
 import logging
 
-__all__ = ['print_callinfo', 'log_callinfo', 'callinfo_to_dict', 'print_date',
+__all__ = ['log_callinfo', 'callinfo_to_dict', 'print_date',
            'print_dated_msg', 'TIME_TO_SECOND_FMT']
 
 TIME_TO_SECOND_FMT = '%Y-%m-%d %H:%M:%S'
 
-def print_callinfo(prog, args):
-    """
-    Print information about how a script using argparse was called
-
-    Parameters
-    ----------
-    prog   program name, typically sys.argv[0]
-    args   object returned by ArgumentParser.parse_args()
-    """
-
-    print('{}   {}  invoked  with arguments'.format(dt.now().strftime(TIME_TO_SECOND_FMT), prog))
-    for e in dir(args):
-        if not e.startswith('_'):
-            nm = 'args.' + e
-            print('{}: {}'.format(e, eval(nm)))
-
-    sys.stdout.flush()
 
 def log_callinfo(prog, args, logname):
     """
@@ -41,10 +24,8 @@ def log_callinfo(prog, args, logname):
 
     logger = logging.getLogger(logname)
     log_out = '{}  invoked  with arguments\n'.format(prog)
-    for e in dir(args):
-        if not e.startswith('_'):
-            nm = 'args.' + e
-            log_out += '    {}: {}\n'.format(e, eval(nm))
+    for k,v in dict(sorted(args._get_kwargs())).items():
+        log_out += '    {}: {}\n'.format(k, v)
     logger.info(log_out)
 
 def callinfo_to_dict(args):
@@ -52,12 +33,7 @@ def callinfo_to_dict(args):
     Make a dict out of program arguments.  Each option value is
     either a simple atomic type or a list
     """
-    a_dict = dict()
-    for e in dir(args):
-        if not e.startswith('_'):
-            v = eval('args.' + e)
-            a_dict[e] = v
-    return a_dict
+    return dict(args._get_kwargs())
 
 def print_date(to_second=True, file=None):
     """
