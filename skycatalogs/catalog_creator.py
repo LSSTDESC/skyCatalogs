@@ -487,19 +487,20 @@ class CatalogCreator:
         #         self._logger.info('Will not overwrite existing config file')
         #         return
         # self.write_config()
-        object_type = 'galaxy'
         prov = assemble_provenance(self._pkg_root,
                                    inputs={'galaxy_truth': self._galaxy_truth},
                                    run_options=self._run_options)
         if self._galaxy_type == 'diffsky':
             object_type = 'diffsky_galaxy'
+            cosmo = assemble_cosmology(self._cosmology)
             self._config_writer.write_configs(object_type, prov,
-                                              cosmology=self._cosmology)
+                                              cosmology=cosmo)
         else:
             object_type = 'galaxy'
-            self._config_writer.write_confgs(object_type, prov,
-                                             cosmology=self._cosmology,
-                                             tophat_bins=self._sed_bins)
+            cosmo = assemble_cosmology(self._cosmology)
+            self._config_writer.write_configs(object_type, prov,
+                                              cosmology=cosmo,
+                                              tophat_bins=self._sed_bins)
 
     def _write_subpixel(self, dat=None, output_path=None, arrow_schema=None,
                         to_rename=dict(), stride=100000):

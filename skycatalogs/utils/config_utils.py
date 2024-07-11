@@ -443,7 +443,7 @@ def get_file_metadata(fpath, key='provenance'):
     return to_return
 
 
-def read_yaml(inpath, silent=True, resolve_include=True):
+def _read_yaml(inpath, silent=True, resolve_include=True):
     '''
     Parameters
     ----------
@@ -459,15 +459,15 @@ def read_yaml(inpath, silent=True, resolve_include=True):
         ldr = YamlIncludeLoader
     else:
         ldr = YamlPassthruIncludeLoader
-    with open(inpath, mode='r') as f:
-        try:
+    try:
+        with open(inpath, mode='r') as f:
             data = yaml.load(f, Loader=ldr)
             return data
-        except FileNotFoundError as ex:
-            if silent:
-                return None
-            else:
-                raise ex
+    except FileNotFoundError as ex:
+        if silent:
+            return None
+        else:
+            raise ex
 
 
 class ConfigWriter():
@@ -550,7 +550,7 @@ class ConfigWriter():
         overwrite = self._overwrite
         top_path = os.path.join(self._out_dir, self._top_name + '.yaml')
 
-        top = self.read_yaml(top_path, silent=True, resolve_include=False)
+        top = _read_yaml(top_path, silent=True, resolve_include=False)
         if top:
             top_exists = True
             object_type_exists = object_type in top['object_types']
@@ -573,20 +573,20 @@ class ConfigWriter():
         if not fragment_name:
             fragment_name = object_type
         if fragment_name in {'star', 'sso', 'snana'}:
-            frag = self._make_frag['fragment_name'](provenance)
+            frag = self._make_frag[fragment_name](provenance)
         elif fragment_name == 'diffsky_galaxy':
-            frag = self._make_frag['fragment_name'](provenance, cosmology)
+            frag = self._make_frag[fragment_name](provenance, cosmology)
         elif fragment_name == 'galaxy':
-            frag = self._make_frag['fragment_name'](provenance, cosmology,
-                                                    tophat_bins)
+            frag = self._make_frag[fragment_name](provenance, cosmology,
+                                                  tophat_bins)
         elif fragment_name == 'gaia_star_butler':
-            frag = self._make_frag['fragment_name'](provenance,
-                                                    id_prefix=id_prefix,
-                                                    butler_parameters=butler_parameters)
+            frag = self._make_frag[fragment_name](provenance,
+                                                  id_prefix=id_prefix,
+                                                  butler_parameters=butler_parameters)
         elif fragment_name == 'gaia_star_direct':
-            frag = self._make_frag['fragment_name'](provenance,
-                                                    id_prefix=id_prefix,
-                                                    basename_template=basename_template)
+            frag = self._make_frag[fragment_name](provenance,
+                                                  id_prefix=id_prefix,
+                                                  basename_template=basename_template)
         else:
             raise ValueError(f'ConfigWriter.write_configs: unknown fragment {fragment_name}')
         basen = fragment_name + '.yaml'

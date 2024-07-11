@@ -185,8 +185,8 @@ class SsoCatalogCreator:
 
         # Add config information for sso
         prov = assemble_provenance(self._catalog_creator._pkg_root,
-                                   inputs={'sso_truth': ,
-                                           'sso_sed'},
+                                   inputs={'sso_truth': self._sso_truth,
+                                           'sso_sed' : self._sso_sed},
                                    run_options=self._catalog_creator._run_options)
         self._catalog_creator.config_writer.write_configs('sso', prov)
 
