@@ -15,6 +15,7 @@ from .utils.sed_tools import generate_sed_path
 from .utils.config_utils import create_config, assemble_SED_models
 from .utils.config_utils import assemble_MW_extinction, assemble_cosmology
 from .utils.config_utils import assemble_object_types, assemble_provenance
+from .utils.config_utils import assemble_file_metadata
 from .utils.config_utils import write_yaml
 from .utils.star_parquet_input import _star_parquet_reader
 from .utils.parquet_schema_utils import make_galaxy_schema
@@ -234,10 +235,11 @@ class CatalogCreator:
                  knots=True, logname='skyCatalogs.creator',
                  pkg_root=None, skip_done=False, no_main=False,
                  no_flux=False, flux_parallel=16, galaxy_nside=32,
-                 galaxy_stride=1000000, provenance=None,
+                 galaxy_stride=1000000,
                  dc2=False, sn_object_type='sncosmo', galaxy_type='cosmodc2',
                  include_roman_flux=False, star_input_fmt='sqlite',
-                 sso_truth=None, sso_sed=None, sso_partition='healpixel'):
+                 sso_truth=None, sso_sed=None, sso_partition='healpixel',
+                 run_options=None):
         """
         Store context for catalog creation
 
@@ -277,7 +279,6 @@ class CatalogCreator:
         flux_parallel   Number of processes to divide work of computing fluxes
         galaxy_nside    Healpix configuration value "nside" for galaxy output
         galaxy_stride   Max number of rows per galaxy row group
-        provenance      Whether to write per-output-file git repo provenance
         dc2             Whether to adjust values to provide input comparable
                         to that for the DC2 run
         sn_object_type  Which object type to use for SNe.
@@ -287,6 +288,8 @@ class CatalogCreator:
         sso_truth       Directory containing Sorcha output
         sso_sed         Path to sed file to be used for all SSOs
         sso_partition   Whether to partition by time or by healpixels
+        run_options     The options the outer script (create_sc.py) was
+                        called with
 
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
@@ -365,7 +368,6 @@ class CatalogCreator:
         self._no_flux = no_flux
         self._flux_parallel = flux_parallel
         self._galaxy_nside = galaxy_nside
-        self._provenance = provenance
         self._dc2 = dc2
         self._include_roman_flux = include_roman_flux
         self._obs_sed_factory = None
@@ -374,6 +376,8 @@ class CatalogCreator:
         self._sso_truth = self._sso_creator.sso_truth
         self._sso_sed = self._sso_creator.sso_sed
         self._sso_partition = sso_partition
+        self._run_options = run_options
+        self._tophat_sed_bins = None
 
     def _make_tophat_columns(self, dat, names, cmp):
         '''
@@ -450,10 +454,16 @@ class CatalogCreator:
         # Save cosmology in case we need to write parameters out later
         self._cosmology = gal_cat.cosmology
 
+        inputs = {'galaxy_truth': self._galaxy_truth}
+        file_metadata = assemble_file_metadata(self._pkg_root,
+                                               inputs=inputs,
+                                               run_options=self._run_options)
+
         arrow_schema = make_galaxy_schema(self._logname,
                                           sed_subdir=self._sed_subdir,
                                           knots=self._knots,
-                                          galaxy_type=self._galaxy_type)
+                                          galaxy_type=self._galaxy_type,
+                                          metadata_input=file_metadata)
 
         for p in self._parts:
             self._logger.info(f'Starting on pixel {p}')
@@ -577,7 +587,7 @@ class CatalogCreator:
             # Find sed bin definition and all the tophat quantities needed
             all_q = gal_cat.list_all_quantities()
             sed_bins, sed_bulge_names, sed_disk_names = _get_tophat_info(all_q)
-            self._sed_bins = sed_bins
+            self._tophat_sed_bins = sed_bins
 
             th_fact = TophatSedFactory(sed_bins,
                                        assemble_cosmology(self._cosmology))
@@ -687,9 +697,6 @@ class CatalogCreator:
                                      arrow_schema=arrow_schema,
                                      stride=stride, to_rename=to_rename)
 
-        if self._provenance == 'yaml':
-            self.write_provenance_file(output_path)
-
     def create_galaxy_flux_catalog(self, config_file=None):
         '''
         Create a second file per healpixel containing just galaxy id and
@@ -708,9 +715,13 @@ class CatalogCreator:
         from .skyCatalogs import open_catalog
         self._sed_gen = None
 
+        file_metadata = assemble_file_metadata(self._pkg_root,
+                                               run_options=self._run_options,
+                                               flux_file=True)
         self._gal_flux_schema =\
             make_galaxy_flux_schema(self._logname, self._galaxy_type,
-                                    include_roman_flux=self._include_roman_flux)
+                                    include_roman_flux=self._include_roman_flux,
+                                    metadata_input=file_metadata)
         self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
 
         if not config_file:
@@ -867,8 +878,6 @@ class CatalogCreator:
 
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
-        if self._provenance == 'yaml':
-            self.write_provenance_file(output_path)
 
     def create_pointsource_catalog(self):
 
@@ -884,9 +893,13 @@ class CatalogCreator:
         -------
         None
         """
-        arrow_schema = make_star_schema()
-        #  Need a way to indicate which object types to include; deal with that
-        #  later.  For now, default is stars + sn
+        inputs = {'star_truth': self._star_truth}
+        file_metadata = assemble_file_metadata(self._pkg_root,
+                                               inputs=inputs,
+                                               run_options=self._run_options)
+
+        arrow_schema = make_star_schema(metadata_input=file_metadata)
+
         for p in self._parts:
             self._logger.debug(f'Point sources. Starting on pixel {p}')
             self.create_pointsource_pixel(p, arrow_schema,
@@ -960,9 +973,6 @@ class CatalogCreator:
             u_bnd = min(l_bnd + stride, last_row_ix + 1)
 
         writer.close()
-        if self._provenance == 'yaml':
-            self.write_provenance_file(output_path)
-
         return
 
     def create_pointsource_flux_catalog(self, config_file=None):
@@ -982,7 +992,12 @@ class CatalogCreator:
 
         from .skyCatalogs import open_catalog
 
-        self._ps_flux_schema = make_star_flux_schema(self._logname)
+        file_metadata = assemble_file_metadata(self._pkg_root,
+                                               run_options=self._run_options,
+                                               flux_file=True)
+
+        self._ps_flux_schema = make_star_flux_schema(self._logname,
+                                                     metadata_input=file_metadata)
         if not config_file:
             config_file = self.write_config(path_only=True)
 
@@ -1100,8 +1115,6 @@ class CatalogCreator:
 
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
-        if self._provenance == 'yaml':
-            self.write_provenance_file(output_path)
 
     def write_config(self, overwrite=False, path_only=False):
         '''
@@ -1131,20 +1144,21 @@ class CatalogCreator:
         config = create_config(self._catalog_name, self._logname)
         if self._global_partition is not None:
             config.add_key('area_partition', self._area_partition)
-        config.add_key('skycatalog_root', self._skycatalog_root)
+
+        # Even though the following keys are also in the run options
+        # section they need to be here so that the flux creation code
+        # can find them
         config.add_key('catalog_dir', self._catalog_dir)
+        config.add_key('skycatalog_root', self._skycatalog_root)
 
         if self._galaxy_type == 'cosmodc2':
             config.add_key('SED_models',
-                           assemble_SED_models(self._sed_bins))
+                           assemble_SED_models(self._tophat_sed_bins))
         config.add_key('MW_extinction_values', assemble_MW_extinction())
         config.add_key('Cosmology', assemble_cosmology(self._cosmology))
         config.add_key('object_types',
                        assemble_object_types(self._pkg_root,
                                              galaxy_nside=self._galaxy_nside))
-
-        config.add_key('galaxy_magnitude_cut', self._mag_cut)
-        config.add_key('knots_magnitude_cut', self._knots_mag_cut)
 
         inputs = {'galaxy_truth': self._galaxy_truth}
         if self._star_truth:
@@ -1152,18 +1166,9 @@ class CatalogCreator:
         if self._sso_truth:
             inputs['sso_truth'] = self._sso_truth
             inputs['sso_sed'] = self._sso_sed
-        config.add_key('provenance', assemble_provenance(self._pkg_root,
-                                                         inputs=inputs))
+        config.add_key('provenance',
+                       assemble_provenance(self._pkg_root, inputs=inputs,
+                                           run_options=self._run_options))
 
         self._written_config = config.write_config(self._config_path,
                                                    overwrite=overwrite)
-
-    def write_provenance_file(self, datafile_path):
-        '''
-        Write git provenance to a yaml file with name derived from a
-        just-written datafile name
-        '''
-        outpath = datafile_path.rsplit('.', 1)[0] + '_provenance.yaml'
-
-        prov = assemble_provenance(self._pkg_root, inputs=None)
-        write_yaml(prov, outpath)

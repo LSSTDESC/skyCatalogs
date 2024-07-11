@@ -334,6 +334,9 @@ class SkyCatalog(object):
                                                                     'sso_sed.db')
 
             self._sso_sed_factory = SsoSedFactory(self._sso_sed_path)
+            if not self._sso_sed_factory:
+                self._logger.warning('SSO appear in the list of available object types but supporting files do not exist')
+                self._logger.warning('SSOs will not be simulated')
         self._extinguisher = MilkyWayExtinction()
 
         # Make our properties accessible to BaseObject, etc.
@@ -359,9 +362,10 @@ class SkyCatalog(object):
             self.cat_cxt.register_source_type('diffsky_galaxy',
                                               object_class=DiffskyObject)
         if 'sso' in config['object_types']:
-            self.cat_cxt.register_source_type('sso',
-                                              object_class=SsoObject,
-                                              collection_class=SsoCollection)
+            if self._sso_sed_factory:
+                self.cat_cxt.register_source_type('sso',
+                                                  object_class=SsoObject,
+                                                  collection_class=SsoCollection)
 
     @property
     def observed_sed_factory(self):
@@ -639,8 +643,10 @@ class SkyCatalog(object):
                               exposure=EXPOSURE_DEFAULT):
         object_list = ObjectList()
 
-        #  Do we need to check more specifically by object type?
-        # if hp not in self._hp_info:
+        if not self.cat_cxt.lookup_collection_type(object_type):
+            msg = f'object type {object_type} not available for this catalog'
+            self._logger.warning(msg)
+            return object_list
         if hp not in self.hps_by_type(object_type):
             msg = f'In SkyCatalog.get_object_type_by_hp, healpix {hp}  '
             msg += f'intersects region but has no data file for {object_type}'

@@ -1,6 +1,8 @@
 import os
 import sys
 import yaml
+import json
+import pyarrow.parquet as pq
 import logging
 from typing import Any
 from .exceptions import ConfigDuplicateKeyError
@@ -10,7 +12,7 @@ __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
            'assemble_SED_models', 'assemble_MW_extinction',
            'assemble_cosmology', 'assemble_object_types',
            'assemble_provenance', 'assemble_variability_models', 'write_yaml',
-           'CURRENT_SCHEMA_VERSION']
+           'get_file_metadata', 'CURRENT_SCHEMA_VERSION']
 
 CURRENT_SCHEMA_VERSION = '1.2.0'
 
@@ -42,7 +44,7 @@ class YamlIncludeLoader(yaml.SafeLoader):
     """
     def __init__(self, filestream):
         super().__init__(filestream)
-        self._logger =  logging.getLogger('YamlIncludeLoader')
+        self._logger = logging.getLogger('YamlIncludeLoader')
         self._current_dir = os.path.dirname(filestream.name)
         self.add_constructor("!include", YamlIncludeLoader.include)
 
@@ -67,7 +69,7 @@ class YamlIncludeLoader(yaml.SafeLoader):
 
         else:
             self._logger.error("Unrecognised node type in !include statement",
-                  file=sys.stderr)
+                               file=sys.stderr)
             raise yaml.constructor.ConstructorError
 
     def extractFile(self, filepath: str) -> Any:
@@ -291,7 +293,7 @@ def create_config(catalog_name, logname=None):
 
 def assemble_cosmology(cosmology):
     d = {k: cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
-                                                    'n_s')}
+                                                    'n_s') if k in dir(cosmology)}
     d['H0'] = float(cosmology.H0.value)
     return d
 
@@ -315,18 +317,27 @@ def assemble_object_types(pkg_root, galaxy_nside=32):
 
 
 def assemble_SED_models(bins):
-    tophat_d = {'units': 'angstrom', 'bin_parameters': ['start', 'width']}
-    tophat_d['bins'] = bins
+    to_return = dict()
     file_nm_d = {'units': 'nm'}
-    return {'tophat': tophat_d, 'file_nm': file_nm_d}
+    to_return['file_nm'] = file_nm_d
+    if bins:
+        tophat_d = {'units': 'angstrom', 'bin_parameters': ['start', 'width']}
+        tophat_d['bins'] = bins
+        to_return['tophat'] = tophat_d
+    return to_return
 
 
-def assemble_provenance(pkg_root, inputs={}, schema_version=None):
-    import git
+def assemble_provenance(pkg_root, inputs={}, run_options=None,
+                        schema_version=None):
+    import skycatalogs
+    try:
+        import git
+        have_git = True
+    except ImportError:
+        have_git = False
 
     if not schema_version:
         schema_version = CURRENT_SCHEMA_VERSION
-    import skycatalogs
     version_d = {'schema_version': schema_version}
     if '__version__' in dir(skycatalogs):
         code_version = skycatalogs.__version__
@@ -338,29 +349,46 @@ def assemble_provenance(pkg_root, inputs={}, schema_version=None):
     has_uncommited = repo.is_dirty()
     has_untracked = (len(repo.untracked_files) > 0)
 
-    git_d = {}
-    git_d['git_hash'] = repo.commit().hexsha
-    git_d['git_branch'] = repo.active_branch.name
-    status = []
-    if has_uncommited:
-        status.append('UNCOMMITTED_FILES')
-    if has_untracked:
-        status.append('UNTRACKED_FILES')
-    if len(status) == 0:
-        status.append('CLEAN')
-    git_d['git_status'] = status
+    if have_git:
+        git_d = {}
+        git_d['git_hash'] = repo.commit().hexsha
+        git_d['git_branch'] = repo.active_branch.name
+        status = []
+        if has_uncommited:
+            status.append('UNCOMMITTED_FILES')
+        if has_untracked:
+            status.append('UNTRACKED_FILES')
+        if len(status) == 0:
+            status.append('CLEAN')
+        git_d['git_status'] = status
+
+        to_return = dict()
+        to_return['versioning'] = version_d
+        to_return['skyCatalogs_repo'] = git_d
 
     if inputs:
-        return {'versioning': version_d, 'skyCatalogs_repo': git_d,
-                'inputs': inputs}
-    else:
-        return{'versioning': version_d, 'skyCatalogs_repo': git_d}
+        to_return['inputs'] = inputs
+    if run_options:
+        to_return['run_options'] = run_options
 
+    return to_return
+
+
+def assemble_file_metadata(pkg_root, inputs=None, run_options=None,
+                           flux_file=False):
+    to_return = assemble_provenance(pkg_root, inputs=inputs,
+                                    run_options=run_options)
+    if flux_file:
+        # add a section 'flux_dependencies' containing at least
+        # galsim version and, if possible, throughputs version
+        to_return['flux_dependencies'] = dict()
+        from galsim import version as galsim_version
+        to_return['flux_dependencies']['galsim_version'] = galsim_version
+    return to_return
 
 # In config just keep track of models by object type. Information
 # about the parameters they require is internal to the code.
 _AGN_MODELS = ['agn_random_walk']
-_SNCOSMO_MODELS = ['sn_salt2_extended']
 
 
 def assemble_variability_models(object_types):
@@ -381,7 +409,19 @@ def assemble_variability_models(object_types):
     models = dict()
     if 'agn' in object_types:
         models['agn'] = _AGN_MODELS
-    if 'sncosmo' in object_types:
-        models['sncosmo'] = _SNCOSMO_MODELS
 
     return models
+
+
+def get_file_metadata(fpath, key='provenance'):
+    '''
+    Extract metadata from a parquet catalog file. Entries in the file
+    metadata are key-value pairs.  Return a dict with the specified
+    key as its only key
+    '''
+    meta = pq.read_table(fpath, columns=[]).schema.metadata
+    to_return = dict()
+
+    if key.encode() in meta:
+        to_return[key] = json.loads(meta[key.encode()])
+    return to_return

@@ -220,13 +220,20 @@ class SsoSedFactory():
         assumptions: that the table name is "SED" and that the columns are
         "wavelength" (units angstroms) and "flux" (units flambda)
         '''
+        if not sed_path:
+            # SSO cannot be supported here
+            return None
+
         if fmt != 'db':
             raise ValueError(f'SsoSedFactory: Unsupport input format {fmt}; must be "db"')
         wave_type = 'angstrom'
         flux_type = 'flambda'
         q = 'select wavelength, flux as flambda from SED order by wavelength'
-        with sqlite3.connect(sed_path) as conn:
-            sed_df = pd.read_sql_query(q, conn)
+        try:
+            with sqlite3.connect(sed_path) as conn:
+                sed_df = pd.read_sql_query(q, conn)
+        except Exception:
+            return None
         lut = galsim.LookupTable(x=sed_df['wavelength'], f=sed_df['flambda'],
                                  interpolant='linear')
         sed = galsim.SED(lut, wave_type=wave_type, flux_type=flux_type)
