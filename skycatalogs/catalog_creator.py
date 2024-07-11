@@ -500,7 +500,7 @@ class CatalogCreator:
             cosmo = assemble_cosmology(self._cosmology)
             self._config_writer.write_configs(object_type, prov,
                                               cosmology=cosmo,
-                                              tophat_bins=self._sed_bins)
+                                              tophat_bins=self._tophat_sed_bins)
 
     def _write_subpixel(self, dat=None, output_path=None, arrow_schema=None,
                         to_rename=dict(), stride=100000):
@@ -1169,8 +1169,6 @@ class CatalogCreator:
     #     Side-effects
     #     ------------
     #     Save path to config file written as instance variable
->>>>>>> 6b2e76e (Add classes YamlPassthruIncludeLoader, ConfigWriter to config_utils.py)
-
     #     '''
     #     if not self._config_path:
     #         self._config_path = self._output_dir
