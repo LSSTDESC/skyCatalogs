@@ -495,22 +495,30 @@ class ConfigWriter():
                            'gaia_star_direct': create_gaia_star_direct_config}
 
     def write_yaml(self, input_dict, outpath):
+        '''
+        Write yaml file if
+          * it doesn't already exist     or
+          * we're allowed to overwrite
+        '''
         if not self._overwrite:
             try:
                 with open(outpath, mode='x') as f:
                     yaml.dump(input_dict, f)
             except FileExistsError:
                 txt = 'write_yaml: Will not overwrite pre-existing config'
-                if self._logname:
-                    logger = logging.getLogger(self._logname)
-                    logger.warning(txt + outpath)
-                else:
-                    print(txt + outpath)
+                self._logger.warning(txt + outpath)
                 return
         else:
-            with open(outpath, mode='w') as f:
-                yaml.dump(input_dict, f)
+            return self.update_yaml(input_dict, outpath)
 
+        return outpath
+
+    def update_yaml(self, input_dict, outpath):
+        '''
+        Write yaml regardless of whether file is present or not
+        '''
+        with open(outpath, mode='w') as f:
+            yaml.dump(input_dict, f)
         return outpath
 
     def find_schema_version(self, top):
@@ -602,7 +610,7 @@ class ConfigWriter():
 
             # Otherwise need to add or modify value for our object type
             top['object_types'][object_type] = value
-            self.write_yaml(top, top_path)
+            self.update_yaml(top, top_path)
             return
 
         # Write out top file from scratch, ignoring other object types
