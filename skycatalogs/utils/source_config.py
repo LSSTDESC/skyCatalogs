@@ -45,7 +45,7 @@ skycatalogs/cfg_templates with added tophat bins, provenance and cosmology
 
     # add tophat bins, cosmology
     data['tophat']['bins'] = tophat_bins
-    data['cosmology'] = cosmology
+    data['Cosmology'] = cosmology
     return data
 
 
@@ -96,7 +96,7 @@ def create_diffsky_galaxy_config(provenance, cosmology, area_partition=None,
     data = _generic_create('diffsky_galaxy_template.yaml', provenance,
                            opt_dict)
 
-    data['cosmology'] = cosmology
+    data['Cosmology'] = cosmology
     return data
 
 

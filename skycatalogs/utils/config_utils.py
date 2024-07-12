@@ -95,7 +95,9 @@ class YamlIncludeLoader(yaml.SafeLoader):
 
 class YamlPassthruIncludeLoader(yaml.SafeLoader):
 
-    """YAML Loader that just returns !include value as is as a string
+    """YAML Loader that just returns
+           !include the_path
+       as is, without attempting to include the contents of the_path
 
 
     Examples
@@ -122,13 +124,12 @@ class YamlPassthruIncludeLoader(yaml.SafeLoader):
     def include(self, node: yaml.Node) -> list[Any] | dict[str, Any]:
         result: list[Any] | dict[str, Any]
         if isinstance(node, yaml.ScalarNode):
-            return str(node)
-            # return self.extractFile(self.construct_scalar(node))  # type: ignore[arg-type]
+            # The following returns only what we need.
+            return node.tag + ' ' + node.value
 
         elif isinstance(node, yaml.SequenceNode):
             result = []
             for filename in self.construct_sequence(node):
-                # result.append(self.extractFile(filename))
                 result.append(filename)
             return result
 
@@ -225,40 +226,63 @@ class Config(DelegatorBase):
     def __contains__(self, k):
         return k in self._cfg
 
-    def list_sed_models(self):
-        return self._cfg['SED_models'].keys()
+    # def list_sed_models(self):
+    #     return self._cfg['SED_models'].keys()
 
     def list_object_types(self):
         return self._cfg['object_types'].keys()
 
-    def get_sed_model(self, modelname):
-        return self._cfg['SED_models'][modelname]
+    # def get_sed_model(self, modelname):
+    #     return self._cfg['SED_models'][modelname]
 
     def object_is_composite(self, objectname):
         return 'composite' in self._cfg['object_types'][objectname]
 
-    def get_object_parent(self, objectname):
-        if 'parent' in self._cfg['object_types'][objectname]:
-            return self._cfg['object_types'][objectname]['parent']
-        else:
-            return None
-
-    def get_object_sedmodel(self, objectname):
-        if 'sed_model' in self._cfg['object_types'][objectname]:
-            return self._cfg['object_types'][objectname]['sed_model']
-        else:
-            return None
-
-    def get_tophat_parameters(self):
+    def get_tophat_parameters(self, schema_version=None):
         '''
         Return list of named tuples
         Should maybe be part of Sky Catalogs API
         '''
-        if not self.get_config_value('SED_models/tophat', silent=True):
+        tophat_path = 'SED_models/tophat'
+        if schema_version:
+            cmps = [int(c) for c in schema_version.split('.')]
+            if (cmps[0] > 1) or (cmps[0] == 1 and cmps[1] > 2):
+                tophat_path = 'object_types/galaxy/tophat'
+
+        tophat = self.get_config_value('object_types/galaxy/tophat',
+                                       silent=True)
+        if not tophat:
             return None
-        raw_bins = self._cfg['SED_models']['tophat']['bins']
+        raw_bins = tophat['bins']
+        #raw_bins = self._cfg['object_types']['galaxy']['tophat']['bins']
 
         return [Tophat(b[0], b[1]) for b in raw_bins]
+
+    def get_cosmology(self, schema_version, object_type=None):
+        '''
+        Return cosmology parameters.  Location in config will depend
+        on schema version and object type
+
+        Parameters
+        ----------
+        schema_version   string or None.   Of form x.y.z
+        object_type      string or None    If object type specified, use it.
+                                           Else presume only one galaxy-like
+                                           object type present
+        '''
+        old_style = True
+        if schema_version:
+            cmps = [int(c) for c in schema_version.split('.')]
+            if (cmps[0] > 1) or (cmps[0] == 1 and cmps[1] > 2):
+                old_style = False
+                if not object_type:
+                    if 'galaxy' in self._cfg['object_types']:
+                        object_type = 'galaxy'
+                    elif 'diffsky_galaxy' in self._cfg['object_types']:
+                        object_type = 'diffsky_galaxy'
+                return self._cfg['object_types'][object_type]['Cosmology']
+        if old_style:
+            return self._cfg['Cosmology']
 
     def get_config_value(self, key_path, silent=False):
         '''
@@ -304,29 +328,6 @@ class Config(DelegatorBase):
             raise ConfigDuplicateKeyError(k)
         self._cfg[k] = v
 
-    # def write_config(self, dirpath, filename=None, overwrite=False):
-    #     '''
-    #     Export self to yaml document and write to specified directory.
-    #     If filename is None the file will be named after catalog_name
-
-    #     Parameters
-    #     ----------
-    #     dirpath        Directory to which file will be written
-    #     filename       If supplied, use for filename
-    #     overwrite      By default do not overwrite existing file with same path
-
-    #     Return
-    #     ------
-    #     Full path of output config
-    #     '''
-    #     # ##self.validate()   skip for now
-
-    #     if not filename:
-    #         filename = self._cfg['catalog_name'] + '.yaml'
-
-    #     return write_yaml(self._cfg, os.path.join(dirpath, filename),
-    #                       overwrite=overwrite, logname=self._logname)
-
 
 def create_config(catalog_name, logname=None):
     return Config({'catalog_name': catalog_name}, logname)
@@ -344,18 +345,6 @@ def assemble_MW_extinction():
     rv = {'mode': 'constant', 'value': 3.1}
     return {'r_v': rv, 'a_v': av}
 
-
-# # won't need this
-# def assemble_object_types(pkg_root, galaxy_nside=32):
-#     '''
-#     Include all supported object types even though a particular catalog
-#     might not use them all
-#     '''
-#     t_path = os.path.join(pkg_root, 'cfg', 'object_types.yaml')
-#     with open(t_path) as f:
-#         d = yaml.safe_load(f)
-#         d['object_types']['galaxy']['area_partition']['nside'] = galaxy_nside
-#         return d['object_types']
 
 # this will change or be eliminated
 def assemble_SED_models(bins):
@@ -553,8 +542,24 @@ class ConfigWriter():
                                    written.  Defaults to object_type
         id_prefix     string       Ignored for all but gaia_star
         butler_parameters dict     Ignored for all but gaia_star (via butler)
-        basename_template string   Ignored for all but giaa_star (direct FITS)
+        basename_template string   Ignored for all but gaia_star (direct FITS)
         '''
+
+        # Need the following machinery (class IncludeValue; routine
+        # include_representer) in order to output values like
+        #       !include  some_path.yaml
+        # properly
+        class IncludeValue(str):
+            def __new__(cls, a):
+                return str.__new__(cls, a)
+            def __repr__(self):
+                return "IncludeValue(%s)" % self
+
+        def include_representer(dumper, value):
+            # To avoid outputting any quotes, use style='|'
+            return dumper.represent_scalar(u'!include', u'%s' % value,
+                                           style='|')
+
         overwrite = self._overwrite
         top_path = os.path.join(self._out_dir, self._top_name + '.yaml')
 
@@ -602,13 +607,21 @@ class ConfigWriter():
         self.write_yaml(frag, frag_path)
 
         # Write or update top file if necessary
-        value = '!include ' + basen
+        value = IncludeValue(basen)
+        yaml.add_representer(IncludeValue, include_representer)
         if top_exists and not overwrite:
             if object_type_exists and top['object_types'][object_type] == value:
                 # No change necessary
                 return
 
             # Otherwise need to add or modify value for our object type
+            # First have to fix values for any other object types already
+            # mentions.  Value read in looks like "!include an_obj_type.yaml"
+            for k,v in top['object_types'].items():
+                cmps = v.split(' ')
+                new_value = IncludeValue(cmps[1])
+                top['object_types'][k] = new_value
+
             top['object_types'][object_type] = value
             self.update_yaml(top, top_path)
             return

@@ -286,7 +286,12 @@ class SkyCatalog(object):
             self._logger.addHandler(ch)
 
         self._mp = mp
-        if 'schema_version' not in config and 'schema_version' not in config['provenance']['versioning']:
+        self._schema_version = None
+        if 'schema_version' in config:
+            self._schema_version = config['schema_version']
+        else:
+            self._schema_version = self._config.get_config_value('provenance/versioning/schema_version', silent=True)
+        if not self._schema_version:
             self._cat_dir = config['root_directory']
         else:
             sky_root = config['skycatalog_root']        # default
@@ -319,16 +324,17 @@ class SkyCatalog(object):
         # input galaxy catalog with format like cosmoDC2, which includes
         # definitions of tophat SEDs. A different implementation will
         # be needed for newer galaxy catalogs
-        th_parameters = self._config.get_tophat_parameters()
+        th_parameters = self._config.get_tophat_parameters(
+            schema_version=self._schema_version)
+        cosmology = self._config.get_cosmology(self._schema_version)
         if th_parameters:
             self._observed_sed_factory =\
-                TophatSedFactory(th_parameters, config['Cosmology'])
+                TophatSedFactory(th_parameters, cosmology)
         elif 'diffsky_galaxy' in config['object_types']:
             self._observed_sed_factory =\
                 DiffskySedFactory(self._cat_dir,
                                   config['object_types']['diffsky_galaxy']
-                                  ['sed_file_template'],
-                                  config['Cosmology'])
+                                  ['sed_file_template'], cosmology)
         if 'sso' in config['object_types']:
             self._sso_sed_path = config['provenance']['inputs'].get('sso_sed',
                                                                     'sso_sed.db')
@@ -483,13 +489,10 @@ class SkyCatalog(object):
         Returns
         -------
         list of healpixels (int) having data for object type object_type
-        (or its parent type if it has one)
         '''
         if not self._hp_info:
             return []
         hps = []
-        if 'parent' in self._config['object_types'][object_type]:
-            object_type = self._config['object_types'][object_type]['parent']
         for hp, val in self._hp_info.items():
             if object_type in val['object_types']:
                 hps.append(hp)
@@ -543,11 +546,6 @@ class SkyCatalog(object):
         Return the resulting types (as list) and their values
         '''
         objs_copy = set(object_types)
-        for obj in object_types:
-            parent = self._config.get_object_parent(obj)
-            if parent is not None:
-                objs_copy.remove(obj)
-                objs_copy.add(parent)
         return objs_copy
 
     def get_objects_by_region(self, region, obj_type_set=None, mjd=None,
