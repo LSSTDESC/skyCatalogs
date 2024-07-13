@@ -211,6 +211,15 @@ class Config(DelegatorBase):
 
         self.default = cfg
 
+        # cache schema version
+        self._schema_version = None
+        if 'schema_version' in cfg:
+            self._schema_version = cfg['schema_version']
+        else:
+            self._schema_version = self.get_config_value('provenance/versioning/schema_version', silent=True)
+        if self._schema_version:
+            self._cmps = [int(c) for c in self._schema_version.split('.')]
+
     def __getitem__(self, k):
         '''
         Specific override of __getitem__, delegating to dict member
@@ -220,6 +229,10 @@ class Config(DelegatorBase):
 
     def __contains__(self, k):
         return k in self._cfg
+
+    @property
+    def schema_version(self):
+        return self._schema_version
 
     def list_object_types(self):
         return self._cfg['object_types'].keys()
@@ -234,7 +247,7 @@ class Config(DelegatorBase):
         '''
         tophat_path = 'SED_models/tophat'
         if schema_version:
-            cmps = [int(c) for c in schema_version.split('.')]
+            cmps = self._cmps
             if (cmps[0] > 1) or (cmps[0] == 1 and cmps[1] > 2):
                 tophat_path = 'object_types/galaxy/tophat'
 
@@ -242,7 +255,6 @@ class Config(DelegatorBase):
         if not tophat:
             return None
         raw_bins = tophat['bins']
-        #raw_bins = self._cfg['object_types']['galaxy']['tophat']['bins']
 
         return [Tophat(b[0], b[1]) for b in raw_bins]
 
@@ -261,7 +273,7 @@ class Config(DelegatorBase):
         '''
         old_style = True
         if schema_version:
-            cmps = [int(c) for c in schema_version.split('.')]
+            cmps = self._cmps
             if (cmps[0] > 1) or (cmps[0] == 1 and cmps[1] > 2):
                 old_style = False
                 if not object_type:

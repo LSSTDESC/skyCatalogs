@@ -286,11 +286,7 @@ class SkyCatalog(object):
             self._logger.addHandler(ch)
 
         self._mp = mp
-        self._schema_version = None
-        if 'schema_version' in config:
-            self._schema_version = config['schema_version']
-        else:
-            self._schema_version = self._config.get_config_value('provenance/versioning/schema_version', silent=True)
+        self._schema_version = self._config.schema_version
         if not self._schema_version:
             self._cat_dir = config['root_directory']
         else:
@@ -322,8 +318,8 @@ class SkyCatalog(object):
 
         # NOTE: the use of TophatSedFactory is appropriate *only* for an
         # input galaxy catalog with format like cosmoDC2, which includes
-        # definitions of tophat SEDs. A different implementation will
-        # be needed for newer galaxy catalogs
+        # definitions of tophat SEDs.
+        # In other cases th_parameters below will be None
         th_parameters = self._config.get_tophat_parameters(
             schema_version=self._schema_version)
         available_types = self._config.list_object_types()
