@@ -16,9 +16,8 @@ from .source_config import create_gaia_star_butler_config
 from .source_config import create_gaia_star_direct_config
 
 __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
-           'assemble_SED_models', 'assemble_MW_extinction',
-           'assemble_cosmology',       # 'assemble_object_types',
-           'assemble_provenance',   # 'write_yaml',
+           'assemble_MW_extinction', 'assemble_cosmology',
+           'assemble_provenance',
            'get_file_metadata', 'CURRENT_SCHEMA_VERSION',
            'YamlPassthruIncludeLoader', 'ConfigWriter']
 
@@ -258,6 +257,7 @@ class Config(DelegatorBase):
         object_type      string or None    If object type specified, use it.
                                            Else presume only one galaxy-like
                                            object type present
+        Return          dict or None
         '''
         old_style = True
         if schema_version:
@@ -269,6 +269,8 @@ class Config(DelegatorBase):
                         object_type = 'galaxy'
                     elif 'diffsky_galaxy' in self._cfg['object_types']:
                         object_type = 'diffsky_galaxy'
+                    else:
+                        return None
                 return self._cfg['object_types'][object_type]['Cosmology']
         if old_style:
             return self._cfg['Cosmology']

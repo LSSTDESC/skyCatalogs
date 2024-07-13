@@ -12,12 +12,10 @@ from multiprocessing import Process, Pipe
 import sqlite3
 from .utils.sed_tools import TophatSedFactory, get_star_sed_path
 from .utils.sed_tools import generate_sed_path
-from .utils.config_utils import create_config, assemble_SED_models
+from .utils.config_utils import create_config
 from .utils.config_utils import assemble_MW_extinction, assemble_cosmology
-# from .utils.config_utils import assemble_object_types, assemble_provenance
 from .utils.config_utils import assemble_provenance
 from .utils.config_utils import assemble_file_metadata
-# from .utils.config_utils import write_yaml
 from .utils.config_utils import ConfigWriter
 from .utils.star_parquet_input import _star_parquet_reader
 from .utils.parquet_schema_utils import make_galaxy_schema

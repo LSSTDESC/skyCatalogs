@@ -326,15 +326,17 @@ class SkyCatalog(object):
         # be needed for newer galaxy catalogs
         th_parameters = self._config.get_tophat_parameters(
             schema_version=self._schema_version)
-        cosmology = self._config.get_cosmology(self._schema_version)
-        if th_parameters:
-            self._observed_sed_factory =\
-                TophatSedFactory(th_parameters, cosmology)
-        elif 'diffsky_galaxy' in config['object_types']:
-            self._observed_sed_factory =\
-                DiffskySedFactory(self._cat_dir,
-                                  config['object_types']['diffsky_galaxy']
-                                  ['sed_file_template'], cosmology)
+        available_types = self._config.list_object_types()
+        if ('galaxy' in available_types) or ('diffsky_galaxy') in available_types:
+            cosmology = self._config.get_cosmology(self._schema_version)
+            if th_parameters:
+                self._observed_sed_factory =\
+                    TophatSedFactory(th_parameters, cosmology)
+            elif 'diffsky_galaxy' in config['object_types']:
+                self._observed_sed_factory =\
+                    DiffskySedFactory(self._cat_dir,
+                                      config['object_types']['diffsky_galaxy']
+                                      ['sed_file_template'], cosmology)
         if 'sso' in config['object_types']:
             self._sso_sed_path = config['provenance']['inputs'].get('sso_sed',
                                                                     'sso_sed.db')
@@ -546,6 +548,7 @@ class SkyCatalog(object):
         Return the resulting types (as list) and their values
         '''
         objs_copy = set(object_types)
+
         return objs_copy
 
     def get_objects_by_region(self, region, obj_type_set=None, mjd=None,
