@@ -95,7 +95,7 @@ class YamlIncludeLoader(yaml.SafeLoader):
 
 class YamlPassthruIncludeLoader(yaml.SafeLoader):
 
-    """YAML Loader that just returns
+    """YAML Loader that just returns scalar nodes like
            !include the_path
        as is, without attempting to include the contents of the_path
 
@@ -103,17 +103,14 @@ class YamlPassthruIncludeLoader(yaml.SafeLoader):
     Examples
     --------
     >>> with open("document.yaml", "r") as f:
-           data = yaml.load(f, Loader=YamlIncludeLoader)
+           data = yaml.load(f, Loader=YamlPassthruIncludeLoader)
 
     Parameters
     ----------
     stream :  text io stream
         The stream to parse.
 
-    This code was adapted from the LSST Science Pipelines Butler.
-    See in particular the Loader class in
-    daf_butler/python/lsst/daf/butler/_config.py in the daf_butler repo
-    https://github.com/lsst/daf_butler
+    Modified version of YamlIncludeLoader above.
     """
     def __init__(self, filestream):
         super().__init__(filestream)
@@ -149,7 +146,7 @@ class YamlPassthruIncludeLoader(yaml.SafeLoader):
 
 def open_config_file(config_file):
     '''
-    Given path to config file, return a Config object
+    Given path to config file, return a Config object. See Config class below
     '''
     with open(config_file) as f:
         content = yaml.load(f, Loader=YamlIncludeLoader)
@@ -175,7 +172,6 @@ class DelegatorBase:
     member.   Here it is used to delegate dict operations to
     the member self._cfg
     '''
-
     @property
     def _delegate(self):
         pub = [o for o in dir(self.default) if not o.startswith('_')]
@@ -196,7 +192,7 @@ class DelegatorBase:
 class Config(DelegatorBase):
     '''
     A wrapper around the dict which is the contents of a Sky Catalog
-    config file (a dict) which understands some of the semantics
+    config file (a dict) which understands some of the dict semantics
 
     '''
     def __init__(self, cfg, logname=None):
@@ -226,14 +222,8 @@ class Config(DelegatorBase):
     def __contains__(self, k):
         return k in self._cfg
 
-    # def list_sed_models(self):
-    #     return self._cfg['SED_models'].keys()
-
     def list_object_types(self):
         return self._cfg['object_types'].keys()
-
-    # def get_sed_model(self, modelname):
-    #     return self._cfg['SED_models'][modelname]
 
     def object_is_composite(self, objectname):
         return 'composite' in self._cfg['object_types'][objectname]
@@ -331,7 +321,8 @@ class Config(DelegatorBase):
 def create_config(catalog_name, logname=None):
     return Config({'catalog_name': catalog_name}, logname)
 
-
+# A collection of utilities used by CatalogCreator to assemble and write
+# configs
 def assemble_cosmology(cosmology):
     d = {k: cosmology.__getattribute__(k) for k in ('Om0', 'Ob0', 'sigma8',
                                                     'n_s') if k in dir(cosmology)}
@@ -345,20 +336,27 @@ def assemble_MW_extinction():
     return {'r_v': rv, 'a_v': av}
 
 
-# this will change or be eliminated
-def assemble_SED_models(bins):
-    to_return = dict()
-    file_nm_d = {'units': 'nm'}
-    to_return['file_nm'] = file_nm_d
-    if bins:
-        tophat_d = {'units': 'angstrom', 'bin_parameters': ['start', 'width']}
-        tophat_d['bins'] = bins
-        to_return['tophat'] = tophat_d
-    return to_return
-
-
 def assemble_provenance(pkg_root, inputs={}, run_options=None,
                         schema_version=None):
+    '''
+    Assemble provenance information, usually pertaining to a sinlge
+    object type
+
+    Parameters
+    ----------
+    pkg_root  string
+        top directory of the git package
+    inputs    dict
+        For a name like 'star_truth' the path to the corresponding input file.
+    run_options dict or None
+         Options the script create_sc.py was called with
+    schema_verion string or None
+         If None (usual case) use current schema version
+
+    Return
+    ------
+    dict
+    '''
     import skycatalogs
     try:
         import git
@@ -406,6 +404,9 @@ def assemble_provenance(pkg_root, inputs={}, run_options=None,
 
 def assemble_file_metadata(pkg_root, inputs=None, run_options=None,
                            flux_file=False):
+    '''
+    Assemble the metadata to be included in a skyCatalogs binary data file
+    '''
     to_return = assemble_provenance(pkg_root, inputs=inputs,
                                     run_options=run_options)
     if flux_file:

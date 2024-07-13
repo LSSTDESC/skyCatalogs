@@ -481,12 +481,6 @@ class CatalogCreator:
 
         # Now make config.   We need it for computing LSST fluxes for
         # the second part of the galaxy catalog
-        # if self._skip_done:
-        #     config_path = self.write_config(path_only=True)
-        #     if os.path.exists(config_path):
-        #         self._logger.info('Will not overwrite existing config file')
-        #         return
-        # self.write_config()
         prov = assemble_provenance(self._pkg_root,
                                    inputs={'galaxy_truth': self._galaxy_truth},
                                    run_options=self._run_options)
@@ -1152,58 +1146,3 @@ class CatalogCreator:
             self._config_path = self._output_dir
 
         return os.path.join(self._config_path, self._catalog_name + '.yaml')
-
-    # def write_config(self, overwrite=False, path_only=False):
-    #     '''
-    #     Parameters
-    #     ----------
-    #     overwrite   boolean default False.   If true, overwrite existing
-    #                 config of the same name
-    #     path_only   If true, just return the path; don't write anything
-
-    #     Returns
-    #     -------
-    #     Path to would-be config file if path_only is True;
-    #     else None
-
-    #     Side-effects
-    #     ------------
-    #     Save path to config file written as instance variable
-    #     '''
-    #     if not self._config_path:
-    #         self._config_path = self._output_dir
-    #     if path_only:
-    #         return os.path.join(self._config_path,
-    #                             self._catalog_name + '.yaml')
-
-    #     config = create_config(self._catalog_name, self._logname)
-    #     if self._global_partition is not None:
-    #         config.add_key('area_partition', self._area_partition)
-
-    #     # Even though the following keys are also in the run options
-    #     # section they need to be here so that the flux creation code
-    #     # can find them
-    #     config.add_key('catalog_dir', self._catalog_dir)
-    #     config.add_key('skycatalog_root', self._skycatalog_root)
-    #
-    #     if self._galaxy_type == 'cosmodc2':
-    #         config.add_key('SED_models',
-    #                        assemble_SED_models(self._sed_bins))
-    #     config.add_key('MW_extinction_values', assemble_MW_extinction())
-    #     config.add_key('Cosmology', assemble_cosmology(self._cosmology))
-    #     config.add_key('object_types',
-    #                    assemble_object_types(self._pkg_root,
-    #                                          galaxy_nside=self._galaxy_nside))
-
-    #     inputs = {'galaxy_truth': self._galaxy_truth}
-    #     if self._star_truth:
-    #         inputs['star_truth'] = self._star_truth
-    #     if self._sso_truth:
-    #         inputs['sso_truth'] = self._sso_truth
-    #         inputs['sso_sed'] = self._sso_sed
-    #     config.add_key('provenance',
-    #                    assemble_provenance(self._pkg_root, inputs=inputs,
-    #                                        run_options=self._run_options))
-
-    #     self._written_config = config.write_config(self._config_path,
-    #                                                overwrite=overwrite)
