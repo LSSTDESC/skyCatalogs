@@ -249,8 +249,7 @@ class Config(DelegatorBase):
             if (cmps[0] > 1) or (cmps[0] == 1 and cmps[1] > 2):
                 tophat_path = 'object_types/galaxy/tophat'
 
-        tophat = self.get_config_value('object_types/galaxy/tophat',
-                                       silent=True)
+        tophat = self.get_config_value(tophat_path, silent=True)
         if not tophat:
             return None
         raw_bins = tophat['bins']
