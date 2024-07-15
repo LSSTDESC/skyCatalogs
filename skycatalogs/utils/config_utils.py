@@ -217,8 +217,12 @@ class Config(DelegatorBase):
             self._schema_version = cfg['schema_version']
         else:
             self._schema_version = self.get_config_value('provenance/versioning/schema_version', silent=True)
+
+        self._schema_pre_130 = True
         if self._schema_version:
             self._cmps = [int(c) for c in self._schema_version.split('.')]
+            if (self._cmps[0] > 1) or (self._cmps[0] == 1 and self._cmps[1] > 2):
+                self._schema_pre_130 = False
 
     def __getitem__(self, k):
         '''
@@ -234,22 +238,25 @@ class Config(DelegatorBase):
     def schema_version(self):
         return self._schema_version
 
+    def schema_pre_130(self):
+        ''' If schema version is older than 1.3.0, structure is different'''
+        return self._schema_pre_130
+
     def list_object_types(self):
         return self._cfg['object_types'].keys()
 
     def object_is_composite(self, objectname):
         return 'composite' in self._cfg['object_types'][objectname]
 
-    def get_tophat_parameters(self, schema_version=None):
+    def get_tophat_parameters(self):
         '''
         Return list of named tuples
         Should maybe be part of Sky Catalogs API
         '''
-        tophat_path = 'SED_models/tophat'
-        if schema_version:
-            cmps = self._cmps
-            if (cmps[0] > 1) or (cmps[0] == 1 and cmps[1] > 2):
-                tophat_path = 'object_types/galaxy/tophat'
+        if self._schema_pre_130:
+            tophat_path = 'SED_models/tophat'
+        else:
+            tophat_path = 'object_types/galaxy/tophat'
 
         tophat = self.get_config_value(tophat_path, silent=True)
         if not tophat:
@@ -258,7 +265,7 @@ class Config(DelegatorBase):
 
         return [Tophat(b[0], b[1]) for b in raw_bins]
 
-    def get_cosmology(self, schema_version, object_type=None):
+    def get_cosmology(self, object_type=None):
         '''
         Return cosmology parameters.  Location in config will depend
         on schema version and object type
@@ -271,11 +278,12 @@ class Config(DelegatorBase):
                                            object type present
         Return          dict or None
         '''
-        old_style = True
-        if schema_version:
-            cmps = self._cmps
-            if (cmps[0] > 1) or (cmps[0] == 1 and cmps[1] > 2):
-                old_style = False
+        old_style = self._schema_pre_130
+        if self._schema_version:
+            # cmps = self._cmps
+            # if (cmps[0] > 1) or (cmps[0] == 1 and cmps[1] > 2):
+            old_style = self._schema_pre_130
+            if not old_style:
                 if not object_type:
                     if 'galaxy' in self._cfg['object_types']:
                         object_type = 'galaxy'
@@ -286,6 +294,13 @@ class Config(DelegatorBase):
                 return self._cfg['object_types'][object_type]['Cosmology']
         if old_style:
             return self._cfg['Cosmology']
+
+    def get_sso_sed_path(self):
+        if self._schema_pre_130:
+            return self._cfg['provenance']['inputs'].get('sso_sed',
+                                                         'sso_sed.db')
+        else:
+            return self._cfg['object_types']['sso']['provenance']['inputs'].get('sso_sed', 'sso_sed.db')
 
     def get_config_value(self, key_path, silent=False):
         '''

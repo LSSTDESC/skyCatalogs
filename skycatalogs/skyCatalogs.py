@@ -320,11 +320,10 @@ class SkyCatalog(object):
         # input galaxy catalog with format like cosmoDC2, which includes
         # definitions of tophat SEDs.
         # In other cases th_parameters below will be None
-        th_parameters = self._config.get_tophat_parameters(
-            schema_version=self._schema_version)
+        th_parameters = self._config.get_tophat_parameters()
         available_types = self._config.list_object_types()
         if ('galaxy' in available_types) or ('diffsky_galaxy') in available_types:
-            cosmology = self._config.get_cosmology(self._schema_version)
+            cosmology = self._config.get_cosmology()
             if th_parameters:
                 self._observed_sed_factory =\
                     TophatSedFactory(th_parameters, cosmology)
@@ -334,9 +333,7 @@ class SkyCatalog(object):
                                       config['object_types']['diffsky_galaxy']
                                       ['sed_file_template'], cosmology)
         if 'sso' in config['object_types']:
-            self._sso_sed_path = config['provenance']['inputs'].get('sso_sed',
-                                                                    'sso_sed.db')
-
+            self._sso_sed_path = self._config.get_sso_sed_path()
             self._sso_sed_factory = SsoSedFactory(self._sso_sed_path)
             if not self._sso_sed_factory:
                 self._logger.warning('SSO appear in the list of available object types but supporting files do not exist')
