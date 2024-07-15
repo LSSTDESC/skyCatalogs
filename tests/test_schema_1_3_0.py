@@ -36,7 +36,7 @@ class SchemaTester(unittest.TestCase):
     def tearDown(self):
         pass                  # nothing to do
 
-    def testAPI_region(self):
+    def testAPI_region_1_3_0(self):
         '''
         Exercise get_objects_by_region for box and disk and parts of the
         interfaces for BaseObject, ObjectCollection and ObjectList
@@ -210,7 +210,7 @@ class SchemaTester(unittest.TestCase):
 
 
 
-    def testAPI_hp(self):
+    def testAPI_hp_1_3_0(self):
         '''
         Try with and without specified object types
         '''
@@ -249,7 +249,7 @@ class SchemaTester(unittest.TestCase):
         obj_type = 'galaxy'
         specified = cat.get_object_type_by_hp(hp, obj_type, region=None)
         print_from_objects(f'From hp {hp} with object types {obj_type}', specified)
-    def testAPI_rowgroup(self):
+    def testAPI_rowgroup_1_3_0(self):
         '''
         Compare results of get_objects_by_region when skyCatalog files
         each have a single row group or have several
