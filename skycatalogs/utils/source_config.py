@@ -178,7 +178,7 @@ def create_snana_config(provenance, area_partition=None, data_file_type=None):
 def create_sso_config(provenance, area_partition=None, data_file_type=None):
     opt_dict = {'area_partition': area_partition,
                 'data_file_type': data_file_type}
-    return _generic_create('sso_template_yaml', provenance, opt_dict)
+    return _generic_create('sso_template.yaml', provenance, opt_dict)
 
 
 def _generic_create(template_filename, provenance, opt):

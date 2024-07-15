@@ -6,6 +6,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from .objects.base_object import LSST_BANDS
+from .utils.config_utils import assemble_provenance
 
 """
 Code for creating sky catalogs for sso objects
@@ -184,11 +185,12 @@ class SsoCatalogCreator:
             self._write_hp(h, hps_by_file, arrow_schema)
 
         # Add config information for sso
-        prov = assemble_provenance(self._catalog_creator._pkg_root,
-                                   inputs={'sso_truth': self._sso_truth,
-                                           'sso_sed' : self._sso_sed},
-                                   run_options=self._catalog_creator._run_options)
-        self._catalog_creator.config_writer.write_configs('sso', prov)
+        prov = assemble_provenance(
+            self._catalog_creator._pkg_root,
+            inputs={'sso_truth': self._sso_truth,
+                    'sso_sed' : self._sso_sed},
+            run_options=self._catalog_creator._run_options)
+        self._catalog_creator._config_writer.write_configs('sso', prov)
 
     def _create_sso_flux_pixel(self, pixel, arrow_schema):
         '''
