@@ -1,0 +1,51 @@
+area_partition:
+  nside: 32
+  ordering: ring
+  type: healpix
+data_file_type: parquet
+file_nm:
+  units: nm
+file_template: pointsource_(?P<healpix>\d+).parquet
+flux_file_template: pointsource_flux_(?P<healpix>\d+).parquet
+internal_extinction: None
+provenance:
+  inputs:
+    star_truth: /global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db
+  run_options:
+    catalog_dir: ci_sample
+    catalog_name: skyCatalog
+    config_path: null
+    dc2: false
+    flux_parallel: 16
+    galaxy_magnitude_cut: 29.0
+    galaxy_nside: 32
+    galaxy_stride: 1000000
+    galaxy_truth: null
+    galaxy_type: cosmodc2
+    include_roman_flux: false
+    knots_magnitude_cut: 27.0
+    log_level: DEBUG
+    no_flux: true
+    no_galaxies: true
+    no_knots: false
+    no_main: false
+    no_pointsources: false
+    options_file: local/out_config/star_main.yaml
+    pixels:
+    - 9556 9683 9684 9812 9813 9940
+    sed_subdir: galaxyTopHatSED
+    skip_done: true
+    skycatalog_root: null
+    sso: false
+    sso_sed: null
+    sso_truth: null
+    star_input_fmt: sqlite
+  skyCatalogs_repo:
+    git_branch: master
+    git_hash: defa84b868c1067d354b19a8287ace339d286790
+    git_status:
+    - UNTRACKED_FILES
+  versioning:
+    schema_version: 1.3.0
+sed_file_root_env_var: SIMS_SED_LIBRARY_DIR
+sed_model: file_nm

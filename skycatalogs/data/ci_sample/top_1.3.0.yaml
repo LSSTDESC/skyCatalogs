@@ -1,0 +1,7 @@
+catalog_dir: ci_sample
+catalog_name: top_1.3.0
+schema_version: 1.3.0
+skycatalog_root: /global/cscratch1/sd/jrbogart/desc/skycatalogs
+object_types:
+  galaxy: !include galaxy_1.3.0.yaml
+  star:   !include star_1.3.0.yaml
