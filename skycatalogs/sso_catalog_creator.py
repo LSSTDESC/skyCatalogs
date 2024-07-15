@@ -291,7 +291,7 @@ class SsoCatalogCreator:
         from .skyCatalogs import open_catalog
 
         arrow_schema = self._create_flux_schema()
-        config_file = self._catalog_creator.write_config(path_only=True)
+        config_file = self._catalog_creator.get_config_path()
         self._cat = open_catalog(config_file,
                                  skycatalog_root=self._catalog_creator._skycatalog_root)
         sso_config = self._cat.raw_config['object_types']['sso']

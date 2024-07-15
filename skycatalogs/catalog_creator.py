@@ -740,7 +740,6 @@ class CatalogCreator:
         self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
 
         if not config_file:
-            # config_file = self.write_config(path_only=True)
             config_file = self.get_config_path()
         if not self._cat:
             self._cat = open_catalog(config_file,
@@ -1021,7 +1020,6 @@ class CatalogCreator:
         self._ps_flux_schema = make_star_flux_schema(self._logname,
                                                      metadata_input=file_metadata)
         if not config_file:
-            # config_file = self.write_config(path_only=True)
             config_file = self.get_config_path()
 
         # Always open catalog. If it was opened for galaxies earlier
