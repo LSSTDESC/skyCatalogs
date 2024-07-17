@@ -34,8 +34,8 @@ def create_galaxy_config(provenance, cosmology, tophat_bins,
     -------
     A dict
 
-The resulting dict looks much like the file galaxy_template.yaml under
-skycatalogs/cfg_templates with added tophat bins, provenance and cosmology
+    The resulting dict looks much like the file galaxy_template.yaml under
+    skycatalogs/cfg_templates with added tophat bins, provenance and cosmology
 
     '''
     opt_dict = {'area_partition': area_partition,

@@ -278,22 +278,17 @@ class Config(DelegatorBase):
                                            object type present
         Return          dict or None
         '''
-        old_style = self._schema_pre_130
-        if self._schema_version:
-            # cmps = self._cmps
-            # if (cmps[0] > 1) or (cmps[0] == 1 and cmps[1] > 2):
-            old_style = self._schema_pre_130
-            if not old_style:
-                if not object_type:
-                    if 'galaxy' in self._cfg['object_types']:
-                        object_type = 'galaxy'
-                    elif 'diffsky_galaxy' in self._cfg['object_types']:
-                        object_type = 'diffsky_galaxy'
-                    else:
-                        return None
-                return self._cfg['object_types'][object_type]['Cosmology']
-        if old_style:
+        if self._schema_pre_130:
             return self._cfg['Cosmology']
+
+        if not object_type:
+            if 'galaxy' in self._cfg['object_types']:
+                object_type = 'galaxy'
+            elif 'diffsky_galaxy' in self._cfg['object_types']:
+                object_type = 'diffsky_galaxy'
+            else:
+                return None
+        return self._cfg['object_types'][object_type]['Cosmology']
 
     def get_sso_sed_path(self):
         if self._schema_pre_130:
@@ -349,6 +344,7 @@ class Config(DelegatorBase):
 
 def create_config(catalog_name, logname=None):
     return Config({'catalog_name': catalog_name}, logname)
+
 
 # A collection of utilities used by CatalogCreator to assemble and write
 # configs
@@ -488,7 +484,7 @@ def _read_yaml(inpath, silent=True, resolve_include=True):
             raise ex
 
 
-class ConfigWriter():
+class ConfigWriter:
     '''
     Saves a little context needed by utilities
     '''
@@ -518,16 +514,16 @@ class ConfigWriter():
           * it doesn't already exist     or
           * we're allowed to overwrite
         '''
-        if not self._overwrite:
-            try:
-                with open(outpath, mode='x') as f:
-                    yaml.dump(input_dict, f)
-            except FileExistsError:
-                txt = 'write_yaml: Will not overwrite pre-existing config'
-                self._logger.warning(txt + outpath)
-                return
-        else:
+        if self._overwrite:
             return self.update_yaml(input_dict, outpath)
+
+        try:
+            with open(outpath, mode='x') as f:
+                yaml.dump(input_dict, f)
+        except FileExistsError:
+            txt = 'write_yaml: Will not overwrite pre-existing config'
+            self._logger.warning(txt + outpath)
+            return
 
         return outpath
 
@@ -581,6 +577,7 @@ class ConfigWriter():
         class IncludeValue(str):
             def __new__(cls, a):
                 return str.__new__(cls, a)
+
             def __repr__(self):
                 return "IncludeValue(%s)" % self
 
@@ -646,7 +643,7 @@ class ConfigWriter():
             # Otherwise need to add or modify value for our object type
             # First have to fix values for any other object types already
             # mentions.  Value read in looks like "!include an_obj_type.yaml"
-            for k,v in top['object_types'].items():
+            for k, v in top['object_types'].items():
                 cmps = v.split(' ')
                 new_value = IncludeValue(cmps[1])
                 top['object_types'][k] = new_value
