@@ -12,8 +12,7 @@ from multiprocessing import Process, Pipe
 import sqlite3
 from .utils.sed_tools import TophatSedFactory, get_star_sed_path
 from .utils.sed_tools import generate_sed_path
-from .utils.config_utils import create_config
-from .utils.config_utils import assemble_MW_extinction, assemble_cosmology
+from .utils.config_utils import assemble_cosmology
 from .utils.config_utils import assemble_provenance
 from .utils.config_utils import assemble_file_metadata
 from .utils.config_utils import ConfigWriter
@@ -25,6 +24,9 @@ from .utils.parquet_schema_utils import make_star_schema
 from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.base_object import LSST_BANDS
 from .objects.base_object import ROMAN_BANDS
+from .objects.star_object import StarConfigFragment
+from .objects.galaxy_object import GalaxyConfigFragment
+from .objects.diffsky_object import DiffskyConfigFragment
 from .sso_catalog_creator import SsoCatalogCreator
 
 """
@@ -385,7 +387,6 @@ class CatalogCreator:
                                            not self._skip_done,
                                            self._logname)
 
-
     def _make_tophat_columns(self, dat, names, cmp):
         '''
         Create columns sed_val_cmp, cmp_magnorm where cmp is one of "disk",
@@ -482,17 +483,13 @@ class CatalogCreator:
         prov = assemble_provenance(self._pkg_root,
                                    inputs={'galaxy_truth': self._galaxy_truth},
                                    run_options=self._run_options)
+        cosmo = assemble_cosmology(self._cosmology)
         if self._galaxy_type == 'diffsky':
-            object_type = 'diffsky_galaxy'
-            cosmo = assemble_cosmology(self._cosmology)
-            self._config_writer.write_configs(object_type, prov,
-                                              cosmology=cosmo)
+            fragment = DiffskyConfigFragment(prov, cosmo)
+            self._config_writer.write_configs(fragment)
         else:
-            object_type = 'galaxy'
-            cosmo = assemble_cosmology(self._cosmology)
-            self._config_writer.write_configs(object_type, prov,
-                                              cosmology=cosmo,
-                                              tophat_bins=self._tophat_sed_bins)
+            fragment = GalaxyConfigFragment(prov, cosmo, self._tophat_sed_bins)
+            self._config_writer.write_configs(fragment)
 
     def _write_subpixel(self, dat=None, output_path=None, arrow_schema=None,
                         to_rename=dict(), stride=100000):
@@ -924,8 +921,8 @@ class CatalogCreator:
         prov = assemble_provenance(self._pkg_root,
                                    inputs={'star_truth': self._star_truth},
                                    run_options=self._run_options)
-        self._config_writer.write_configs('star', prov)
-
+        fragment = StarConfigFragment(prov)
+        self._config_writer.write_configs(fragment)
 
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None):
         if not star_cat:

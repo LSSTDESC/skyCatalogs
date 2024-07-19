@@ -7,13 +7,6 @@ import logging
 from typing import Any
 from .exceptions import ConfigDuplicateKeyError
 from collections import namedtuple
-from .source_config import create_galaxy_config
-from skycatalogs.utils.source_config import create_diffsky_galaxy_config
-from .source_config import create_star_config
-from .source_config import create_sso_config
-from .source_config import create_snana_config
-from .source_config import create_gaia_star_butler_config
-from .source_config import create_gaia_star_direct_config
 
 __all__ = ['Config', 'open_config_file', 'Tophat', 'create_config',
            'assemble_MW_extinction', 'assemble_cosmology',
@@ -499,15 +492,6 @@ class ConfigWriter:
             logname = 'skyCatalogs:ConfigUtils'
         self._logger = logging.getLogger(logname)
 
-        # associate fragment name with config builder
-        self._make_frag = {'star': create_star_config,
-                           'galaxy': create_galaxy_config,
-                           'diffsky_galaxy': create_diffsky_galaxy_config,
-                           'sso': create_sso_config,
-                           'snana': create_snana_config,
-                           'gaia_star_butler': create_gaia_star_butler_config,
-                           'gaia_star_direct': create_gaia_star_direct_config}
-
     def write_yaml(self, input_dict, outpath):
         '''
         Write yaml file if
@@ -548,9 +532,7 @@ class ConfigWriter:
         incoming = schema_version.split('.')
         return current[0] == incoming[0]
 
-    def write_configs(self, object_type, provenance, cosmology=None,
-                      tophat_bins=None, fragment_name=None, id_prefix=None,
-                      butler_parameters=None, basename_template=None):
+    def write_configs(self, config_fragment):
         '''
         Write yaml fragment for specified object type and write or update
         top yaml file if
@@ -559,15 +541,9 @@ class ConfigWriter:
 
         Parameters
         ----------
-        object_type   string       An object type
-        provenance    dict
-        cosmology     dict         Ignored for all but galaxy, diffsky_galaxy
-        tophat_bins   list         Ignored for all but galaxy
-        fragment_name string       Name (not include '.yaml') of file to be
-                                   written.  Defaults to object_type
-        id_prefix     string       Ignored for all but gaia_star
-        butler_parameters dict     Ignored for all but gaia_star (via butler)
-        basename_template string   Ignored for all but gaia_star (direct FITS)
+        config_fragment   BaseConfigFragment   Knows how to create
+                                               config_fragment for a particular
+                                               object type
         '''
 
         # Need the following machinery (class IncludeValue; routine
@@ -592,7 +568,7 @@ class ConfigWriter:
         top = _read_yaml(top_path, silent=True, resolve_include=False)
         if top:
             top_exists = True
-            object_type_exists = object_type in top['object_types']
+            object_type_exists = config_fragment.object_type in top['object_types']
             schema_version = self.find_schema_version(top)
         else:
             top_exists = False
@@ -609,31 +585,14 @@ class ConfigWriter:
                 return
 
         # Generate and write fragment for the object type
-        if not fragment_name:
-            fragment_name = object_type
-        if fragment_name in {'star', 'sso', 'snana'}:
-            frag = self._make_frag[fragment_name](provenance)
-        elif fragment_name == 'diffsky_galaxy':
-            frag = self._make_frag[fragment_name](provenance, cosmology)
-        elif fragment_name == 'galaxy':
-            frag = self._make_frag[fragment_name](provenance, cosmology,
-                                                  tophat_bins)
-        elif fragment_name == 'gaia_star_butler':
-            frag = self._make_frag[fragment_name](provenance,
-                                                  id_prefix=id_prefix,
-                                                  butler_parameters=butler_parameters)
-        elif fragment_name == 'gaia_star_direct':
-            frag = self._make_frag[fragment_name](provenance,
-                                                  id_prefix=id_prefix,
-                                                  basename_template=basename_template)
-        else:
-            raise ValueError(f'ConfigWriter.write_configs: unknown fragment {fragment_name}')
-        basen = fragment_name + '.yaml'
-        frag_path = os.path.join(self._out_dir, basen)
+        fragment_name = config_fragment.fragment_name
+        frag = config_fragment.make_fragment()
+        frag_path = os.path.join(self._out_dir, fragment_name)
         self.write_yaml(frag, frag_path)
 
         # Write or update top file if necessary
-        value = IncludeValue(basen)
+        object_type = config_fragment.object_type
+        value = IncludeValue(fragment_name)
         yaml.add_representer(IncludeValue, include_representer)
         if top_exists and not overwrite:
             if object_type_exists and top['object_types'][object_type] == value:

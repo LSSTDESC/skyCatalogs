@@ -6,6 +6,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from .objects.base_object import LSST_BANDS
+from .objects.sso_object import SsoConfigFragment
 from .utils.config_utils import assemble_provenance
 
 """
@@ -188,9 +189,10 @@ class SsoCatalogCreator:
         prov = assemble_provenance(
             self._catalog_creator._pkg_root,
             inputs={'sso_truth': self._sso_truth,
-                    'sso_sed' : self._sso_sed},
+                    'sso_sed': self._sso_sed},
             run_options=self._catalog_creator._run_options)
-        self._catalog_creator._config_writer.write_configs('sso', prov)
+        sso_fragment = SsoConfigFragment(prov)
+        self._catalog_creator._config_writer.write_configs(sso_fragment)
 
     def _create_sso_flux_pixel(self, pixel, arrow_schema):
         '''

@@ -1,9 +1,9 @@
-# import numpy as np
 import galsim
 import numpy as np
 from .base_object import BaseObject
+from .base_config_fragment import BaseConfigFragment
 
-__all__ = ['DiffskyObject']
+__all__ = ['DiffskyObject', 'DiffskyConfigFragment']
 
 
 class DiffskyObject(BaseObject):
@@ -37,27 +37,28 @@ class DiffskyObject(BaseObject):
             pixel = self.partition_id
 
             sky_cat = self._belongs_to._sky_catalog
-            self._seds = sky_cat.observed_sed_factory.create(pixel, self.id, z_h, z)
-
+            self._seds = sky_cat.observed_sed_factory.create(pixel, self.id,
+                                                             z_h, z)
         return self._seds[component]
 
-    def get_knot_size(self,z):
+    def get_knot_size(self, z):
         """
-        Return the angular knot size. Knots are modelled as the same physical size
+        Return the angular knot size. Knots are modelled as the same
+        physical size
         """
         # Deceleration paramameter
-        q  = -0.5
+        q = -0.5
         # Angular diameter scaling approximation in pc
         dA = (3e9/q**2)*(z*q+(q-1)*(np.sqrt(2*q*z+1)-1))/(1+z)**2*(1.4-0.53*z)
         # Using typical knot size 250pc, convert to sigma in arcmin
-        if z<0.6:
+        if z < 0.6:
             return 206264.8*250/dA/2.355
         else:
-            # Above z=0.6, fractional contribution to post-convolved size 
+            # Above z=0.6, fractional contribution to post-convolved size
             # is <20% for smallest Roman PSF size, so can treat as point source
             return None
 
-    def get_knot_n(self,rng=None):
+    def get_knot_n(self, rng=None):
         """
         Return random value for number of knots based on galaxy sm.
         """
@@ -66,11 +67,11 @@ class DiffskyObject(BaseObject):
         else:
             ud = galsim.UniformDeviate(int(self.id))
         sm = np.log10(self.get_native_attribute('um_source_galaxy_obs_sm'))
-        m  = (50-3)/(12-6) # (knot_n range)/(logsm range)
+        m = (50-3)/(12-6)  # (knot_n range)/(logsm range)
         n_knot_max = m*(sm-6)+3
-        n_knot = int(ud()*n_knot_max) # random n up to n_knot_max
-        if n_knot==0:
-            n_knot+=1 # need at least 1 knot
+        n_knot = int(ud()*n_knot_max)  # random n up to n_knot_max
+        if n_knot == 0:
+            n_knot += 1  # need at least 1 knot
         return n_knot
 
     def get_wl_params(self):
@@ -121,15 +122,15 @@ class DiffskyObject(BaseObject):
             if component == 'knots':
                 npoints = self.get_knot_n()
                 assert npoints > 0
-                knot_profile = galsim.Sersic(n=self._sersic_disk, 
-                                            half_light_radius=hlr/2.,
-                                            gsparams=gsparams)
+                knot_profile = galsim.Sersic(n=self._sersic_disk,
+                                             half_light_radius=hlr/2.,
+                                             gsparams=gsparams)
                 knot_profile = knot_profile._shear(shear)
                 obj = galsim.RandomKnots(npoints=npoints,
                                          profile=knot_profile, rng=rng,
                                          gsparams=gsparams)
                 z = self.get_native_attribute('redshift')
-                size = self.get_knot_size(z) # get knot size
+                size = self.get_knot_size(z)  # get knot size
                 if size is not None:
                     obj = galsim.Convolve(obj, galsim.Gaussian(sigma=size))
                 obj_dict[component] = obj
@@ -150,3 +151,18 @@ class DiffskyObject(BaseObject):
         if sed is not None:
             sed = self._apply_component_extinction(sed)
         return sed
+
+
+class DiffskyConfigFragment(BaseConfigFragment):
+    def __init__(self, prov, cosmology,
+                 area_partition=None, data_file_type=None):
+        self.super().__init__(prov, object_type_name='diffsky_galaxy')
+
+        self._opt_dict = {'area_partition': area_partition,
+                          'data_file_type': data_file_type}
+        self._cosmology = cosmology
+
+    def make_fragment(self):
+        data = self.generic_create()
+        data['Cosmology'] = self._cosmology
+        return data

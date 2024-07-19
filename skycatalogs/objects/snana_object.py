@@ -3,9 +3,10 @@ import galsim
 import h5py
 import numpy as np
 from .base_object import BaseObject, ObjectCollection
+from .base_config_fragment import BaseConfigFragment
 from skycatalogs.utils.exceptions import SkyCatalogsRuntimeError
 
-__all__ = ['SnanaObject', 'SnanaCollection']
+__all__ = ['SnanaObject', 'SnanaCollection', 'SnanaConfigFragment']
 
 _map_SNANA_bands = {'R062': 'R',
                     'Z087': 'Z',
@@ -15,6 +16,7 @@ _map_SNANA_bands = {'R062': 'R',
                     'F184': 'F',
                     'K213': 'K',
                     'W146': 'W'}
+
 
 class SnanaObject(BaseObject):
     _type_name = 'snana'
@@ -215,3 +217,14 @@ class SnanaCollection(ObjectCollection):
         super().__init__(ra, dec, id, object_type, partition_id,
                          sky_catalog, region=region, mjd=mjd, mask=mask,
                          readers=readers, row_group=row_group)
+
+
+class SnanaConfigFragment(BaseConfigFragment):
+    def __init__(self, prov, area_partition=None, data_file_type=None):
+        super().__init__(prov, object_type_name='snana')
+
+        self._opt_dict = {'area_partition': area_partition,
+                          'data_file_type': data_file_type}
+
+    def make_fragment(self):
+        return self.generic_create()
