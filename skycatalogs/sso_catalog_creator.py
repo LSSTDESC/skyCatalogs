@@ -5,9 +5,12 @@ import sqlite3
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import json
 from .objects.base_object import LSST_BANDS
 from .objects.sso_object import SsoConfigFragment
 from .utils.config_utils import assemble_provenance
+from .utils.config_utils import assemble_file_metadata
+
 
 """
 Code for creating sky catalogs for sso objects
@@ -108,7 +111,8 @@ class SsoCatalogCreator:
     def sso_sed(self):
         return self._sso_sed
 
-    def _create_main_schema(self):
+    def _create_main_schema(self, metadata_input=None,
+                            metadata_key='provenance'):
 
         fields = [
             pa.field('id', pa.string()),
@@ -118,9 +122,16 @@ class SsoCatalogCreator:
             pa.field('trailed_source_mag', pa.float64()),
             pa.field('ra_rate', pa.float64()),
             pa.field('dec_rate', pa.float64())]
-        return pa.schema(fields)
+        if metadata_input:
+            metadata_bytes = json.dumps(metadata_input).encode('utf8')
+            final_metadata = {metadata_key: metadata_bytes}
+        else:
+            final_metadata = None
 
-    def _create_flux_schema(self):
+        return pa.schema(fields, metadata=final_metadata)
+
+    def _create_flux_schema(self, metadata_input=None,
+                            metadata_key='provenance'):
         # id, mjd and 6 flux fields (for now.  Maybe later also Roman)
         fields = [
             pa.field('id', pa.string()),
@@ -131,7 +142,13 @@ class SsoCatalogCreator:
             pa.field('lsst_flux_i', pa.float32(), True),
             pa.field('lsst_flux_z', pa.float32(), True),
             pa.field('lsst_flux_y', pa.float32(), True)]
-        return pa.schema(fields)
+        if metadata_input:
+            metadata_bytes = json.dumps(metadata_input).encode('utf8')
+            final_metadata = {metadata_key: metadata_bytes}
+        else:
+            final_metadata = None
+
+        return pa.schema(fields, metadata=final_metadata)
 
     def _get_hps(self, filepath):
 
@@ -170,7 +187,12 @@ class SsoCatalogCreator:
         #  Find all the db files from Sorcha.   They should all be in a single
         #  directory with no other files in that directory
         files = os.listdir(self._sso_truth)
-        arrow_schema = self._create_main_schema()
+        inputs = {'sso_truth': self._sso_truth, 'sso_sed': self._sso_sed}
+        run_options = self._catalog_creator._run_options
+        file_metadata = assemble_file_metadata(self._catalog_creator._pkg_root,
+                                               inputs=inputs,
+                                               run_options=run_options)
+        arrow_schema = self._create_main_schema(metadata_input=file_metadata)
         db_files = [os.path.join(self._sso_truth, f) for f in files if f.endswith('.db')]
 
         all_hps = set()
@@ -294,13 +316,21 @@ class SsoCatalogCreator:
         """
         from .skyCatalogs import open_catalog
 
-        arrow_schema = self._create_flux_schema()
         config_file = self._catalog_creator.get_config_path()
         self._cat = open_catalog(config_file,
                                  skycatalog_root=self._catalog_creator._skycatalog_root)
         sso_config = self._cat.raw_config['object_types']['sso']
         self._flux_template = sso_config['flux_file_template']
         self._main_template = sso_config['file_template']
+
+        thru_v = {'lsst_throughputs_version': self._catalog_creator._cat._lsst_thru_v}
+        file_metadata = assemble_file_metadata(
+            self._catalog_creator._pkg_root,
+            run_options=self._catalog_creator._run_options,
+            flux_file=True,
+            throughputs_versions=thru_v)
+
+        arrow_schema = self._create_flux_schema(metadata_input=file_metadata)
 
         self._logger.info('Creating sso flux files')
 
