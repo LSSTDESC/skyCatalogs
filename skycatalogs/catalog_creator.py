@@ -727,20 +727,27 @@ class CatalogCreator:
         from .skyCatalogs import open_catalog
         self._sed_gen = None
 
-        file_metadata = assemble_file_metadata(self._pkg_root,
-                                               run_options=self._run_options,
-                                               flux_file=True)
-        self._gal_flux_schema =\
-            make_galaxy_flux_schema(self._logname, self._galaxy_type,
-                                    include_roman_flux=self._include_roman_flux,
-                                    metadata_input=file_metadata)
-        self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
-
         if not config_file:
             config_file = self.get_config_path()
         if not self._cat:
             self._cat = open_catalog(config_file,
                                      skycatalog_root=self._skycatalog_root)
+
+        # Throughput versions for fluxes included
+        thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
+        if self._include_roman_flux:
+            thru_v['roman_throughputs_version'] = self._cat._roman_thru_v
+
+        file_metadata = assemble_file_metadata(
+            self._pkg_root,
+            run_options=self._run_options,
+            flux_file=True,
+            throughputs_versions=thru_v)
+        self._gal_flux_schema =\
+            make_galaxy_flux_schema(self._logname, self._galaxy_type,
+                                    include_roman_flux=self._include_roman_flux,
+                                    metadata_input=file_metadata)
+        self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
 
         # Might also open a main file and read its metadata to be sure
         # the value for stride is correct.
@@ -1001,7 +1008,7 @@ class CatalogCreator:
         Parameters
         ----------
         Path to config created in first stage so we can find the main
-        galaxy files.
+        star files
 
         Return
         ------
@@ -1010,12 +1017,6 @@ class CatalogCreator:
 
         from .skyCatalogs import open_catalog
 
-        file_metadata = assemble_file_metadata(self._pkg_root,
-                                               run_options=self._run_options,
-                                               flux_file=True)
-
-        self._ps_flux_schema = make_star_flux_schema(self._logname,
-                                                     metadata_input=file_metadata)
         if not config_file:
             config_file = self.get_config_path()
 
@@ -1023,6 +1024,15 @@ class CatalogCreator:
         # it won't know about star files.
         self._cat = open_catalog(config_file,
                                  skycatalog_root=self._skycatalog_root)
+        thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
+        file_metadata = assemble_file_metadata(
+            self._pkg_root,
+            run_options=self._run_options,
+            flux_file=True,
+            throughputs_versions=thru_v)
+
+        self._ps_flux_schema = make_star_flux_schema(self._logname,
+                                                     metadata_input=file_metadata)
 
         self._flux_template = self._cat.raw_config['object_types']['star']['flux_file_template']
 

@@ -1,7 +1,6 @@
 from collections.abc import Sequence, Iterable
 from collections import namedtuple
 import os
-import itertools
 import numpy as np
 import galsim
 from galsim.roman import longwave_bands as roman_longwave_bands
@@ -30,7 +29,7 @@ ROMAN_BANDS = roman_shortwave_bands+roman_longwave_bands
 def load_lsst_bandpasses():
     '''
     Read in lsst bandpasses from standard place, trim, and store in global dict
-    Returns: The dict
+    Returns: The dict and throughputs version
     '''
     global lsst_bandpasses
     lsst_bandpasses = dict()
@@ -51,6 +50,11 @@ def load_lsst_bandpasses():
             else:
                 # logger.info('Using galsim built-in bandpasses')
                 bp_dir = None
+    if bp_dir:
+        with open(os.path.join(bp_dir, 'version_info')) as f:
+            version = f.read().strip()
+    else:
+        version = 'galsim_builtin'
 
     for band in LSST_BANDS:
         if bp_dir:
@@ -70,7 +74,7 @@ def load_lsst_bandpasses():
         bp = bp.withZeropoint('AB')
         lsst_bandpasses[band] = bp
 
-    return lsst_bandpasses
+    return lsst_bandpasses, version
 
 
 def load_roman_bandpasses():
@@ -80,7 +84,7 @@ def load_roman_bandpasses():
     '''
     global roman_bandpasses
     roman_bandpasses = roman_getBandpasses()
-    return roman_bandpasses
+    return roman_bandpasses, 'galsim_builtin'
 
 
 class BaseObject(object):
@@ -600,7 +604,7 @@ class ObjectCollection(Sequence):
             return [self.__getitem__(i) for i in range(self.__len__())[key]]
 
         elif type(key) == tuple and isinstance(key[0], Iterable):
-            return[self.__getitem__(i) for i in key[0]]
+            return [self.__getitem__(i) for i in key[0]]
 
     def get_partition_id(self):
         return self._partition_id
@@ -650,7 +654,7 @@ class ObjectList(Sequence):
         if isinstance(coll, ObjectCollection):
             self._total_len += len(coll)
             self._located.append(LocatedCollection(coll, old, self._total_len))
-        else:  #  list of collections
+        else:  # list of collections
             for c in coll:
                 self._total_len += len(c)
                 self._located.append(LocatedCollection(c, old, self._total_len))

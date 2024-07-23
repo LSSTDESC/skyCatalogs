@@ -421,7 +421,8 @@ def assemble_provenance(pkg_root, inputs={}, run_options=None,
 
 
 def assemble_file_metadata(pkg_root, inputs=None, run_options=None,
-                           flux_file=False):
+                           flux_file=False, throughputs_versions=None):
+    #                      flux_file=False):
     '''
     Assemble the metadata to be included in a skyCatalogs binary data file
     '''
@@ -433,6 +434,10 @@ def assemble_file_metadata(pkg_root, inputs=None, run_options=None,
         to_return['flux_dependencies'] = dict()
         from galsim import version as galsim_version
         to_return['flux_dependencies']['galsim_version'] = galsim_version
+        if throughputs_versions:
+            for k, v in throughputs_versions.items():
+                to_return['flux_dependencies'][k] = v
+
     return to_return
 
 
