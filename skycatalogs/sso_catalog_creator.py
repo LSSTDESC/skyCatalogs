@@ -323,7 +323,7 @@ class SsoCatalogCreator:
         self._flux_template = sso_config['flux_file_template']
         self._main_template = sso_config['file_template']
 
-        thru_v = {'lsst_throughputs_version': self._catalog_creator._cat._lsst_thru_v}
+        thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
         file_metadata = assemble_file_metadata(
             self._catalog_creator._pkg_root,
             run_options=self._catalog_creator._run_options,
