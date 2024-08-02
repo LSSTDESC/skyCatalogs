@@ -261,7 +261,7 @@ class SkyCatalog(object):
     point sources, SSOs
 
     '''
-    def __init__(self, config, mp=False, skycatalog_root=None, verbose=False,
+    def __init__(self, config, mp=False, skycatalog_root=None,
                  loglevel='INFO'):
         '''
         Parameters
@@ -270,6 +270,7 @@ class SkyCatalog(object):
         mp:      boolean  Default False. Set True to enable multiprocessing.
         skycatalog_root: If not None, overrides value in config or
                          in environment variable SKYCATALOG_ROOT
+        loglevel: logging level
         '''
         self._config = Config(config)
         self._global_partition = None
@@ -307,7 +308,6 @@ class SkyCatalog(object):
         # There may be more to do at this point but not too much.
         # In particular, don't read in anything from data files
 
-        self.verbose = verbose
         self._validate_config()
 
         # Outer dict: hpid for key. Value is another dict
@@ -565,9 +565,8 @@ class SkyCatalog(object):
         # Take intersection of obj_type_list and available object types
         # Determine healpix intersecting the region
 
-        if self.verbose:
-            print("Region ", region)
-            print("obj_type_set ", obj_type_set)
+        self._logger.info("Region %s", region)
+        self._logger.info("obj_type_set %s", obj_type_set)
 
         object_list = ObjectList()
         if obj_type_set is None:
@@ -665,8 +664,8 @@ class SkyCatalog(object):
 
         coll_class = self.cat_cxt.lookup_collection_type(object_type)
 
-        if self.verbose:
-            print('Working on healpix pixel ', hp)
+        self._logger.info('Working on healpix pixel %s', hp)
+
         rdr_ot = dict()   # maps readers to set of object types it reads
 
         if 'file_template' in self._config['object_types'][object_type]:
@@ -779,7 +778,7 @@ class SkyCatalog(object):
         pass
 
 
-def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
+def open_catalog(config_file, mp=False, skycatalog_root=None, loglevel="INFO"):
     '''
     Parameters
     ----------
@@ -791,6 +790,7 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
                     key skycatalog_root.  However set, this value
                     joined to value of the key catalog_dir will be used
                     to find the catalog data.
+    loglevel logging level
 
     Returns
     -------
@@ -801,7 +801,7 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
 
     config_dict = open_config_file(config_file)
     cat = SkyCatalog(config_dict, skycatalog_root=skycatalog_root, mp=mp,
-                     verbose=verbose)
+                     loglevel=loglevel)
 
     # Get bandpasses in case we need to compute fluxes
     _, cat._lsst_thru_v = _load_lsst_bandpasses()
