@@ -402,6 +402,7 @@ class GaiaCollection(ObjectCollection):
 class GaiaConfigFragment(BaseConfigFragment):
     def __init__(self, prov, id_prefix=None, use_butler=False,
                  butler_parameters=None, area_partition=None,
+                 data_file_type=None,
                  data_dir=None, basename_template=None):
         '''
         prov              dict       Provenance
@@ -411,6 +412,7 @@ class GaiaConfigFragment(BaseConfigFragment):
                                      each object
         butler_parameters dict       Used only if use_butler is true
         area_partition    dict       Used only if use_butler is False
+        data_file_type    dict       Used only if use_butler is False
         data_dir          string     Used only if use_butler is False
         basename_template string     Used only if use_butler is False
 
@@ -424,22 +426,15 @@ class GaiaConfigFragment(BaseConfigFragment):
             template_name = 'gaia_star_direct_template.yaml'
 
         super().__init__(prov, object_type_name='gaia_star',
-                         template_name=template_name)
+                         template_name=template_name,
+                         area_partition=area_partition,
+                         data_file_type=data_file_type)
 
-        opt_dict = dict()
         if id_prefix:
-            opt_dict['id_prefix'] = id_prefix
+            self._opt_dict['id_prefix'] = id_prefix
         if use_butler:
             if butler_parameters:
-                opt_dict['butler_parameters'] = butler_parameters
+                self._opt_dict['butler_parameters'] = butler_parameters
         else:
-            if area_partition:
-                opt_dict['area_partition'] = area_partition
-            if data_dir:
-                opt_dict['data_dir'] = data_dir
             if basename_template:
-                opt_dict['basename_template'] = basename_template
-        self._opt_dict = opt_dict
-
-    def make_fragment(self):
-        return self.generic_create()
+                self._opt_dict['basename_template'] = basename_template

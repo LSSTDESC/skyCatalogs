@@ -16,9 +16,15 @@ _TEMPLATE_DIR = os.path.join(_SKYCATALOGS_DIR, 'skycatalogs', 'data',
 
 
 class BaseConfigFragment():
-    def __init__(self, prov, object_type_name=None, template_name=None):
+    def __init__(self, prov, object_type_name=None, template_name=None,
+                 area_partition=None, data_file_type=None):
         self._object_type_name = object_type_name
         self._prov = prov
+        self._opt_dict = dict()
+        if area_partition:
+            self._opt_dict['area_partition'] = area_partition
+        if data_file_type:
+            self._opt_dict['data_file_type'] = data_file_type
         self._template_name = template_name
         if not template_name:
             if object_type_name:
@@ -42,20 +48,20 @@ class BaseConfigFragment():
         for the object type.
         Must be implemented by subclass
         '''
-        raise NotImplementedError("Must be implemented by subclass")
+        return self.generic_create()
 
     def generic_create(self):
         template_path = os.path.join(_TEMPLATE_DIR, self._template_name)
         with open(template_path, 'r') as f:
             data = yaml.load(f, Loader=yaml.SafeLoader)
-        if self._opt_dict:
-            opt = self._opt_dict
-            other = dict()
-            for key in opt:
-                if opt[key] is not None:
-                    other[key] = opt[key]
-            if len(other.keys()) > 0:
-                data.update(other)
+
+        opt = self._opt_dict
+        other = dict()
+        for key in opt:
+            if opt[key] is not None:
+                other[key] = opt[key]
+        if len(other.keys()) > 0:
+            data.update(other)
 
         data['provenance'] = self._prov
         return data

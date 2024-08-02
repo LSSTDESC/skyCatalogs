@@ -167,15 +167,13 @@ class GalaxyObject(BaseObject):
 class GalaxyConfigFragment(BaseConfigFragment):
     def __init__(self, prov, cosmology, tophat_bins,
                  area_partition=None, data_file_type=None):
-        super().__init__(prov, object_type_name='galaxy')
-
-        self._opt_dict = {'area_partition': area_partition,
-                          'data_file_type': data_file_type}
-        self._cosmology = cosmology
+        super().__init__(prov, object_type_name='galaxy',
+                         area_partition=area_partition,
+                         data_file_type=data_file_type)
+        self._opt_dict['Cosmology'] = cosmology
         self._tophat_bins = tophat_bins
 
     def make_fragment(self):
         data = self.generic_create()
         data['tophat']['bins'] = self._tophat_bins
-        data['Cosmology'] = self._cosmology
         return data

@@ -6,7 +6,8 @@ import numpy as np
 import numpy.ma as ma
 from astropy import units as u
 import lsst.sphgeom
-from skycatalogs.objects.base_object import load_lsst_bandpasses, load_roman_bandpasses
+from skycatalogs.objects.base_object import _load_lsst_bandpasses
+from skycatalogs.objects.base_object import _load_roman_bandpasses
 from skycatalogs.utils.catalog_utils import CatalogContext
 from skycatalogs.objects.base_object import ObjectList, ObjectCollection
 from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
@@ -803,6 +804,6 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
                      verbose=verbose)
 
     # Get bandpasses in case we need to compute fluxes
-    _, cat._lsst_thru_v = load_lsst_bandpasses()
-    _, cat._roman_thru_v = load_roman_bandpasses()
+    _, cat._lsst_thru_v = _load_lsst_bandpasses()
+    _, cat._roman_thru_v = _load_roman_bandpasses()
     return cat

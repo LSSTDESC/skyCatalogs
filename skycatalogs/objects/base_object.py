@@ -1,6 +1,7 @@
 from collections.abc import Sequence, Iterable
 from collections import namedtuple
 import os
+import logging
 import numpy as np
 import galsim
 from galsim.roman import longwave_bands as roman_longwave_bands
@@ -26,7 +27,7 @@ ROMAN_BANDS = roman_shortwave_bands+roman_longwave_bands
 # global for easy access for code run within mp
 
 
-def load_lsst_bandpasses():
+def _load_lsst_bandpasses():
     '''
     Read in lsst bandpasses from standard place, trim, and store in global dict
     Returns: The dict and throughputs version
@@ -48,13 +49,15 @@ def load_lsst_bandpasses():
             if os.path.exists(bp_dir):
                 BaseObject._bp_path = bp_dir
             else:
-                # logger.info('Using galsim built-in bandpasses')
+                logger = logging.getLogger('skyCatalogs:load_lsst_bandpasses')
+                logger.warning('Using galsim built-in bandpasses which may not be up to date')
                 bp_dir = None
     if bp_dir:
         with open(os.path.join(bp_dir, 'version_info')) as f:
             version = f.read().strip()
     else:
         version = 'galsim_builtin'
+
 
     for band in LSST_BANDS:
         if bp_dir:
@@ -76,16 +79,30 @@ def load_lsst_bandpasses():
 
     return lsst_bandpasses, version
 
+def load_lsst_bandpasses():
+    '''
+    Read in lsst bandpasses from standard place, trim, and store in global dict
+    Returns
+    -------
+    The bandpasses
+    '''
+    return _load_lsst_bandpasses()[0]
+
+def _load_roman_bandpasses():
+    '''
+    Read in Roman bandpasses from standard place, trim, and store in global dict
+    Returns: The dict and version inforation
+    '''
+    global roman_bandpasses
+    roman_bandpasses = roman_getBandpasses()
+    return roman_bandpasses, 'galsim_builtin'
 
 def load_roman_bandpasses():
     '''
     Read in Roman bandpasses from standard place, trim, and store in global dict
     Returns: The dict
     '''
-    global roman_bandpasses
-    roman_bandpasses = roman_getBandpasses()
-    return roman_bandpasses, 'galsim_builtin'
-
+    return load_roman_bandpasses()[0]
 
 class BaseObject(object):
     '''

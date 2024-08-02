@@ -191,10 +191,6 @@ class SsoCollection(ObjectCollection):
 
 class SsoConfigFragment(BaseConfigFragment):
     def __init__(self, prov, area_partition=None, data_file_type=None):
-        super().__init__(prov, object_type_name='sso')
-
-        self._opt_dict = {'area_partition': area_partition,
-                          'data_file_type': data_file_type}
-
-    def make_fragment(self):
-        return self.generic_create()
+        super().__init__(prov, object_type_name='sso',
+                         area_partition=area_partition,
+                         data_file_type=data_file_type)

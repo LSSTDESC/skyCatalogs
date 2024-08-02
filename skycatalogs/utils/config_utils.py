@@ -462,6 +462,10 @@ def _read_yaml(inpath, silent=True, resolve_include=True):
     inpath     string            path to file
     silent     boolean           if file not found and silent is true,
                                  return None.  Else raise exception
+    resolve_include boolean      if False, return values like
+                                 !include star.yaml
+                                 literally. If True, replace with content
+                                 of references file
 
     Returns
     -------
@@ -502,6 +506,15 @@ class ConfigWriter:
         Write yaml file if
           * it doesn't already exist     or
           * we're allowed to overwrite
+
+        Parameters
+        ----------
+        input_dict    dict   Contents to be output to yaml
+        outpath       string Where to write the output
+
+        Returns
+        -------
+        output path (same as argument) if a file is written, else None
         '''
         if self._overwrite:
             return self.update_yaml(input_dict, outpath)
@@ -512,7 +525,7 @@ class ConfigWriter:
         except FileExistsError:
             txt = 'write_yaml: Will not overwrite pre-existing config'
             self._logger.warning(txt + outpath)
-            return
+            return None
 
         return outpath
 

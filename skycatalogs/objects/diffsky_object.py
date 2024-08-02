@@ -156,13 +156,7 @@ class DiffskyObject(BaseObject):
 class DiffskyConfigFragment(BaseConfigFragment):
     def __init__(self, prov, cosmology,
                  area_partition=None, data_file_type=None):
-        self.super().__init__(prov, object_type_name='diffsky_galaxy')
-
-        self._opt_dict = {'area_partition': area_partition,
-                          'data_file_type': data_file_type}
-        self._cosmology = cosmology
-
-    def make_fragment(self):
-        data = self.generic_create()
-        data['Cosmology'] = self._cosmology
-        return data
+        super().__init__(prov, object_type_name='diffsky_galaxy',
+                         area_partition=area_partition,
+                         data_file_type=data_file_type)
+        self._opt_dict['Cosmology'] = cosmology
