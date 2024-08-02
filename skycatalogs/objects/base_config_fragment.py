@@ -60,8 +60,7 @@ class BaseConfigFragment():
         for key in opt:
             if opt[key] is not None:
                 other[key] = opt[key]
-        if len(other.keys()) > 0:
-            data.update(other)
+        data.update(other)
 
         data['provenance'] = self._prov
         return data
