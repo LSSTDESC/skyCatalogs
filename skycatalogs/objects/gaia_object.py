@@ -20,10 +20,11 @@ import lsst.afw.table as afwtable
 from lsst.sphgeom import HtmPixelization, Circle, LonLat
 
 from skycatalogs.utils.shapes import Disk, PolygonalRegion, compute_region_mask
-from skycatalogs.objects.base_object import BaseObject, ObjectCollection
+from .base_object import BaseObject, ObjectCollection
+from .base_config_fragment import BaseConfigFragment
 
 
-__all__ = ['GaiaObject', 'GaiaCollection']
+__all__ = ['GaiaObject', 'GaiaCollection', 'GaiaConfigFragment']
 
 
 def ignore_erfa_warnings(func):
@@ -287,7 +288,8 @@ class GaiaCollection(ObjectCollection):
                        for _ in refs]
             dataIds = [butler.registry.expandDataId(_.dataId) for _ in refs]
             config = ReferenceObjectLoader.ConfigClass()
-            config.filterMap = {f'{_}': f'phot_{_}_mean' for _ in ('g', 'bp', 'rp')}
+            config.filterMap = {f'{_}': f'phot_{_}_mean' for _ in ('g', 'bp',
+                                                                   'rp')}
             ref_obj_loader = ReferenceObjectLoader(dataIds=dataIds,
                                                    refCats=refCats,
                                                    config=config)
@@ -395,3 +397,44 @@ class GaiaCollection(ObjectCollection):
 
     def __len__(self):
         return len(self.df)
+
+
+class GaiaConfigFragment(BaseConfigFragment):
+    def __init__(self, prov, id_prefix=None, use_butler=False,
+                 butler_parameters=None, area_partition=None,
+                 data_file_type=None,
+                 data_dir=None, basename_template=None):
+        '''
+        prov              dict       Provenance
+        use_butler        boolean    Access data via Butler if True; else read
+                                     FITS files directly
+        id_prefix         string     Prepend to native (integer) id for
+                                     each object
+        butler_parameters dict       Used only if use_butler is true
+        area_partition    dict       Used only if use_butler is False
+        data_file_type    dict       Used only if use_butler is False
+        data_dir          string     Used only if use_butler is False
+        basename_template string     Used only if use_butler is False
+
+        Parameters starting with id_prefix are optional.  They allow
+        the caller to override the default information in the Gaia star
+        fragment template
+        '''
+        if use_butler:
+            template_name = 'gaia_star_butler_template.yaml'
+        else:
+            template_name = 'gaia_star_direct_template.yaml'
+
+        super().__init__(prov, object_type_name='gaia_star',
+                         template_name=template_name,
+                         area_partition=area_partition,
+                         data_file_type=data_file_type)
+
+        if id_prefix:
+            self._opt_dict['id_prefix'] = id_prefix
+        if use_butler:
+            if butler_parameters:
+                self._opt_dict['butler_parameters'] = butler_parameters
+        else:
+            if basename_template:
+                self._opt_dict['basename_template'] = basename_template

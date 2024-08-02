@@ -1,10 +1,10 @@
 import os
-import numpy as np
 import galsim
 from .base_object import BaseObject
 from ..utils import normalize_sed
+from .base_config_fragment import BaseConfigFragment
 
-__all__ = ['StarObject']
+__all__ = ['StarObject', 'StarConfigFragment']
 
 
 class StarObject(BaseObject):
@@ -33,3 +33,10 @@ class StarObject(BaseObject):
         if sed is not None:
             sed = self._apply_component_extinction(sed)
         return sed
+
+
+class StarConfigFragment(BaseConfigFragment):
+    def __init__(self, prov, area_partition=None, data_file_type=None):
+        super().__init__(prov, object_type_name='star',
+                         area_partition=area_partition,
+                         data_file_type=data_file_type)

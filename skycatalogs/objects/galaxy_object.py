@@ -2,9 +2,10 @@ import numpy as np
 import galsim
 
 from .base_object import BaseObject
+from .base_config_fragment import BaseConfigFragment
 from skycatalogs.utils.translate_utils import form_object_string
 
-__all__ = ['GalaxyObject']
+__all__ = ['GalaxyObject', 'GalaxyConfigFragment']
 
 
 class GalaxyObject(BaseObject):
@@ -42,19 +43,20 @@ class GalaxyObject(BaseObject):
                                                   resolution=resolution)
         return sed
 
-    def get_knot_size(self,z):
+    def get_knot_size(self, z):
         """
-        Return the angular knot size. Knots are modelled as the same physical size
+        Return the angular knot size. Knots are modelled as the same physical
+        size
         """
         # Deceleration paramameter
-        q  = -0.55
+        q = -0.55
         # Angular diameter scaling approximation in pc
         dA = (3e9/q**2)*(z*q+(q-1)*(np.sqrt(2*q*z+1)-1))/(1+z)**2*(1.4-0.53*z)
         # Using typical knot size 250pc, convert to sigma in arcmin
-        if z<0.6:
+        if z < 0.6:
             return 206264.8*250/dA/2.355
         else:
-            # Above z=0.6, fractional contribution to post-convolved size 
+            # Above z=0.6, fractional contribution to post-convolved size
             # is <20% for smallest Roman PSF size, so can treat as point source
             return None
 
@@ -121,7 +123,7 @@ class GalaxyObject(BaseObject):
                                          profile=obj_dict['disk'], rng=rng,
                                          gsparams=gsparams)
                 z = self.get_native_attribute('redshift')
-                size = self.get_knot_size(z) # get knot size
+                size = self.get_knot_size(z)  # get knot size
                 if size is not None:
                     obj = galsim.Convolve(obj, galsim.Gaussian(sigma=size))
                 obj_dict[component] = obj
@@ -140,7 +142,6 @@ class GalaxyObject(BaseObject):
         for component in self.subcomponents:
             obj_dict[component] = obj_dict[component]._lens(g1, g2, mu)
         return obj_dict
-
 
     def get_observer_sed_component(self, component, mjd=None, resolution=None):
         sed = self._get_sed(component=component, resolution=resolution)
@@ -161,3 +162,18 @@ class GalaxyObject(BaseObject):
         if component not in self.subcomponents:
             return ''
         return form_object_string(self, band, component)
+
+
+class GalaxyConfigFragment(BaseConfigFragment):
+    def __init__(self, prov, cosmology, tophat_bins,
+                 area_partition=None, data_file_type=None):
+        super().__init__(prov, object_type_name='galaxy',
+                         area_partition=area_partition,
+                         data_file_type=data_file_type)
+        self._opt_dict['Cosmology'] = cosmology
+        self._tophat_bins = tophat_bins
+
+    def make_fragment(self):
+        data = self.generic_create()
+        data['tophat']['bins'] = self._tophat_bins
+        return data

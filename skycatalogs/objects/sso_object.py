@@ -1,14 +1,16 @@
 from collections.abc import Iterable
-import itertools
+# import itertools
 import numpy as np
 import math
 import galsim
 from .base_object import BaseObject, ObjectCollection
 from lsst.sphgeom import UnitVector3d, LonLat
 from ..utils import normalize_sed
+from .base_config_fragment import BaseConfigFragment
 
 EXPOSURE_DEFAULT = 30.0         # seconds
-__all__ = ['SsoObject', 'SsoCollection', 'EXPOSURE_DEFAULT']
+__all__ = ['SsoObject', 'SsoCollection', 'SsoConfigFragment',
+           'EXPOSURE_DEFAULT']
 
 SECONDS_PER_DAY = 24.0*3600.0
 
@@ -77,7 +79,8 @@ class SsoObject(BaseObject):
                 length = np.degrees(np.arccos(cos_sep)) * 3600.0
             if np.isnan(length):
                 # This will raise if cos_sep < -1.0. A value of cos_sep = -1.0
-                # is almost certainly unphysical, so we want to catch these cases.
+                # is almost certainly unphysical, so we want to catch these
+                # cases.
                 raise ValueError("SSO streak length is nan")
 
             if length * trail_width == 0:
@@ -87,7 +90,9 @@ class SsoObject(BaseObject):
             gobj = galsim.Box(length, trail_width, gsparams=gsparams)
 
             # now rotate to direction of (ra_rate, dec_rate)
-            # angle_rad = galsim.Angle(np.arctan2(dec_rate, (ra_rate * np.cos(dec))), galsim.radians)
+            # angle_rad = galsim.Angle(np.arctan2(dec_rate,
+            #                                     (ra_rate * np.cos(dec))),
+            #                          galsim.radians)
             # NOTE: cos(dec) has already been applied, so we want
             angle_rad = galsim.Angle(np.arctan2(dec_rate, ra_rate),
                                      galsim.radians)
@@ -126,7 +131,8 @@ class SsoCollection(ObjectCollection):
 
     def __init__(self, ra, dec, id, hp, sky_catalog, mjd_individual=None,
                  region=None, mjd=None,
-                 mask=None, readers=None, row_group=0, exposure=EXPOSURE_DEFAULT):
+                 mask=None, readers=None, row_group=0,
+                 exposure=EXPOSURE_DEFAULT):
         '''
         Parameters
         ----------
@@ -181,3 +187,10 @@ class SsoCollection(ObjectCollection):
 
         elif type(key) == tuple and isinstance(key[0], Iterable):
             return [self.__getitem__(i) for i in key[0]]
+
+
+class SsoConfigFragment(BaseConfigFragment):
+    def __init__(self, prov, area_partition=None, data_file_type=None):
+        super().__init__(prov, object_type_name='sso',
+                         area_partition=area_partition,
+                         data_file_type=data_file_type)

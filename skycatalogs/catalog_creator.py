@@ -12,11 +12,10 @@ from multiprocessing import Process, Pipe
 import sqlite3
 from .utils.sed_tools import TophatSedFactory, get_star_sed_path
 from .utils.sed_tools import generate_sed_path
-from .utils.config_utils import create_config, assemble_SED_models
-from .utils.config_utils import assemble_MW_extinction, assemble_cosmology
-from .utils.config_utils import assemble_object_types, assemble_provenance
+from .utils.config_utils import assemble_cosmology
+from .utils.config_utils import assemble_provenance
 from .utils.config_utils import assemble_file_metadata
-from .utils.config_utils import write_yaml
+from .utils.config_utils import ConfigWriter
 from .utils.star_parquet_input import _star_parquet_reader
 from .utils.parquet_schema_utils import make_galaxy_schema
 from .utils.parquet_schema_utils import make_galaxy_flux_schema
@@ -25,6 +24,9 @@ from .utils.parquet_schema_utils import make_star_schema
 from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.base_object import LSST_BANDS
 from .objects.base_object import ROMAN_BANDS
+from .objects.star_object import StarConfigFragment
+from .objects.galaxy_object import GalaxyConfigFragment
+from .objects.diffsky_object import DiffskyConfigFragment
 from .sso_catalog_creator import SsoCatalogCreator
 
 """
@@ -379,6 +381,12 @@ class CatalogCreator:
         self._run_options = run_options
         self._tophat_sed_bins = None
 
+        self._config_writer = ConfigWriter(self._skycatalog_root,
+                                           self._catalog_dir,
+                                           self._catalog_name,
+                                           not self._skip_done,
+                                           self._logname)
+
     def _make_tophat_columns(self, dat, names, cmp):
         '''
         Create columns sed_val_cmp, cmp_magnorm where cmp is one of "disk",
@@ -472,12 +480,16 @@ class CatalogCreator:
 
         # Now make config.   We need it for computing LSST fluxes for
         # the second part of the galaxy catalog
-        if self._skip_done:
-            config_path = self.write_config(path_only=True)
-            if os.path.exists(config_path):
-                self._logger.info('Will not overwrite existing config file')
-                return
-        self.write_config()
+        prov = assemble_provenance(self._pkg_root,
+                                   inputs={'galaxy_truth': self._galaxy_truth},
+                                   run_options=self._run_options)
+        cosmo = assemble_cosmology(self._cosmology)
+        if self._galaxy_type == 'diffsky':
+            fragment = DiffskyConfigFragment(prov, cosmo)
+            self._config_writer.write_configs(fragment)
+        else:
+            fragment = GalaxyConfigFragment(prov, cosmo, self._tophat_sed_bins)
+            self._config_writer.write_configs(fragment)
 
     def _write_subpixel(self, dat=None, output_path=None, arrow_schema=None,
                         to_rename=dict(), stride=100000):
@@ -715,20 +727,27 @@ class CatalogCreator:
         from .skyCatalogs import open_catalog
         self._sed_gen = None
 
-        file_metadata = assemble_file_metadata(self._pkg_root,
-                                               run_options=self._run_options,
-                                               flux_file=True)
+        if not config_file:
+            config_file = self.get_config_path()
+        if not self._cat:
+            self._cat = open_catalog(config_file,
+                                     skycatalog_root=self._skycatalog_root)
+
+        # Throughput versions for fluxes included
+        thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
+        if self._include_roman_flux:
+            thru_v['roman_throughputs_version'] = self._cat._roman_thru_v
+
+        file_metadata = assemble_file_metadata(
+            self._pkg_root,
+            run_options=self._run_options,
+            flux_file=True,
+            throughputs_versions=thru_v)
         self._gal_flux_schema =\
             make_galaxy_flux_schema(self._logname, self._galaxy_type,
                                     include_roman_flux=self._include_roman_flux,
                                     metadata_input=file_metadata)
         self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
-
-        if not config_file:
-            config_file = self.write_config(path_only=True)
-        if not self._cat:
-            self._cat = open_catalog(config_file,
-                                     skycatalog_root=self._skycatalog_root)
 
         # Might also open a main file and read its metadata to be sure
         # the value for stride is correct.
@@ -906,6 +925,12 @@ class CatalogCreator:
                                           star_cat=self._star_truth)
             self._logger.debug(f'Completed pixel {p}')
 
+        prov = assemble_provenance(self._pkg_root,
+                                   inputs={'star_truth': self._star_truth},
+                                   run_options=self._run_options)
+        fragment = StarConfigFragment(prov)
+        self._config_writer.write_configs(fragment)
+
     def create_pointsource_pixel(self, pixel, arrow_schema, star_cat=None):
         if not star_cat:
             self._logger.info('No star input specified')
@@ -983,7 +1008,7 @@ class CatalogCreator:
         Parameters
         ----------
         Path to config created in first stage so we can find the main
-        galaxy files.
+        star files
 
         Return
         ------
@@ -992,19 +1017,22 @@ class CatalogCreator:
 
         from .skyCatalogs import open_catalog
 
-        file_metadata = assemble_file_metadata(self._pkg_root,
-                                               run_options=self._run_options,
-                                               flux_file=True)
-
-        self._ps_flux_schema = make_star_flux_schema(self._logname,
-                                                     metadata_input=file_metadata)
         if not config_file:
-            config_file = self.write_config(path_only=True)
+            config_file = self.get_config_path()
 
         # Always open catalog. If it was opened for galaxies earlier
         # it won't know about star files.
         self._cat = open_catalog(config_file,
                                  skycatalog_root=self._skycatalog_root)
+        thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
+        file_metadata = assemble_file_metadata(
+            self._pkg_root,
+            run_options=self._run_options,
+            flux_file=True,
+            throughputs_versions=thru_v)
+
+        self._ps_flux_schema = make_star_flux_schema(self._logname,
+                                                     metadata_input=file_metadata)
 
         self._flux_template = self._cat.raw_config['object_types']['star']['flux_file_template']
 
@@ -1116,59 +1144,8 @@ class CatalogCreator:
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
 
-    def write_config(self, overwrite=False, path_only=False):
-        '''
-        Parameters
-        ----------
-        overwrite   boolean default False.   If true, overwrite existing
-                    config of the same name
-        path_only   If true, just return the path; don't write anything
-
-        Returns
-        -------
-        Path to would-be config file if path_only is True;
-        else None
-
-        Side-effects
-        ------------
-        Save path to config file written as instance variable
-
-        '''
+    def get_config_path(self):
         if not self._config_path:
             self._config_path = self._output_dir
 
-        if path_only:
-            return os.path.join(self._config_path,
-                                self._catalog_name + '.yaml')
-
-        config = create_config(self._catalog_name, self._logname)
-        if self._global_partition is not None:
-            config.add_key('area_partition', self._area_partition)
-
-        # Even though the following keys are also in the run options
-        # section they need to be here so that the flux creation code
-        # can find them
-        config.add_key('catalog_dir', self._catalog_dir)
-        config.add_key('skycatalog_root', self._skycatalog_root)
-
-        if self._galaxy_type == 'cosmodc2':
-            config.add_key('SED_models',
-                           assemble_SED_models(self._tophat_sed_bins))
-        config.add_key('MW_extinction_values', assemble_MW_extinction())
-        config.add_key('Cosmology', assemble_cosmology(self._cosmology))
-        config.add_key('object_types',
-                       assemble_object_types(self._pkg_root,
-                                             galaxy_nside=self._galaxy_nside))
-
-        inputs = {'galaxy_truth': self._galaxy_truth}
-        if self._star_truth:
-            inputs['star_truth'] = self._star_truth
-        if self._sso_truth:
-            inputs['sso_truth'] = self._sso_truth
-            inputs['sso_sed'] = self._sso_sed
-        config.add_key('provenance',
-                       assemble_provenance(self._pkg_root, inputs=inputs,
-                                           run_options=self._run_options))
-
-        self._written_config = config.write_config(self._config_path,
-                                                   overwrite=overwrite)
+        return os.path.join(self._config_path, self._catalog_name + '.yaml')

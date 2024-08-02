@@ -1,0 +1,8 @@
+area_partition:
+  nside: 32
+  ordering: ring
+  type: healpix
+data_file_type: parquet
+file_template: sso_(?P<healpix>\d+).parquet
+flux_file_template: sso_flux_(?P<healpix>\d+).parquet
+sed_model: dbfile_angstrom_flambda
