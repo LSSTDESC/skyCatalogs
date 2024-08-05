@@ -23,6 +23,7 @@ https://github.com/LSSTDESC/skyCatalogs.
    :caption: Contents:
 
    installation
+   usage_read
    ops-rehearsals-3-4/galaxies
    ops-rehearsals-3-4/UW_stars
    ops-rehearsals-3-4/SSO
