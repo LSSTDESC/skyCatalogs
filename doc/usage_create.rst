@@ -98,10 +98,11 @@ something higher to make the process go faster.
    flux_parallel:        24      # Default is 16
 
 .. note::
-   Here the star main and flux files will be created in the same script
-   execution - first the main file, then the flux file - but that not
-   need be the case. In production runs it's more usual to deal with main
-   files and flux files separately. However the main file for a particular
-   healpixel and object type must already exist before one tries to make the
-   flux file because the main file is an input to the process.
+   This script will create both star main and flux files - first the main file,
+   then the flux file - but that need not be the case. In production runs it's
+   more usual to deal with main files and flux files separately.
+   If you choose to do that, be sure to make the main file for a particular
+   healpixel and object type first.  It must already exist before one tries
+   to make the flux file because quantities read from the main file are input
+   to flux generation.
    
