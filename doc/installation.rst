@@ -3,7 +3,7 @@ Installation Instructions
 
 .. note::
 
-   **Pre-requisites**:
+   **Prerequisites**:
 
    To use **skyCatalogs 1.7.x**
 

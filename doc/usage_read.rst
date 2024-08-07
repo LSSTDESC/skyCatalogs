@@ -26,6 +26,9 @@ You open a catalog like this:
 
 Often the config file is in the same folder as the data but it need not be.
 
+If ``skycatalog_root`` is not specified, the code will use the value of the
+environment variable ``SKYCATALOG_ROOT`` if it exists, 
+
 Structure of skyCatalogs Configs
 ================================
 Configs contain a variety of information.   Some of it is required for the
@@ -52,7 +55,7 @@ Using !include
   object_types:
     galaxy: !include galaxy.yaml    # See Note 2.
     star: !include |-               # The  |- indicates continue to next line
-      star.yaml                     # Appears in auto-generated top files
+      star.yaml                     # & may appear in auto-generated top files
   skycatalog_root:    /some/path/often/absolute   # see Note 3.
   schema_version:     1.3.0
 

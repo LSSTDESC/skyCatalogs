@@ -72,3 +72,36 @@ star_input_fmt         string     "sqlite"      Format of star truth
 
 Example options files
 +++++++++++++++++++++
+Create cosmodc2-style galaxies, main file only.  This file was one I wrote
+primarily for testing the creation code. In order to speed things up, I
+set ``galaxy_magnitude_cut`` down to 20.0. The output file is about 1000 times
+smaller than with the default cut.
+
+.. code-block:: yaml
+
+   catalog_dir:          just_testing
+   no_pointsources:      True
+   no_flux:              True
+   pixels:               [9683]
+   galaxy_magnitude_cut: 20.0    # Default is 29.0
+   log_level:            DEBUG   # Default is INFO
+
+Create star files, both main and flux.  The default value of
+``flux_parallel`` is rather conservative for Perlmutter, so use
+something higher to make the process go faster.
+
+.. code-block:: yaml
+                
+   catalog_dir:          just_testing
+   no_galaxies:          True
+   pixels:               [9683]
+   flux_parallel:        24      # Default is 16
+
+.. note::
+   Here the star main and flux files will be created in the same script
+   execution - first the main file, then the flux file - but that not
+   need be the case. In production runs it's more usual to deal with main
+   files and flux files separately. However the main file for a particular
+   healpixel and object type must already exist before one tries to make the
+   flux file because the main file is an input to the process.
+   
