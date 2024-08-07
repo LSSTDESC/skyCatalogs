@@ -6,9 +6,9 @@ created by other means, but it is still necessary to make a suitable
 config fragment so that the skyCatalogs API can access the data.  New object
 types will require updates to the API.
 
-The script `create_sc.py` and its options
------------------------------------------
-`create_sc.py` has a plethora of options, but few are of interest for
+The script ``create_sc.py`` and its options
+-------------------------------------------
+``create_sc.py`` has a plethora of options, but few are of interest for
 most invocations and even fewer are required.  The options determine
 
 * object type(s) for which files will be created
@@ -20,13 +20,13 @@ most invocations and even fewer are required.  The options determine
 * numerous options conditioning exactly how the output is to be created,
   most of which are usually defaulted
 
-One particularly handy option, `--options-file`, allows you to specify
+One particularly handy option, ``--options-file``, allows you to specify
 everything else as key-value pairs in a yaml file.
 
 Options table
 +++++++++++++
 Here is the complete list of options as they appear in an options file.
-On the command line, prepend `\--` and change all underscores to hyphens.
+On the command line, prepend ``--`` and change all underscores to hyphens.
 
 =====================  =========  ============  ===============================
 Name                   Datatype   Default       Description
@@ -36,7 +36,7 @@ catalog_dir            string     "."           Location of catalog relative
 catalog_name           string     "skyCatalog"  Name of top-level yaml config
                                                 file 
 config_path            string     None          where to write config. If
-                                                `None`, same directory as data
+                                                ``None``, same folder as data
 dc2                    boolean    False         Use dc2 conventions
 flux_parallel          int        16            # of parallel processes to use
                                                 when computing flux
