@@ -46,8 +46,11 @@ pygments_style = 'sphinx'
 # ones.
 extensions = [
     "sphinx_rtd_theme",
-    "sphinx.ext.autodoc"
-]
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon"
+    ]
+    #     "sphinxcontrib.autoprogram"     # for CLI; probably don't need
+    # ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

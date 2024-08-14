@@ -32,6 +32,20 @@ https://github.com/LSSTDESC/skyCatalogs.
    roman-rubin-1.1.2/UW_stars
    roman-rubin-1.1.2/snana
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference:
+   :hidden:
+
+   reference_python
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contact:
+   :hidden:
+
+   contact
+   
 
 Indices and tables
 ==================
