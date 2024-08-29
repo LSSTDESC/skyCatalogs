@@ -603,12 +603,12 @@ class MainCatalogCreator:
         _star_parquet = '/sdf/data/rubin/shared/ops-rehearsal-3/imSim_catalogs/UW_stars'
 
         if self._truth is None:
-            if self._star_input_format == 'sqlite':
+            if self._star_input_fmt == 'sqlite':
                 self._truth = _star_db
             else:              # must be parquet
                 self._truth = _star_parquet
 
-        inputs = {'star_truth': self._star_truth}
+        inputs = {'star_truth': self._truth}
         file_metadata = assemble_file_metadata(self._pkg_root,
                                                inputs=inputs,
                                                run_options=self._run_options)
@@ -618,11 +618,11 @@ class MainCatalogCreator:
         for p in self._parts:
             self._logger.debug(f'Point sources. Starting on pixel {p}')
             self.create_pointsource_pixel(p, arrow_schema,
-                                          star_cat=self._star_truth)
+                                          star_cat=self._truth)
             self._logger.debug(f'Completed pixel {p}')
 
         prov = assemble_provenance(self._pkg_root,
-                                   inputs={'star_truth': self._star_truth},
+                                   inputs={'star_truth': self._truth},
                                    run_options=self._run_options)
         fragment = StarConfigFragment(prov)
         self._config_writer.write_configs(fragment)
@@ -657,7 +657,7 @@ class MainCatalogCreator:
             with sqlite3.connect(star_cat) as conn:
                 star_df = pd.read_sql_query(q, conn)
         elif self._star_input_fmt == 'parquet':
-            star_df = _star_parquet_reader(self._star_truth, pixel,
+            star_df = _star_parquet_reader(self._truth, pixel,
                                            arrow_schema)
         nobj = len(star_df['id'])
         self._logger.debug(f'Found {nobj} stars')
