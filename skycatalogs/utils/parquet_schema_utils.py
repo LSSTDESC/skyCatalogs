@@ -20,7 +20,7 @@ def _add_roman_fluxes(fields):
 
 # This schema is not the same as the one taken from the data,
 # probably because of the indexing in the schema derived from a pandas df.
-def make_galaxy_schema(logname, sed_subdir=False, knots=True,
+def make_galaxy_schema(logname, knots=True,
                        galaxy_type='cosmodc2', metadata_input=None,
                        metadata_key='provenance'):
     logger = logging.getLogger(logname)  # maybe move this above if:
@@ -66,10 +66,6 @@ def make_galaxy_schema(logname, sed_subdir=False, knots=True,
             # galaxy-wide quantities.
             fields.append(pa.field('n_knots', pa.float32(), True))
             fields.append(pa.field('knots_magnorm', pa.float64(), True))
-
-        if sed_subdir:
-            fields.append(pa.field('bulge_sed_file_path', pa.string(), True))
-            fields.append(pa.field('disk_sed_file_path', pa.string(), True))
 
     elif galaxy_type == 'diffsky':
         fields = [pa.field('galaxy_id', pa.int64()),
