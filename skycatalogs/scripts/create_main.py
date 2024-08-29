@@ -124,7 +124,7 @@ creator = MainCatalogCreator(args.object_type, parts,
                              stride=args.stride,
                              dc2=args.dc2,
                              star_input_fmt=args.star_input_fmt,
-                             sso_sed=args.sso_sed,
+                             sso_sed=args.sso_sed, # probably not needed
                              run_options=opt_dict)
 if len(parts) > 0:
     logger.info(f'Starting with healpix pixel {parts[0]}')
@@ -132,17 +132,6 @@ elif args.object_type == "sso":
     logger.info('Creating catalogs for all available healpixels')
 
 creator.create()
-# if not args.no_galaxies:
-#     logger.info("Creating galaxy catalogs")
-#     creator.create('galaxy')
-
-# if not args.no_pointsources:
-#     logger.info("Creating point source catalogs")
-#     creator.create('pointsource')
-
-# if args.sso:
-#     logger.info("Creating SSO catalogs")
-#     creator.create('sso')
 
 logger.info('All done')
 print_date()

@@ -1,5 +1,4 @@
 import os
-import sys
 import re
 import logging
 import numpy as np
@@ -10,19 +9,16 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import sqlite3
 from .utils.sed_tools import TophatSedFactory, get_star_sed_path
-from .utils.sed_tools import generate_sed_path
 from .utils.config_utils import assemble_cosmology
 from .utils.config_utils import assemble_provenance
 from .utils.config_utils import assemble_file_metadata
 from .utils.config_utils import ConfigWriter
 from .utils.star_parquet_input import _star_parquet_reader
 from .utils.parquet_schema_utils import make_galaxy_schema
-# from .utils.parquet_schema_utils import make_galaxy_flux_schema
-# from .utils.parquet_schema_utils import make_star_flux_schema
 from .utils.parquet_schema_utils import make_star_schema
 from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
-from .objects.base_object import LSST_BANDS
-from .objects.base_object import ROMAN_BANDS
+# from .objects.base_object import LSST_BANDS
+# from .objects.base_object import ROMAN_BANDS
 from .objects.star_object import StarConfigFragment
 from .objects.galaxy_object import GalaxyConfigFragment
 from .objects.diffsky_object import DiffskyConfigFragment
@@ -214,24 +210,7 @@ class MainCatalogCreator:
             self._pkg_root = os.path.join(os.path.dirname(__file__), '..')
 
         self._truth = truth
-        # self._galaxy_type = galaxy_type
-        # self._galaxy_truth = galaxy_truth
-        # if galaxy_truth is None:
-        #     if galaxy_type == 'cosmodc2':
-        #         self._galaxy_truth = _cosmo_cat
-        #     else:
-        #         self._galaxy_truth = _diffsky_cat
-
-        # self._star_truth = star_truth
         self._star_input_fmt = star_input_fmt
-        # if self._star_truth is None:
-        #     if self._star_input_fmt == 'sqlite':
-        #         self._star_truth = _star_db
-        #     elif self._star_input_fmt == 'parquet':
-        #         self._star_truth = _star_parquet
-
-        # Not used for main file
-        # self._cat = None
 
         self._parts = parts
         if skycatalog_root:
@@ -259,7 +238,6 @@ class MainCatalogCreator:
         self._nside = nside
         self._dc2 = dc2
         self._obs_sed_factory = None
-        # self._sso_sed_factory = None      # Not needed for main file
         if object_type == 'sso':
             self._sso_creator = SsoCatalogCreator(self, self._truth, sso_sed)
         # self._sso_truth = self._sso_creator.sso_truth
@@ -695,9 +673,3 @@ class MainCatalogCreator:
 
         writer.close()
         return
-
-    # def get_config_path(self):
-    #     if not self._config_path:
-    #         self._config_path = self._output_dir
-
-    #     return os.path.join(self._config_path, self._catalog_name + '.yaml')
