@@ -46,8 +46,7 @@ parser.add_argument('--no-knots', action='store_true',
 parser.add_argument('--config-path', default=None, help='''
                     Output path for config file. If no value,
                     config will be written to same location as data,
-                    with filenmame taken from catalog-name.
-                    A config file is written iff galaxies are requested''')
+                    with filenmame taken from catalog-name.''')
 parser.add_argument('--catalog-name', '--cat-name', default='skyCatalog',
                     help='''If write-config option is used, this value
                     will appear in the config and will be part of

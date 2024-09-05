@@ -294,7 +294,7 @@ class MainCatalogCreator:
             self._sso_creator.create_sso_catalog()
         else:
             raise NotImplementedError(
-                f'CatalogCreator.create: unsupported object type {object_type}')
+                f'MainCatalogCreator.create: unsupported object type {object_type}')
 
     def create_galaxy_catalog(self):
         """
@@ -312,13 +312,14 @@ class MainCatalogCreator:
         import GCRCatalogs
 
         # self._cat = None
-        if self._truth is None:
-            if self._object_type == 'cosmodc2_galaxy':
+        if self._object_type == 'cosmodc2_galaxy':
+            self._galaxy_type = 'cosmodc2'
+            if self._truth is None:
                 self._truth = _cosmo_cat
-                self._galaxy_type = 'cosmodc2'
-            else:    # only other possibility is diffsky
+        else:    # only other possibility is diffsky
+            self._galaxy_type = 'diffsky'
+            if self._truth is None:
                 self._truth = _diffsky_cat
-                self._galaxy_type = 'diffsky'
 
         gal_cat = GCRCatalogs.load_catalog(self._truth)
         self._gal_cat = gal_cat

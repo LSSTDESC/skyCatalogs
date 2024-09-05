@@ -637,6 +637,9 @@ class SkyCatalog(object):
                               exposure=EXPOSURE_DEFAULT):
         object_list = ObjectList()
 
+        if object_type == 'cosmodc2_galaxy':
+            object_type = 'galaxy'
+
         if not self.cat_cxt.lookup_collection_type(object_type):
             msg = f'object type {object_type} not available for this catalog'
             self._logger.warning(msg)

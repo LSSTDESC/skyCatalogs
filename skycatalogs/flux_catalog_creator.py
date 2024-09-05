@@ -1,0 +1,715 @@
+import os
+import sys
+# import re
+import logging
+import numpy as np
+# import healpy
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+from multiprocessing import Process, Pipe
+# from .utils.sed_tools import TophatSedFactory, get_star_sed_path
+# from .utils.config_utils import assemble_cosmology
+# from .utils.config_utils import assemble_provenance
+from .utils.config_utils import assemble_file_metadata
+# from .utils.config_utils import ConfigWriter
+# from .utils.star_parquet_input import _star_parquet_reader
+# from .utils.parquet_schema_utils import make_galaxy_schema
+from .utils.parquet_schema_utils import make_galaxy_flux_schema
+from .utils.parquet_schema_utils import make_star_flux_schema
+# from .utils.parquet_schema_utils import make_star_schema
+# from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
+from .objects.base_object import LSST_BANDS
+from .objects.base_object import ROMAN_BANDS
+# from .objects.star_object import StarConfigFragment
+# from .objects.galaxy_object import GalaxyConfigFragment
+# from .objects.diffsky_object import DiffskyConfigFragment
+from .sso_catalog_creator import SsoCatalogCreator
+
+"""
+Code to create flux sky catalogs for particular object types
+"""
+
+__all__ = ['FluxCatalogCreator']
+
+_MW_rv_constant = 3.1
+_nside_allowed = 2**np.arange(15)
+
+
+# def _get_tophat_info(columns):
+#     '''
+#     Parameters
+#     ----------
+#     columns    list of column names including the ones with per-tophat info
+
+#     Returns
+#     -------
+#     sed_bins        List of  the tophat bins, sorted by "start" (left edge)
+#     sed_bulge_names To be fetched from input catalog
+#     sed_disk_names  To be fetched from input catalog
+#     '''
+#     tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
+#     tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
+
+#     # Save all the start, width values
+#     sed_bulge_names = [i for i in columns if (i.startswith('sed') and
+#                                               i.endswith('bulge'))]
+#     sed_disk_names = [i for i in columns if (i.startswith('sed') and
+#                                              i.endswith('disk'))]
+
+#     sed_bins = [[int(re.match(tophat_bulge_re, s)['start']),
+#                  int(re.match(tophat_bulge_re, s)['width'])] for s in sed_bulge_names]
+
+#     # Sort sed by value for start. Finishes off work on sed_bins
+#     def _bin_start_key(start_width):
+#         return start_width[0]
+#     sed_bins.sort(key=_bin_start_key)
+
+#     # Moving on to tophat_fetch
+#     def _sed_bulge_key(s):
+#         return int(re.match(tophat_bulge_re, s)['start'])
+
+#     def _sed_disk_key(s):
+#         return int(re.match(tophat_disk_re, s)['start'])
+
+#     # Sort into increaing order by start wavelength
+#     sed_bulge_names.sort(key=_sed_bulge_key)
+#     sed_disk_names.sort(key=_sed_disk_key)
+
+#     return sed_bins, sed_bulge_names, sed_disk_names
+
+
+# def _find_subpixels(pixel, subpixel_nside, pixel_nside=32, nest=False):
+#     '''
+#     Return list of pixels of specified nside inside a given pixel
+#     Parameters
+#     ----------
+#     pixel           int       the id of the input pixel
+#     subpixel_nside  int       nside for subpixels
+#     pixel_nside     int       nside of original pixel (default=32)
+#     nest            boolean   True if pixel ordering for original pixel is
+#                               nested (default = False)
+#     Returns
+#     -------
+#     List of subpixel ids (nested ordering iff original was).  If subpixel
+#     resolution is no better than original, just return original pixel id
+#     '''
+#     if pixel_nside not in _nside_allowed:
+#         raise ValueError(f'Disallowed pixel nside value {pixel_nside}')
+#     if subpixel_nside not in _nside_allowed:
+#         raise ValueError(f'Disallowed subpixel nside value {subpixel_nside}')
+#     if pixel_nside >= subpixel_nside:
+#         return [pixel]
+
+#     if not nest:
+#         nest_pixel = healpy.ring2nest(pixel_nside, pixel)
+#     else:
+#         nest_pixel = pixel
+
+#     def _next_level(pixel):
+#         return [4 * pixel, 4 * pixel + 1, 4 * pixel + 2, 4 * pixel + 3]
+
+#     pixels = [nest_pixel]
+#     current_nside = pixel_nside
+#     while current_nside < subpixel_nside:
+#         pixels = [pix for p in pixels for pix in _next_level(p)]
+#         current_nside = current_nside * 2
+
+#     if nest:
+#         return pixels
+#     else:
+#         return [healpy.nest2ring(subpixel_nside, p) for p in pixels]
+
+
+# def _generate_subpixel_masks(ra, dec, subpixels, nside=32):
+#     '''
+#     Given ra, dec values for objects within a particular pixel and a list of
+#     its subpixels for some greater value of nside, return dict with subpixel
+#     ids as keys and values a mask which masks off all values except those
+#     belonging to subpixel
+
+#     Parameters
+#     ----------
+#     ra         float array   ra for all objects in a particular pixel
+#     dec        float array   dec for all objects in a particular pixel
+#     subpixels  int array     pixels for which masks should be generated
+#     nside      int           healpix ordering parameter
+
+#     Returns
+#     -------
+#     masks      dict          mask for each subpixel, keyed by subpixel id
+#     '''
+
+#     pix_id = np.array(healpy.pixelfunc.ang2pix(nside, ra, dec, lonlat=True))
+#     masks = dict()
+#     for p in subpixels:
+#         m = np.array(pix_id != p)
+#         masks[p] = m
+
+#     return masks
+
+
+# Collection of galaxy objects for current row group, current pixel
+# Used while doing flux computation
+
+def _do_galaxy_flux_chunk(send_conn, galaxy_collection, instrument_needed,
+                          l_bnd, u_bnd):
+    '''
+    output connection
+    l_bnd, u_bnd     demarcates slice to process
+    instrument_needed List of which calculations should be done
+
+    returns
+                    dict with keys id, lsst_flux_u, ... lsst_flux_y
+    '''
+    out_dict = {}
+
+    o_list = galaxy_collection[l_bnd: u_bnd]
+    out_dict['galaxy_id'] = [o.get_native_attribute('galaxy_id') for o in o_list]
+    if 'lsst' in instrument_needed:
+        all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        colnames = [f'lsst_flux_{band}' for band in LSST_BANDS]
+        flux_dict = dict(zip(colnames, all_fluxes_transpose))
+        out_dict.update(flux_dict)
+
+    if 'roman' in instrument_needed:
+        all_fluxes = [o.get_roman_fluxes(as_dict=False) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        colnames = [f'roman_flux_{band}' for band in ROMAN_BANDS]
+        flux_dict = dict(zip(colnames, all_fluxes_transpose))
+        out_dict.update(flux_dict)
+
+    if send_conn:
+        send_conn.send(out_dict)
+    else:
+        return out_dict
+
+
+def _do_star_flux_chunk(send_conn, star_collection, instrument_needed,
+                        l_bnd, u_bnd):
+    '''
+    send_conn         output connection, used to send results to
+                      parent process
+    star_collection   ObjectCollection. Information from main skyCatalogs
+                      star file
+    instrument_needed List of which calculations should be done. Currently
+                      supported instrument names are 'lsst' and 'roman'
+    l_bnd, u_bnd      demarcates slice to process
+
+    returns
+                    dict with keys id, lsst_flux_u, ... lsst_flux_y
+    '''
+    out_dict = {}
+
+    o_list = star_collection[l_bnd: u_bnd]
+    out_dict['id'] = [o.get_native_attribute('id') for o in o_list]
+    if 'lsst' in instrument_needed:
+        all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        colnames = [f'lsst_flux_{band}' for band in LSST_BANDS]
+        flux_dict = dict(zip(colnames, all_fluxes_transpose))
+        out_dict.update(flux_dict)
+
+    if 'roman' in instrument_needed:
+        all_fluxes = [o.get_roman_fluxes(as_dict=False) for o in o_list]
+        all_fluxes_transpose = zip(*all_fluxes)
+        colnames = [f'roman_flux_{band}' for band in ROMAN_BANDS]
+        flux_dict = dict(zip(colnames, all_fluxes_transpose))
+        out_dict.update(flux_dict)
+
+    if send_conn:
+        send_conn.send(out_dict)
+    else:
+        return out_dict
+
+
+class FluxCatalogCreator:
+    def __init__(self, object_type, parts,
+                 skycatalog_root=None,
+                 catalog_dir='.',
+                 config_path=None,
+                 catalog_name='skyCatalog',
+                 logname='skyCatalogs.creator',
+                 pkg_root=None,
+                 skip_done=False,
+                 flux_parallel=16,
+                 dc2=False,
+                 include_roman_flux=False,
+                 sso_sed=None,
+                 run_options=None):
+        """
+        Store context for catalog creation
+
+        Parameters
+        ----------
+        object_type     'cosmodc2_galaxy', 'diffsky_galaxy', 'star', or 'sso'
+        parts           Segments for which catalog is to be generated. If
+                        partition type is HEALpix, parts will be a collection
+                        of HEALpix pixels
+        skycatalog_root Typically absolute directory containing one or
+                        more subdirectories for sky catalogs. Defaults
+                        to current directory
+        catalog_dir     Directory relative to skycatalog_root where catalog
+                        will be written.  Defaults to '.'
+        config_path     Where to read config file. Default is data
+                        directory.
+        catalog_name    If a config file is written this value is saved
+                        there and is also part of the filename of the
+                        config file.
+        logname         logname for Python logger
+        pkg_root        defaults to one level up from __file__
+        skip_done       If True, skip over files which already exist. Otherwise
+                        (by default) overwrite with new version.
+                        Output info message in either case if file exists.
+        flux_parallel   Number of processes to divide work of computing fluxes
+        dc2             Whether to adjust values to provide input comparable
+                        to that for the DC2 run
+        include_roman_flux Calculate and write Roman flux values
+        sso_sed         Path to sed file to be used for all SSOs
+        run_options     The options the outer script (create_sc.py) was
+                        called with
+
+        Might want to add a way to specify template for output file name
+        and template for input sedLookup file name.
+        """
+
+        self._object_type = object_type
+        if object_type.endswith('_galaxy'):
+            self._galaxy_type = object_type[:-7]  # len('_galaxy')
+
+        if pkg_root:
+            self._pkg_root = pkg_root
+        else:
+            self._pkg_root = os.path.join(os.path.dirname(__file__), '..')
+
+        self._cat = None
+
+        self._parts = parts
+        if skycatalog_root:
+            self._skycatalog_root = skycatalog_root
+        else:
+            self._skycatalog_root = './'
+        if catalog_dir:
+            self._catalog_dir = catalog_dir
+        else:
+            self._catalog_dir = '.'
+
+        self._output_dir = os.path.join(self._skycatalog_root,
+                                        self._catalog_dir)
+
+        self._config_path = config_path
+        self._catalog_name = catalog_name
+
+        # self._output_type = output_type
+        self._logname = logname
+        self._logger = logging.getLogger(logname)
+        self._skip_done = skip_done
+        self._flux_parallel = flux_parallel
+        self._dc2 = dc2
+        self._include_roman_flux = include_roman_flux
+        self._obs_sed_factory = None
+        self._sso_sed_factory = None               # do we need this?
+        self._sso_creator = SsoCatalogCreator(self, None, sso_sed)
+        self._sso_sed = self._sso_creator.sso_sed
+        # self._sso_partition = sso_partition
+        self._run_options = run_options
+        self._tophat_sed_bins = None
+
+        # self._config_writer = ConfigWriter(self._skycatalog_root,
+        #                                    self._catalog_dir,
+        #                                    self._catalog_name,
+        #                                    not self._skip_done,
+        #                                    self._logname)
+
+    # def _make_tophat_columns(self, dat, names, cmp):
+    #     '''
+    #     Create columns sed_val_cmp, cmp_magnorm where cmp is one of "disk",
+    #     "bulge", "knots"
+
+    #     Parameters
+    #     ----------
+    #     dat          Data read from input galaxy catalog. Includes keys for
+    #                  everything in names plus entry for redshiftHubble
+    #     names        Names of SED columns for this component
+    #     cmp          Component name
+
+    #     Returns
+    #     -------
+    #     Add keys  sed_val_cmp, cmp_magnorm to input dat. Then return dat.
+    #     '''
+    #     sed_vals = (np.array([dat[k] for k in names]).T).tolist()
+    #     dat['sed_val_' + cmp] = sed_vals
+    #     dat[cmp + '_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for (s, z)
+    #                              in zip(sed_vals, dat['redshiftHubble'])]
+    #     for k in names:
+    #         del dat[k]
+    #     return dat
+
+    def create(self):
+        """
+        Create catalog for our object_type, using stored context.
+
+        Return
+        ------
+        None
+        """
+        object_type  = self._object_type
+        if object_type in {'cosmodc2_galaxy', 'diffsky_galaxy'}:
+            self.create_galaxy_flux_catalog()
+        elif object_type == ('star'):
+            self.create_pointsource_flux_catalog()
+        elif object_type == ('sso'):
+            self._sso_creator.create_sso_flux_catalog()
+
+        else:
+            raise NotImplementedError(
+                f'FluxCatalogCreator.create: unsupported object type {object_type}')
+
+    def create_galaxy_flux_catalog(self, config_file=None):
+        '''
+        Create a second file per healpixel containing just galaxy id and
+        LSST fluxes.  Use information in the main file to compute fluxes
+
+        Parameters
+        ----------
+        Path to config created in first stage so we can find the main
+        galaxy files.
+
+        Return
+        ------
+        None
+        '''
+
+        from .skyCatalogs import open_catalog
+        self._sed_gen = None
+
+        if not config_file:
+            config_file = self.get_config_path()
+        if not self._cat:
+            self._cat = open_catalog(config_file,
+                                     skycatalog_root=self._skycatalog_root)
+
+        # Throughput versions for fluxes included
+        thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
+        if self._include_roman_flux:
+            thru_v['roman_throughputs_version'] = self._cat._roman_thru_v
+
+        file_metadata = assemble_file_metadata(
+            self._pkg_root,
+            run_options=self._run_options,
+            flux_file=True,
+            throughputs_versions=thru_v)
+
+        self._gal_flux_schema =\
+            make_galaxy_flux_schema(self._logname, self._galaxy_type,
+                                    include_roman_flux=self._include_roman_flux,
+                                    metadata_input=file_metadata)
+        self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
+
+        # Might also open a main file and read its metadata to be sure
+        # the value for stride is correct.
+        # Especially need to do this if we want to support making flux
+        # files in a separate job activation.
+        # self.object_type = 'galaxy'
+        if self._galaxy_type == 'diffsky':
+            # self.object_type = 'diffsky_galaxy'
+            from .diffsky_sedgen import DiffskySedGenerator
+            # Default values are ok for all the diffsky-specific
+            # parameters: include_nonLSST_flux, sed_parallel, auto_loop,
+            # wave_ang_min, wave_ang_max, rel_err, n_per
+            self._sed_gen = DiffskySedGenerator(logname=self._logname,
+                                                galaxy_truth=self._galaxy_truth,
+                                                output_dir=self._output_dir,
+                                                skip_done=True,
+                                                sky_cat=self._cat)
+
+        self._flux_template = self._cat.raw_config['object_types']['galaxy']['flux_file_template']
+
+        self._logger.info('Creating galaxy flux files')
+        for p in self._parts:
+            self._logger.info(f'Starting on pixel {p}')
+            self._create_galaxy_flux_pixel(p)
+            self._logger.info(f'Completed pixel {p}')
+
+    def _get_needed_flux_attrs(self):
+        if self._galaxy_type == 'diffsky':
+            return ['galaxy_id', 'shear1', 'shear2', 'convergence',
+                    'redshiftHubble', 'MW_av', 'MW_rv']
+        else:
+            return ['galaxy_id', 'shear_1', 'shear_2', 'convergence',
+                    'redshift_hubble', 'MW_av', 'MW_rv', 'sed_val_bulge',
+                    'sed_val_disk', 'sed_val_knots']
+
+    def _create_galaxy_flux_pixel(self, pixel):
+        '''
+        Create a parquet file for a single healpix pixel containing only
+        galaxy id and LSST fluxes
+
+        Parameters
+        ----------
+        Pixel         int
+
+        Return
+        ------
+        None
+        '''
+
+        # Would be better to obtain output filename from config or
+        # at least from object_type
+        output_filename = f'galaxy_flux_{pixel}.parquet'
+        output_path = os.path.join(self._output_dir, output_filename)
+
+        if os.path.exists(output_path):
+            if not self._skip_done:
+                self._logger.info(f'Overwriting file {output_path}')
+            else:
+                self._logger.info(f'Skipping regeneration of {output_path}')
+                return
+
+        # If there are multiple row groups, each is stored in a separate
+        # object collection. Need to loop over them
+        object_list = self._cat.get_object_type_by_hp(pixel, self._object_type)
+        if len(object_list) == 0:
+            self._logger.warning(f'Cannot create flux file for pixel {pixel} because main file does not exist or is empty')
+            return
+
+        if self._galaxy_type == 'diffsky':
+            # Generate SEDs if necessary
+            self._sed_gen.generate_pixel(pixel)
+
+        writer = None
+        _instrument_needed = []
+        rg_written = 0
+        for field in self._gal_flux_needed:
+            if 'lsst' in field and 'lsst' not in _instrument_needed:
+                _instrument_needed.append('lsst')
+            if 'roman' in field and 'roman' not in _instrument_needed:
+                _instrument_needed.append('roman')
+
+        for object_coll in object_list.get_collections():
+            _galaxy_collection = object_coll
+            # prefetch everything we need.
+            for att in self._get_needed_flux_attrs():
+                _ = object_coll.get_native_attribute(att)
+            l_bnd = 0
+            u_bnd = len(object_coll)
+
+            self._logger.debug(f'Handling range {l_bnd} up to {u_bnd}')
+
+            out_dict = {}
+            for field in self._gal_flux_needed:
+                out_dict[field] = []
+
+            n_parallel = self._flux_parallel
+
+            if n_parallel == 1:
+                n_per = u_bnd - l_bnd
+            else:
+                n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
+            lb = l_bnd
+            u = min(l_bnd + n_per, u_bnd)
+            readers = []
+
+            if n_parallel == 1:
+                out_dict = _do_galaxy_flux_chunk(None, _galaxy_collection,
+                                                 _instrument_needed, lb, u)
+            else:
+                # Expect to be able to do about 1500/minute/process
+                tm = max(int((n_per*60)/500), 5)  # Give ourselves a cushion
+                self._logger.info(
+                    f'Using timeout value {tm} for {n_per} sources')
+                p_list = []
+                for i in range(n_parallel):
+                    conn_rd, conn_wrt = Pipe(duplex=False)
+                    readers.append(conn_rd)
+
+                    # For debugging call directly
+                    proc = Process(target=_do_galaxy_flux_chunk,
+                                   name=f'proc_{i}',
+                                   args=(conn_wrt, _galaxy_collection,
+                                         _instrument_needed, lb, u))
+                    proc.start()
+                    p_list.append(proc)
+                    lb = u
+                    u = min(lb + n_per, u_bnd)
+
+                self._logger.debug('Processes started')
+                for i in range(n_parallel):
+                    ready = readers[i].poll(tm)
+                    if not ready:
+                        self._logger.error(
+                            f'Process {i} timed out after {tm} sec')
+                        sys.exit(1)
+                    dat = readers[i].recv()
+                    for field in self._gal_flux_needed:
+                        out_dict[field] += dat[field]
+                for p in p_list:
+                    p.join()
+
+            out_df = pd.DataFrame.from_dict(out_dict)
+            out_table = pa.Table.from_pandas(out_df,
+                                             schema=self._gal_flux_schema)
+
+            if not writer:
+                writer = pq.ParquetWriter(output_path, self._gal_flux_schema)
+            writer.write_table(out_table)
+
+            rg_written += 1
+
+        writer.close()
+        self._logger.debug(f'# row groups written to flux file: {rg_written}')
+
+    def create_pointsource_flux_catalog(self, config_file=None):
+        '''
+        Create a second file per healpixel containing just id and
+        LSST fluxes.  Use information in the main file to compute fluxes
+
+        Parameters
+        ----------
+        Path to config created in first stage so we can find the main
+        star files
+
+        Return
+        ------
+        None
+        '''
+
+        from .skyCatalogs import open_catalog
+
+        if not config_file:
+            config_file = self.get_config_path()
+
+        # Always open catalog. If it was opened for galaxies earlier
+        # it won't know about star files.
+        self._cat = open_catalog(config_file,
+                                 skycatalog_root=self._skycatalog_root)
+        thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
+        file_metadata = assemble_file_metadata(
+            self._pkg_root,
+            run_options=self._run_options,
+            flux_file=True,
+            throughputs_versions=thru_v)
+
+        self._ps_flux_schema = make_star_flux_schema(self._logname,
+                                                     metadata_input=file_metadata)
+
+        self._flux_template = self._cat.raw_config['object_types']['star']['flux_file_template']
+
+        self._logger.info('Creating pointsource flux files')
+        for p in self._parts:
+            self._logger.info(f'Starting on pixel {p}')
+            self._create_pointsource_flux_pixel(p)
+            self._logger.info(f'Completed pixel {p}')
+
+    def _create_pointsource_flux_pixel(self, pixel):
+        '''
+        Create a parquet file for a single healpix pixel containing only
+        pointsource id and LSST fluxes
+
+        Parameters
+        ----------
+        pixel         int
+
+        Return
+        ------
+        None
+        '''
+
+        # For main catalog use self._cat
+        # For schema use self._ps_flux_schema
+        # output_template should be derived from value for flux_file_template
+        #  in main catalog config.  Cheat for now
+        output_filename = f'pointsource_flux_{pixel}.parquet'
+        output_path = os.path.join(self._output_dir, output_filename)
+
+        if os.path.exists(output_path):
+            if not self._skip_done:
+                self._logger.info(f'Overwriting file {output_path}')
+            else:
+                self._logger.info(f'Skipping regeneration of {output_path}')
+                return
+        n_parallel = self._flux_parallel
+
+        object_list = self._cat.get_object_type_by_hp(pixel, 'star')
+        writer = None
+        instrument_needed = ['lsst']       # for now
+        rg_written = 0
+        fields_needed = self._ps_flux_schema.names
+
+        for i in range(object_list.collection_count):
+            _star_collection = object_list.get_collections()[i]
+
+            l_bnd = 0
+            u_bnd = len(_star_collection)
+            out_dict = {}
+
+            out_dict = {}
+            for field in fields_needed:
+                out_dict[field] = []
+
+            if n_parallel == 1:
+                n_per = u_bnd - l_bnd
+            else:
+                n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
+
+            lb = l_bnd
+            u = min(l_bnd + n_per, u_bnd)
+            readers = []
+
+            if n_parallel == 1:
+                out_dict = _do_star_flux_chunk(None, _star_collection,
+                                               instrument_needed, lb, u)
+            else:
+                # Expect to be able to do about 1500/minute/process
+
+                tm = max(int((n_per*60)/500), 5)  # Give ourselves a cushion
+                self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+                p_list = []
+                for i in range(n_parallel):
+                    conn_rd, conn_wrt = Pipe(duplex=False)
+                    readers.append(conn_rd)
+
+                    # For debugging call directly
+                    proc = Process(target=_do_star_flux_chunk,
+                                   name=f'proc_{i}',
+                                   args=(conn_wrt, _star_collection,
+                                         instrument_needed, lb, u))
+                    proc.start()
+                    p_list.append(proc)
+                    lb = u
+                    u = min(lb + n_per, u_bnd)
+
+                self._logger.debug('Processes started')
+                for i in range(n_parallel):
+                    ready = readers[i].poll(tm)
+                    if not ready:
+                        self._logger.error(f'Process {i} timed out after {tm} sec')
+                        sys.exit(1)
+                    dat = readers[i].recv()
+                    for field in fields_needed:
+                        out_dict[field] += dat[field]
+                for p in p_list:
+                    p.join()
+
+            out_df = pd.DataFrame.from_dict(out_dict)
+            out_table = pa.Table.from_pandas(out_df,
+                                             schema=self._ps_flux_schema)
+
+            if not writer:
+                writer = pq.ParquetWriter(output_path, self._ps_flux_schema)
+            writer.write_table(out_table)
+            rg_written += 1
+
+        writer.close()
+        self._logger.debug(f'# row groups written to flux file: {rg_written}')
+
+    def get_config_path(self):
+        '''
+        Return full path to config file.
+        (self._config_path is path to *directory* containing config file)
+        '''
+        if not self._config_path:
+            self._config_path = self._output_dir
+
+        return os.path.join(self._config_path, self._catalog_name + '.yaml')
