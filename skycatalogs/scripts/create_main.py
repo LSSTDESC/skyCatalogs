@@ -123,7 +123,7 @@ creator = MainCatalogCreator(args.object_type, parts,
                              stride=args.stride,
                              dc2=args.dc2,
                              star_input_fmt=args.star_input_fmt,
-                             sso_sed=args.sso_sed, # probably not needed
+                             sso_sed=args.sso_sed,  # probably not needed
                              run_options=opt_dict)
 if len(parts) > 0:
     logger.info(f'Starting with healpix pixel {parts[0]}')

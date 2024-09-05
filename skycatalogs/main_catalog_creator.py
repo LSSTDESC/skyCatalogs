@@ -17,8 +17,6 @@ from .utils.star_parquet_input import _star_parquet_reader
 from .utils.parquet_schema_utils import make_galaxy_schema
 from .utils.parquet_schema_utils import make_star_schema
 from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
-# from .objects.base_object import LSST_BANDS
-# from .objects.base_object import ROMAN_BANDS
 from .objects.star_object import StarConfigFragment
 from .objects.galaxy_object import GalaxyConfigFragment
 from .objects.diffsky_object import DiffskyConfigFragment
@@ -28,7 +26,6 @@ from .sso_catalog_creator import SsoCatalogCreator
 Code to create a sky catalog for particular object types
 """
 
-# __all__ = ['MainCatalogCreator', 'FluxCatalogCreator']
 __all__ = ['MainCatalogCreator']
 
 _MW_rv_constant = 3.1

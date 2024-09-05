@@ -1,29 +1,16 @@
 import os
 import sys
-# import re
 import logging
 import numpy as np
-# import healpy
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from multiprocessing import Process, Pipe
-# from .utils.sed_tools import TophatSedFactory, get_star_sed_path
-# from .utils.config_utils import assemble_cosmology
-# from .utils.config_utils import assemble_provenance
 from .utils.config_utils import assemble_file_metadata
-# from .utils.config_utils import ConfigWriter
-# from .utils.star_parquet_input import _star_parquet_reader
-# from .utils.parquet_schema_utils import make_galaxy_schema
 from .utils.parquet_schema_utils import make_galaxy_flux_schema
 from .utils.parquet_schema_utils import make_star_flux_schema
-# from .utils.parquet_schema_utils import make_star_schema
-# from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.base_object import LSST_BANDS
 from .objects.base_object import ROMAN_BANDS
-# from .objects.star_object import StarConfigFragment
-# from .objects.galaxy_object import GalaxyConfigFragment
-# from .objects.diffsky_object import DiffskyConfigFragment
 from .sso_catalog_creator import SsoCatalogCreator
 
 """
@@ -34,119 +21,6 @@ __all__ = ['FluxCatalogCreator']
 
 _MW_rv_constant = 3.1
 _nside_allowed = 2**np.arange(15)
-
-
-# def _get_tophat_info(columns):
-#     '''
-#     Parameters
-#     ----------
-#     columns    list of column names including the ones with per-tophat info
-
-#     Returns
-#     -------
-#     sed_bins        List of  the tophat bins, sorted by "start" (left edge)
-#     sed_bulge_names To be fetched from input catalog
-#     sed_disk_names  To be fetched from input catalog
-#     '''
-#     tophat_bulge_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_bulge'
-#     tophat_disk_re = r'sed_(?P<start>\d+)_(?P<width>\d+)_disk'
-
-#     # Save all the start, width values
-#     sed_bulge_names = [i for i in columns if (i.startswith('sed') and
-#                                               i.endswith('bulge'))]
-#     sed_disk_names = [i for i in columns if (i.startswith('sed') and
-#                                              i.endswith('disk'))]
-
-#     sed_bins = [[int(re.match(tophat_bulge_re, s)['start']),
-#                  int(re.match(tophat_bulge_re, s)['width'])] for s in sed_bulge_names]
-
-#     # Sort sed by value for start. Finishes off work on sed_bins
-#     def _bin_start_key(start_width):
-#         return start_width[0]
-#     sed_bins.sort(key=_bin_start_key)
-
-#     # Moving on to tophat_fetch
-#     def _sed_bulge_key(s):
-#         return int(re.match(tophat_bulge_re, s)['start'])
-
-#     def _sed_disk_key(s):
-#         return int(re.match(tophat_disk_re, s)['start'])
-
-#     # Sort into increaing order by start wavelength
-#     sed_bulge_names.sort(key=_sed_bulge_key)
-#     sed_disk_names.sort(key=_sed_disk_key)
-
-#     return sed_bins, sed_bulge_names, sed_disk_names
-
-
-# def _find_subpixels(pixel, subpixel_nside, pixel_nside=32, nest=False):
-#     '''
-#     Return list of pixels of specified nside inside a given pixel
-#     Parameters
-#     ----------
-#     pixel           int       the id of the input pixel
-#     subpixel_nside  int       nside for subpixels
-#     pixel_nside     int       nside of original pixel (default=32)
-#     nest            boolean   True if pixel ordering for original pixel is
-#                               nested (default = False)
-#     Returns
-#     -------
-#     List of subpixel ids (nested ordering iff original was).  If subpixel
-#     resolution is no better than original, just return original pixel id
-#     '''
-#     if pixel_nside not in _nside_allowed:
-#         raise ValueError(f'Disallowed pixel nside value {pixel_nside}')
-#     if subpixel_nside not in _nside_allowed:
-#         raise ValueError(f'Disallowed subpixel nside value {subpixel_nside}')
-#     if pixel_nside >= subpixel_nside:
-#         return [pixel]
-
-#     if not nest:
-#         nest_pixel = healpy.ring2nest(pixel_nside, pixel)
-#     else:
-#         nest_pixel = pixel
-
-#     def _next_level(pixel):
-#         return [4 * pixel, 4 * pixel + 1, 4 * pixel + 2, 4 * pixel + 3]
-
-#     pixels = [nest_pixel]
-#     current_nside = pixel_nside
-#     while current_nside < subpixel_nside:
-#         pixels = [pix for p in pixels for pix in _next_level(p)]
-#         current_nside = current_nside * 2
-
-#     if nest:
-#         return pixels
-#     else:
-#         return [healpy.nest2ring(subpixel_nside, p) for p in pixels]
-
-
-# def _generate_subpixel_masks(ra, dec, subpixels, nside=32):
-#     '''
-#     Given ra, dec values for objects within a particular pixel and a list of
-#     its subpixels for some greater value of nside, return dict with subpixel
-#     ids as keys and values a mask which masks off all values except those
-#     belonging to subpixel
-
-#     Parameters
-#     ----------
-#     ra         float array   ra for all objects in a particular pixel
-#     dec        float array   dec for all objects in a particular pixel
-#     subpixels  int array     pixels for which masks should be generated
-#     nside      int           healpix ordering parameter
-
-#     Returns
-#     -------
-#     masks      dict          mask for each subpixel, keyed by subpixel id
-#     '''
-
-#     pix_id = np.array(healpy.pixelfunc.ang2pix(nside, ra, dec, lonlat=True))
-#     masks = dict()
-#     for p in subpixels:
-#         m = np.array(pix_id != p)
-#         masks[p] = m
-
-#     return masks
 
 
 # Collection of galaxy objects for current row group, current pixel
@@ -301,7 +175,6 @@ class FluxCatalogCreator:
         self._config_path = config_path
         self._catalog_name = catalog_name
 
-        # self._output_type = output_type
         self._logname = logname
         self._logger = logging.getLogger(logname)
         self._skip_done = skip_done
@@ -312,39 +185,8 @@ class FluxCatalogCreator:
         self._sso_sed_factory = None               # do we need this?
         self._sso_creator = SsoCatalogCreator(self, None, sso_sed)
         self._sso_sed = self._sso_creator.sso_sed
-        # self._sso_partition = sso_partition
         self._run_options = run_options
         self._tophat_sed_bins = None
-
-        # self._config_writer = ConfigWriter(self._skycatalog_root,
-        #                                    self._catalog_dir,
-        #                                    self._catalog_name,
-        #                                    not self._skip_done,
-        #                                    self._logname)
-
-    # def _make_tophat_columns(self, dat, names, cmp):
-    #     '''
-    #     Create columns sed_val_cmp, cmp_magnorm where cmp is one of "disk",
-    #     "bulge", "knots"
-
-    #     Parameters
-    #     ----------
-    #     dat          Data read from input galaxy catalog. Includes keys for
-    #                  everything in names plus entry for redshiftHubble
-    #     names        Names of SED columns for this component
-    #     cmp          Component name
-
-    #     Returns
-    #     -------
-    #     Add keys  sed_val_cmp, cmp_magnorm to input dat. Then return dat.
-    #     '''
-    #     sed_vals = (np.array([dat[k] for k in names]).T).tolist()
-    #     dat['sed_val_' + cmp] = sed_vals
-    #     dat[cmp + '_magnorm'] = [self._obs_sed_factory.magnorm(s, z) for (s, z)
-    #                              in zip(sed_vals, dat['redshiftHubble'])]
-    #     for k in names:
-    #         del dat[k]
-    #     return dat
 
     def create(self):
         """
@@ -354,7 +196,7 @@ class FluxCatalogCreator:
         ------
         None
         """
-        object_type  = self._object_type
+        object_type = self._object_type
         if object_type in {'cosmodc2_galaxy', 'diffsky_galaxy'}:
             self.create_galaxy_flux_catalog()
         elif object_type == ('star'):
