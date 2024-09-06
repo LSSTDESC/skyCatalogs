@@ -422,7 +422,6 @@ def assemble_provenance(pkg_root, inputs={}, run_options=None,
 
 def assemble_file_metadata(pkg_root, inputs=None, run_options=None,
                            flux_file=False, throughputs_versions=None):
-    #                      flux_file=False):
     '''
     Assemble the metadata to be included in a skyCatalogs binary data file
     '''

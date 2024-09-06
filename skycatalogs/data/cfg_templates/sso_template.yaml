@@ -5,4 +5,4 @@ area_partition:
 data_file_type: parquet
 file_template: sso_(?P<healpix>\d+).parquet
 flux_file_template: sso_flux_(?P<healpix>\d+).parquet
-sed_model: dbfile_angstrom_flambda
+sed_model: file_angstrom_flambda

@@ -334,8 +334,9 @@ class SkyCatalog(object):
                                       config['object_types']['diffsky_galaxy']
                                       ['sed_file_template'], cosmology)
         if 'sso' in config['object_types']:
-            self._sso_sed_path = self._config.get_sso_sed_path()
-            self._sso_sed_factory = SsoSedFactory(self._sso_sed_path)
+            # self._sso_sed_path = self._config.get_sso_sed_path()
+            # self._sso_sed_factory = SsoSedFactory(self._sso_sed_path)
+            self._sso_sed_factory = SsoSedFactory()
             if not self._sso_sed_factory:
                 self._logger.warning('SSO appear in the list of available object types but supporting files do not exist')
                 self._logger.warning('SSOs will not be simulated')
