@@ -11,7 +11,7 @@ from .utils.parquet_schema_utils import make_galaxy_flux_schema
 from .utils.parquet_schema_utils import make_star_flux_schema
 from .objects.base_object import LSST_BANDS
 from .objects.base_object import ROMAN_BANDS
-from .sso_catalog_creator import SsoCatalogCreator
+from .sso_catalog_creator import SsoFluxCatalogCreator
 
 """
 Code to create flux sky catalogs for particular object types
@@ -147,6 +147,7 @@ class FluxCatalogCreator:
         Might want to add a way to specify template for output file name
         and template for input sedLookup file name.
         """
+        from .skyCatalogs import open_catalog
 
         self._object_type = object_type
         if object_type.endswith('_galaxy'):
@@ -156,8 +157,6 @@ class FluxCatalogCreator:
             self._pkg_root = pkg_root
         else:
             self._pkg_root = os.path.join(os.path.dirname(__file__), '..')
-
-        self._cat = None
 
         self._parts = parts
         if skycatalog_root:
@@ -175,6 +174,9 @@ class FluxCatalogCreator:
         self._config_path = config_path
         self._catalog_name = catalog_name
 
+        self._cat = open_catalog(self.get_config_file_path(),
+                                 skycatalog_root=self._skycatalog_root)
+
         self._logname = logname
         self._logger = logging.getLogger(logname)
         self._skip_done = skip_done
@@ -182,9 +184,7 @@ class FluxCatalogCreator:
         self._dc2 = dc2
         self._include_roman_flux = include_roman_flux
         self._obs_sed_factory = None
-        self._sso_sed_factory = None               # do we need this?
-        self._sso_creator = SsoCatalogCreator(self, None, sso_sed)
-        self._sso_sed = self._sso_creator.sso_sed
+        self._sso_creator = SsoFluxCatalogCreator(self)
         self._run_options = run_options
         self._tophat_sed_bins = None
 
@@ -223,14 +223,7 @@ class FluxCatalogCreator:
         None
         '''
 
-        from .skyCatalogs import open_catalog
         self._sed_gen = None
-
-        if not config_file:
-            config_file = self.get_config_path()
-        if not self._cat:
-            self._cat = open_catalog(config_file,
-                                     skycatalog_root=self._skycatalog_root)
 
         # Throughput versions for fluxes included
         thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
@@ -253,9 +246,7 @@ class FluxCatalogCreator:
         # the value for stride is correct.
         # Especially need to do this if we want to support making flux
         # files in a separate job activation.
-        # self.object_type = 'galaxy'
         if self._galaxy_type == 'diffsky':
-            # self.object_type = 'diffsky_galaxy'
             from .diffsky_sedgen import DiffskySedGenerator
             # Default values are ok for all the diffsky-specific
             # parameters: include_nonLSST_flux, sed_parallel, auto_loop,
@@ -416,16 +407,6 @@ class FluxCatalogCreator:
         ------
         None
         '''
-
-        from .skyCatalogs import open_catalog
-
-        if not config_file:
-            config_file = self.get_config_path()
-
-        # Always open catalog. If it was opened for galaxies earlier
-        # it won't know about star files.
-        self._cat = open_catalog(config_file,
-                                 skycatalog_root=self._skycatalog_root)
         thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
         file_metadata = assemble_file_metadata(
             self._pkg_root,
@@ -546,7 +527,7 @@ class FluxCatalogCreator:
         writer.close()
         self._logger.debug(f'# row groups written to flux file: {rg_written}')
 
-    def get_config_path(self):
+    def get_config_file_path(self):
         '''
         Return full path to config file.
         (self._config_path is path to *directory* containing config file)

@@ -25,6 +25,8 @@ parser.add_argument('--catalog-type', default=None,
                     help='flux or main.  If None, deduce from file name')
 parser.add_argument('--columns', nargs='*', default=[],
                     help='Columns to compare.  If None, deduce from object and catalog types')
+parser.add_argument('--debug', action='store_true',
+                    help='print output when operations succeed')
 
 args = parser.parse_args()
 
@@ -71,8 +73,13 @@ pq_file2 = pq.ParquetFile(file2)
 
 assert pq_file1.metadata.num_rows == pq_file2.metadata.num_rows, 'Same number of rows'
 
+if args.debug:
+    print("Number of rows is identical")
+
 tbl1 = pq_file1.read_row_group(0, columns=cols)
 tbl2 = pq_file2.read_row_group(0, columns=cols)
 
 for c in cols:
     assert tbl1[c] == tbl2[c], f'Column {c} is identical'
+    if args.debug:
+        print(f"Column {c} is identical")

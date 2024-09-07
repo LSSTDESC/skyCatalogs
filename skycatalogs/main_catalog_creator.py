@@ -20,7 +20,7 @@ from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.star_object import StarConfigFragment
 from .objects.galaxy_object import GalaxyConfigFragment
 from .objects.diffsky_object import DiffskyConfigFragment
-from .sso_catalog_creator import SsoCatalogCreator
+from .sso_catalog_creator import SsoMainCatalogCreator
 
 """
 Code to create a sky catalog for particular object types
@@ -155,7 +155,7 @@ class MainCatalogCreator:
                  pkg_root=None, skip_done=False,
                  nside=32, stride=1000000, dc2=False,
                  star_input_fmt='sqlite', sso_sed=None,
-                 sso_partition='healpixel', run_options=None):
+                 run_options=None):
         """
         Store context for catalog creation
 
@@ -191,7 +191,6 @@ class MainCatalogCreator:
         dc2             Whether to adjust values to provide input comparable
                         to that for the DC2 run
         star_input_fmt  May be either 'sqlite' or 'parquet'
-        sso_sed         Path to sed file to be used for all SSOs
         run_options     The options the outer script (create_sc.py) was
                         called with
 
@@ -236,10 +235,7 @@ class MainCatalogCreator:
         self._dc2 = dc2
         self._obs_sed_factory = None
         if object_type == 'sso':
-            self._sso_creator = SsoCatalogCreator(self, self._truth, sso_sed)
-        # self._sso_truth = self._sso_creator.sso_truth
-        # self._sso_sed = self._sso_creator.sso_sed
-        # self._sso_partition = sso_partition
+            self._sso_creator = SsoMainCatalogCreator(self, self._truth)
         self._run_options = run_options
         self._tophat_sed_bins = None
 
@@ -308,7 +304,6 @@ class MainCatalogCreator:
 
         import GCRCatalogs
 
-        # self._cat = None
         if self._object_type == 'cosmodc2_galaxy':
             self._galaxy_type = 'cosmodc2'
             if self._truth is None:
