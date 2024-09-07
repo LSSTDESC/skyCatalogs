@@ -44,6 +44,8 @@ cmps = base1.split('_')
 obj = args.object_type
 if not obj:
     obj = cmps[0]
+if obj == 'pointsource':
+    obj = 'star'
 cat_type = args.catalog_type
 if not cat_type:
     if len(cmps) == 2:
