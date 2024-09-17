@@ -4,8 +4,6 @@ from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
 import astropy.constants
 import h5py
-import sqlite3
-import pandas as pd
 
 import numpy as np
 from pathlib import PurePath
@@ -218,35 +216,20 @@ class SsoSedFactory():
     Load the single SED used for SSO objects and make it available as galsim
     SED
     '''
-    def __init__(self, sed_path=None, fmt='txt'):
+    def __init__(self, sed_path=None):
         '''
-        Support db format or two-column text file, which galsim can
-        read directly.  In fact we're hardcoding additional
-        assumptions: that for db formath the table name is "SED" and that,
-        for both formats, columns are
+        Format of sed file is two-column text file, which galsim can
+        read directly. Columns are
         "wavelength" (units angstroms) and "flux" (units flambda)
         '''
-        if fmt not in ['db', 'txt']:
-            raise ValueError(f'SsoSedFactory: Unsupport input format {fmt}; must be "db"')
-
         if not sed_path:
             fname = 'solar_sed'
             # Get directory for possible default sed files
             sed_path = os.path.join(_SKYCATALOGS_DIR, 'skycatalogs',
-                                    'data','sso','.'.join([fname, fmt]))
+                                    'data', 'sso', '.'.join([fname, 'txt']))
         wave_type = 'angstrom'
         flux_type = 'flambda'
-        if fmt == 'txt':
-            lut = galsim.LookupTable.from_file(sed_path, interpolant='linear')
-        else:  # must be db
-            q = 'select wavelength, flux as flambda from SED order by wavelength'
-            try:
-                with sqlite3.connect(sed_path) as conn:
-                    sed_df = pd.read_sql_query(q, conn)
-            except Exception:
-                return None
-            lut = galsim.LookupTable(x=sed_df['wavelength'], f=sed_df['flambda'],
-                                     interpolant='linear')
+        lut = galsim.LookupTable.from_file(sed_path, interpolant='linear')
 
         sed = galsim.SED(lut, wave_type=wave_type, flux_type=flux_type)
         self.sed = sed
