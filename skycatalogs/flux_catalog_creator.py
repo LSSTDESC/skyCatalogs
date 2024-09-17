@@ -187,6 +187,7 @@ class FluxCatalogCreator:
         self._sso_creator = SsoFluxCatalogCreator(self)
         self._run_options = run_options
         self._tophat_sed_bins = None
+        self._sed_gen = None
 
     def create(self):
         """
@@ -223,8 +224,6 @@ class FluxCatalogCreator:
         None
         '''
 
-        self._sed_gen = None
-
         # Throughput versions for fluxes included
         thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
         if self._include_roman_flux:
@@ -242,22 +241,11 @@ class FluxCatalogCreator:
                                     metadata_input=file_metadata)
         self._gal_flux_needed = [field.name for field in self._gal_flux_schema]
 
-        # Might also open a main file and read its metadata to be sure
-        # the value for stride is correct.
-        # Especially need to do this if we want to support making flux
-        # files in a separate job activation.
         if self._galaxy_type == 'diffsky':
-            from .diffsky_sedgen import DiffskySedGenerator
-            # Default values are ok for all the diffsky-specific
-            # parameters: include_nonLSST_flux, sed_parallel, auto_loop,
-            # wave_ang_min, wave_ang_max, rel_err, n_per
-            self._sed_gen = DiffskySedGenerator(logname=self._logname,
-                                                galaxy_truth=self._galaxy_truth,
-                                                output_dir=self._output_dir,
-                                                skip_done=True,
-                                                sky_cat=self._cat)
-
-        self._flux_template = self._cat.raw_config['object_types']['galaxy']['flux_file_template']
+            type_field = 'diffsky_galaxy'
+        else:
+            type_field = 'galaxy'
+        self._flux_template = self._cat.raw_config['object_types'][type_field]['flux_file_template']
 
         self._logger.info('Creating galaxy flux files')
         for p in self._parts:
@@ -309,7 +297,22 @@ class FluxCatalogCreator:
 
         if self._galaxy_type == 'diffsky':
             # Generate SEDs if necessary
-            self._sed_gen.generate_pixel(pixel)
+            sed_output_path = os.path.join(self._output_dir,
+                                           f'galaxy_sed_{pixel}.hdf5')
+            if not os.path.exists(sed_output_path):
+                if not self._sed_gen:
+                    from .diffsky_sedgen import DiffskySedGenerator
+                    # Default values are ok for all the diffsky-specific
+                    # parameters: include_nonLSST_flux, sed_parallel, auto_loop,
+                    # wave_ang_min, wave_ang_max, rel_err, n_per
+                    self._sed_gen = DiffskySedGenerator(
+                        logname=self._logname,
+                        galaxy_truth=self._galaxy_truth,
+                        output_dir=self._output_dir,
+                        skip_done=True,
+                        sky_cat=self._cat)
+
+                self._sed_gen.generate_pixel(pixel)
 
         writer = None
         _instrument_needed = []
