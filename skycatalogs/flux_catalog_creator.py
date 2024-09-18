@@ -25,59 +25,23 @@ _nside_allowed = 2**np.arange(15)
 
 # Collection of galaxy objects for current row group, current pixel
 # Used while doing flux computation
-
-def _do_galaxy_flux_chunk(send_conn, galaxy_collection, instrument_needed,
-                          l_bnd, u_bnd):
+def _do_flux_chunk(send_conn, object_collection, instrument_needed,
+                   l_bnd, u_bnd, id_column):
     '''
-    output connection
-    l_bnd, u_bnd     demarcates slice to process
-    instrument_needed List of which calculations should be done
+    send_conn           output connection
+    object_collection   objects whose fluxes are to be computed
+    instrument_needed   determines which fluxes (LSST only or also Roman)
+                        to compute
+    l_bnd, u_bnd        demarcates slice to process
+    id_column           column name
 
     returns
                     dict with keys id, lsst_flux_u, ... lsst_flux_y
     '''
     out_dict = {}
 
-    o_list = galaxy_collection[l_bnd: u_bnd]
-    out_dict['galaxy_id'] = [o.get_native_attribute('galaxy_id') for o in o_list]
-    if 'lsst' in instrument_needed:
-        all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in o_list]
-        all_fluxes_transpose = zip(*all_fluxes)
-        colnames = [f'lsst_flux_{band}' for band in LSST_BANDS]
-        flux_dict = dict(zip(colnames, all_fluxes_transpose))
-        out_dict.update(flux_dict)
-
-    if 'roman' in instrument_needed:
-        all_fluxes = [o.get_roman_fluxes(as_dict=False) for o in o_list]
-        all_fluxes_transpose = zip(*all_fluxes)
-        colnames = [f'roman_flux_{band}' for band in ROMAN_BANDS]
-        flux_dict = dict(zip(colnames, all_fluxes_transpose))
-        out_dict.update(flux_dict)
-
-    if send_conn:
-        send_conn.send(out_dict)
-    else:
-        return out_dict
-
-
-def _do_star_flux_chunk(send_conn, star_collection, instrument_needed,
-                        l_bnd, u_bnd):
-    '''
-    send_conn         output connection, used to send results to
-                      parent process
-    star_collection   ObjectCollection. Information from main skyCatalogs
-                      star file
-    instrument_needed List of which calculations should be done. Currently
-                      supported instrument names are 'lsst' and 'roman'
-    l_bnd, u_bnd      demarcates slice to process
-
-    returns
-                    dict with keys id, lsst_flux_u, ... lsst_flux_y
-    '''
-    out_dict = {}
-
-    o_list = star_collection[l_bnd: u_bnd]
-    out_dict['id'] = [o.get_native_attribute('id') for o in o_list]
+    o_list = object_collection[l_bnd: u_bnd]
+    out_dict[id_column] = [o.get_native_attribute(id_column) for o in o_list]
     if 'lsst' in instrument_needed:
         all_fluxes = [o.get_LSST_fluxes(as_dict=False) for o in o_list]
         all_fluxes_transpose = zip(*all_fluxes)
@@ -108,7 +72,6 @@ class FluxCatalogCreator:
                  pkg_root=None,
                  skip_done=False,
                  flux_parallel=16,
-                 dc2=False,
                  include_roman_flux=False,
                  sso_sed=None,
                  run_options=None):
@@ -137,8 +100,8 @@ class FluxCatalogCreator:
                         (by default) overwrite with new version.
                         Output info message in either case if file exists.
         flux_parallel   Number of processes to divide work of computing fluxes
-        dc2             Whether to adjust values to provide input comparable
-                        to that for the DC2 run
+        # dc2             Whether to adjust values to provide input comparable
+        #                to that for the DC2 run
         include_roman_flux Calculate and write Roman flux values
         sso_sed         Path to sed file to be used for all SSOs
         run_options     The options the outer script (create_sc.py) was
@@ -181,7 +144,6 @@ class FluxCatalogCreator:
         self._logger = logging.getLogger(logname)
         self._skip_done = skip_done
         self._flux_parallel = flux_parallel
-        self._dc2 = dc2
         self._include_roman_flux = include_roman_flux
         self._obs_sed_factory = None
         self._sso_creator = SsoFluxCatalogCreator(self)
@@ -348,8 +310,9 @@ class FluxCatalogCreator:
             readers = []
 
             if n_parallel == 1:
-                out_dict = _do_galaxy_flux_chunk(None, _galaxy_collection,
-                                                 _instrument_needed, lb, u)
+                # For debugging call directly
+                out_dict = _do_flux_chunk(None, _galaxy_collection,
+                                          _instrument_needed, lb, u, 'galaxy_id')
             else:
                 # Expect to be able to do about 1500/minute/process
                 tm = max(int((n_per*60)/500), 5)  # Give ourselves a cushion
@@ -359,12 +322,10 @@ class FluxCatalogCreator:
                 for i in range(n_parallel):
                     conn_rd, conn_wrt = Pipe(duplex=False)
                     readers.append(conn_rd)
-
-                    # For debugging call directly
-                    proc = Process(target=_do_galaxy_flux_chunk,
+                    proc = Process(target=_do_flux_chunk,
                                    name=f'proc_{i}',
                                    args=(conn_wrt, _galaxy_collection,
-                                         _instrument_needed, lb, u))
+                                         _instrument_needed, lb, u, 'galaxy_id'))
                     proc.start()
                     p_list.append(proc)
                     lb = u
@@ -484,8 +445,9 @@ class FluxCatalogCreator:
             readers = []
 
             if n_parallel == 1:
-                out_dict = _do_star_flux_chunk(None, _star_collection,
-                                               instrument_needed, lb, u)
+                # For debugging call directly
+                out_dict = _do_flux_chunk(None, _star_collection,
+                                          instrument_needed, lb, u, 'id')
             else:
                 # Expect to be able to do about 1500/minute/process
 
@@ -495,12 +457,10 @@ class FluxCatalogCreator:
                 for i in range(n_parallel):
                     conn_rd, conn_wrt = Pipe(duplex=False)
                     readers.append(conn_rd)
-
-                    # For debugging call directly
-                    proc = Process(target=_do_star_flux_chunk,
+                    proc = Process(target=_do_flux_chunk,
                                    name=f'proc_{i}',
                                    args=(conn_wrt, _star_collection,
-                                         instrument_needed, lb, u))
+                                         instrument_needed, lb, u, 'id'))
                     proc.start()
                     p_list.append(proc)
                     lb = u

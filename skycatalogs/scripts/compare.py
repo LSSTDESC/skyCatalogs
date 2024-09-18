@@ -38,6 +38,9 @@ if not base2:
 else:
     file2 = args.file2
 
+if args.debug:
+    print(f'Comparing {file1} and {file2}')
+
 # Basenames are of the form {object-type}_{hp}.parquet or
 # {object-type}_flux_{hp}.parquet
 cmps = base1.split('_')

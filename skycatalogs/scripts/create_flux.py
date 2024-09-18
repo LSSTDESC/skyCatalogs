@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(
     description='''
     Create flux Sky Catalogs for specified object type''',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('object_type',
+parser.add_argument('--object_type',
                     choices=['star', 'cosmodc2_galaxy', 'diffsky_galaxy',
                              'sso'],
                     help='Object type for which catalog is to be created')
@@ -46,14 +46,11 @@ parser.add_argument(
 parser.add_argument('--options-file', default=None, help='''
                     path to yaml file associating option names with values.
                     Values for any options included will take precedence.''')
-parser.add_argument('--dc2', action='store_true',
-                    help='''If supplied provide values comparable to those
-                            used for DC2 run.''')
 parser.add_argument(
     '--include-roman-flux', action='store_true',
     help='If supplied calculate & store Roman as well as LSST  fluxes')
 parser.add_argument('--sso-sed', default=None, help='''
-                    path to sqlite file containing SED to be used
+                    path to two-column text file containing SED to be used
                     for all SSOs''')
 
 args = parser.parse_args()
@@ -66,6 +63,9 @@ if args.options_file:
                 args.__setattr__(k, opt_dict[k])
             else:
                 raise ValueError(f'Unknown attribute "{k}" in options file {args.options_file}')
+
+if not args.object_type:
+    raise ValueError('Missing object-type argument')
 
 logname = 'skyCatalogs.creator'
 logger = logging.getLogger(logname)
@@ -96,7 +96,6 @@ creator = FluxCatalogCreator(args.object_type, parts,
                              logname=logname,
                              skip_done=args.skip_done,
                              flux_parallel=args.flux_parallel,
-                             dc2=args.dc2,
                              include_roman_flux=args.include_roman_flux,
                              sso_sed=args.sso_sed,
                              run_options=opt_dict)
