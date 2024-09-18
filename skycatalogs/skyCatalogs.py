@@ -334,8 +334,7 @@ class SkyCatalog(object):
                                       config['object_types']['diffsky_galaxy']
                                       ['sed_file_template'], cosmology)
         if 'sso' in config['object_types']:
-            self._sso_sed_path = self._config.get_sso_sed_path()
-            self._sso_sed_factory = SsoSedFactory(self._sso_sed_path)
+            self._sso_sed_factory = SsoSedFactory()
             if not self._sso_sed_factory:
                 self._logger.warning('SSO appear in the list of available object types but supporting files do not exist')
                 self._logger.warning('SSOs will not be simulated')
@@ -636,6 +635,9 @@ class SkyCatalog(object):
     def get_object_type_by_hp(self, hp, object_type, region=None, mjd=None,
                               exposure=EXPOSURE_DEFAULT):
         object_list = ObjectList()
+
+        if object_type == 'cosmodc2_galaxy':
+            object_type = 'galaxy'
 
         if not self.cat_cxt.lookup_collection_type(object_type):
             msg = f'object type {object_type} not available for this catalog'

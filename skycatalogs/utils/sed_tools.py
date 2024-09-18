@@ -4,16 +4,18 @@ from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
 import astropy.constants
 import h5py
-import sqlite3
-import pandas as pd
 
 import numpy as np
+from pathlib import PurePath
 from dust_extinction.parameter_averages import F19
 import galsim
 
 __all__ = ['TophatSedFactory', 'DiffskySedFactory', 'SsoSedFactory',
            'MilkyWayExtinction', 'get_star_sed_path', 'generate_sed_path',
            'normalize_sed']
+
+_FILE_PATH = str(PurePath(__file__))
+_SKYCATALOGS_DIR = _FILE_PATH[:_FILE_PATH.rindex('/skycatalogs')]
 
 
 class TophatSedFactory:
@@ -214,30 +216,28 @@ class SsoSedFactory():
     Load the single SED used for SSO objects and make it available as galsim
     SED
     '''
-    def __init__(self, sed_path, fmt='db'):
+    def __init__(self, sed_path=None):
         '''
-        For now only support db format.  In fact we're hardcoding additional
-        assumptions: that the table name is "SED" and that the columns are
+        Format of sed file is two-column text file, which galsim can
+        read directly. Columns are
         "wavelength" (units angstroms) and "flux" (units flambda)
         '''
         if not sed_path:
-            # SSO cannot be supported here
-            return None
-
-        if fmt != 'db':
-            raise ValueError(f'SsoSedFactory: Unsupport input format {fmt}; must be "db"')
+            fname = 'solar_sed'
+            # Get directory for possible default sed files
+            sed_path = os.path.join(_SKYCATALOGS_DIR, 'skycatalogs',
+                                    'data', 'sso', '.'.join([fname, 'txt']))
         wave_type = 'angstrom'
         flux_type = 'flambda'
-        q = 'select wavelength, flux as flambda from SED order by wavelength'
-        try:
-            with sqlite3.connect(sed_path) as conn:
-                sed_df = pd.read_sql_query(q, conn)
-        except Exception:
-            return None
-        lut = galsim.LookupTable(x=sed_df['wavelength'], f=sed_df['flambda'],
-                                 interpolant='linear')
+        lut = galsim.LookupTable.from_file(sed_path, interpolant='linear')
+
         sed = galsim.SED(lut, wave_type=wave_type, flux_type=flux_type)
         self.sed = sed
+        self._sed_path = sed_path    # In case we want to save it for posterity
+
+    @property
+    def sed_path(self):
+        return self._sed_path
 
     def create(self):
         return self.sed
