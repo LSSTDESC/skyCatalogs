@@ -58,7 +58,6 @@ def _load_lsst_bandpasses():
     else:
         version = 'galsim_builtin'
 
-
     for band in LSST_BANDS:
         if bp_dir:
             bp_full_path = os.path.join(bp_dir, f'total_{band}.dat')
@@ -79,6 +78,7 @@ def _load_lsst_bandpasses():
 
     return lsst_bandpasses, version
 
+
 def load_lsst_bandpasses():
     '''
     Read in lsst bandpasses from standard place, trim, and store in global dict
@@ -87,6 +87,7 @@ def load_lsst_bandpasses():
     The bandpasses
     '''
     return _load_lsst_bandpasses()[0]
+
 
 def _load_roman_bandpasses():
     '''
@@ -103,6 +104,7 @@ def load_roman_bandpasses():
     Returns: The dict
     '''
     return load_roman_bandpasses()[0]
+
 
 class BaseObject(object):
     '''
@@ -615,12 +617,12 @@ class ObjectCollection(Sequence):
             return self._object_class(self._ra[key], self._dec[key],
                                       self._id[key], object_type, self, key)
 
-        elif type(key) == slice:
+        elif type(key) is slice:
             if key.start is None:
                 key.start = 0
             return [self.__getitem__(i) for i in range(self.__len__())[key]]
 
-        elif type(key) == tuple and isinstance(key[0], Iterable):
+        elif type(key) is tuple and isinstance(key[0], Iterable):
             return [self.__getitem__(i) for i in key[0]]
 
     def get_partition_id(self):
@@ -645,7 +647,8 @@ LocatedCollection = namedtuple('LocatedCollection',
                                ['collection', 'first_index', 'upper_bound'])
 '''
 Describes collection included in a list of collections to be concatenated
-   collection:     the data
+   collection:  the data.  Should be or subclass ObjectCollection or
+                MinCollection
    first_index: index in the concatenated list of first elt in this collection
    upper_bound: index + 1 in concatenated list of last elt in this collection
       so upper_bound for one collection = first_index in the next
@@ -654,10 +657,10 @@ Describes collection included in a list of collections to be concatenated
 
 class ObjectList(Sequence):
     '''
-    Keep track of a list of ObjectCollection objects, but from user
-    perspective appears to be a list of objects.  Make use of ObjectCollection
-    implementation of Sequence until it's time to move to the next
-    ObjectCollection
+    Keep track of a list of ObjectCollection or MinCollection objects,
+    but from user perspective appears to be a list of objects.
+    Make use of Object(Min)Collection implementation of Sequence until
+    it's time to move to the next collection.
     '''
 
     def __init__(self):

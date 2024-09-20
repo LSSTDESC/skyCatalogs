@@ -24,6 +24,7 @@ from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
 from skycatalogs.objects.diffsky_object import DiffskyObject
 from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
+from skycatalogs.objects.min_object import MinCollection
 
 __all__ = ['SkyCatalog', 'open_catalog']
 
@@ -261,22 +262,16 @@ class SkyCatalog(object):
     point sources, SSOs
 
     '''
-    def __init__(self, config, mp=False, skycatalog_root=None,
-                 loglevel='INFO'):
+    def __init__(self, config, skycatalog_root=None, loglevel='INFO'):
         '''
         Parameters
         ----------
         config:  dict.  Typically the result of loading a yaml file
-        mp:      boolean  Default False. Set True to enable multiprocessing.
+                 If value is None, do a minimal amount of initialization
         skycatalog_root: If not None, overrides value in config or
                          in environment variable SKYCATALOG_ROOT
         loglevel: logging level
         '''
-        self._config = Config(config)
-        self._global_partition = None
-        if 'area_partition' in self._config.keys():       # old-style config
-            self._global_partition = self._config['area_partition']
-
         self._logger = logging.getLogger('skyCatalogs.client')
 
         if not self._logger.hasHandlers():
@@ -287,43 +282,52 @@ class SkyCatalog(object):
             ch.setFormatter(formatter)
             self._logger.addHandler(ch)
 
-        self._mp = mp
-        self._schema_version = self._config.schema_version
-        if not self._schema_version:
-            self._cat_dir = config['root_directory']
-        else:
-            sky_root = config['skycatalog_root']        # default
-            if skycatalog_root:
-                sky_root = skycatalog_root
+        self._global_partition = None
+        if config:
+            self._config = Config(config)
+            if 'area_partition' in self._config.keys():      # old-style config
+                self._global_partition = self._config['area_partition']
+            self._schema_version = self._config.schema_version
+            if not self._schema_version:
+                self._cat_dir = config['root_directory']
             else:
-                sky_root_env = os.getenv('SKYCATALOG_ROOT', None)
-                if sky_root_env:
-                    sky_root = sky_root_env
+                sky_root = config['skycatalog_root']        # default
+                if skycatalog_root:
+                    sky_root = skycatalog_root
+                else:
+                    sky_root_env = os.getenv('SKYCATALOG_ROOT', None)
+                    if sky_root_env:
+                        sky_root = sky_root_env
 
-            self._cat_dir = os.path.join(sky_root, config['catalog_dir'])
+                self._cat_dir = os.path.join(sky_root, config['catalog_dir'])
+            self._logger.info(f'Catalog data will be read from {self._cat_dir}')
+            self._sky_root = os.path.abspath(sky_root)
+        else:
+            self._config = None
+            self._sky_root = None
+            self._cat_dir = None
+            self._schema_version = None
 
-        self._sky_root = os.path.abspath(sky_root)
+        if self._config:
+            self._validate_config()
 
-        self._logger.info(f'Catalog data will be read from {self._cat_dir}')
-        # There may be more to do at this point but not too much.
-        # In particular, don't read in anything from data files
+            # Outer dict: hpid for key. Value is another dict
+            #   with keys 'files', 'object_types', each with value another dict
+            #     for 'files', map filepath to handle (initially None)
+            #     for 'object_types', map object type to filepath
+            self._hp_info = dict()
+            _ = self._find_all_hps()
 
-        self._validate_config()
+            # NOTE: the use of TophatSedFactory is appropriate *only* for an
+            # input galaxy catalog with format like cosmoDC2, which includes
+            # definitions of tophat SEDs.
+            # In other cases th_parameters below will be None
+            th_parameters = self._config.get_tophat_parameters()
+            available_types = set(self._config.list_object_types())
+        else:
+            available_types = set()
 
-        # Outer dict: hpid for key. Value is another dict
-        #    with keys 'files', 'object_types', each with value another dict
-        #       for 'files', map filepath to handle (initially None)
-        #       for 'object_types', map object type to filepath
-        self._hp_info = dict()
-        _ = self._find_all_hps()
-
-        # NOTE: the use of TophatSedFactory is appropriate *only* for an
-        # input galaxy catalog with format like cosmoDC2, which includes
-        # definitions of tophat SEDs.
-        # In other cases th_parameters below will be None
-        th_parameters = self._config.get_tophat_parameters()
-        available_types = self._config.list_object_types()
-        if ('galaxy' in available_types) or ('diffsky_galaxy') in available_types:
+        if ('galaxy' in available_types) or ('diffsky_galaxy' in available_types):
             cosmology = self._config.get_cosmology()
             if th_parameters:
                 self._observed_sed_factory =\
@@ -333,40 +337,42 @@ class SkyCatalog(object):
                     DiffskySedFactory(self._cat_dir,
                                       config['object_types']['diffsky_galaxy']
                                       ['sed_file_template'], cosmology)
-        if 'sso' in config['object_types']:
+
+        if 'sso' in available_types:
             self._sso_sed_factory = SsoSedFactory()
-            if not self._sso_sed_factory:
-                self._logger.warning('SSO appear in the list of available object types but supporting files do not exist')
-                self._logger.warning('SSOs will not be simulated')
+
         self._extinguisher = MilkyWayExtinction()
 
         # Make our properties accessible to BaseObject, etc.
         self.cat_cxt = CatalogContext(self)
 
+        if not self._config:
+            return
+
         # register object types which are in the config
-        if 'gaia_star' in config['object_types']:
+        if 'gaia_star' in available_types:
             self.cat_cxt.register_source_type('gaia_star',
                                               object_class=GaiaObject,
                                               collection_class=GaiaCollection,
                                               custom_load=True)
-        if 'star' in config['object_types']:
+        if 'star' in available_types:
             self.cat_cxt.register_source_type('star',
                                               object_class=StarObject)
-        if 'galaxy' in config['object_types']:
+        if 'galaxy' in available_types:
             self.cat_cxt.register_source_type('galaxy',
                                               object_class=GalaxyObject)
-        if 'snana' in config['object_types']:
+        if 'snana' in available_types:
             self.cat_cxt.register_source_type('snana',
                                               object_class=SnanaObject,
                                               collection_class=SnanaCollection)
-        if 'diffsky_galaxy' in config['object_types']:
+        if 'diffsky_galaxy' in available_types:
             self.cat_cxt.register_source_type('diffsky_galaxy',
                                               object_class=DiffskyObject)
-        if 'sso' in config['object_types']:
+        if 'sso' in available_types:
             if self._sso_sed_factory:
-                self.cat_cxt.register_source_type('sso',
-                                                  object_class=SsoObject,
-                                                  collection_class=SsoCollection)
+                self.cat_cxt.register_source_type(
+                    'sso', object_class=SsoObject,
+                    collection_class=SsoCollection)
 
     @property
     def observed_sed_factory(self):
@@ -551,8 +557,8 @@ class SkyCatalog(object):
         ----------
         region         region is a named tuple(may be box or circle)
                        or object of type PolygonalRegion
-        obj_type_set   Return only these objects. Defaults to value in config if
-                       specified; else default to all defined in config
+        obj_type_set   Return only these objects. Defaults to value in config
+                       if specified; else default to all defined in config
         mjd            MJD of observation epoch.
         exposure       exposure length (seconds)
 
@@ -603,21 +609,21 @@ class SkyCatalog(object):
         '''
 
         out_list = ObjectList()
-        if self._global_partition is not None:
-            partition = self._global_partition
-        else:
-            partition = self._config['object_types'][object_type]['area_partition']
-
         coll_type = self.cat_cxt.lookup_collection_type(object_type)
         if coll_type is not None:
             if self.cat_cxt.use_custom_load(object_type):
                 coll = coll_type.load_collection(region, self, mjd=mjd,
                                                  exposure=EXPOSURE_DEFAULT)
-                if isinstance(coll, ObjectCollection):
+                if isinstance(coll, ObjectCollection | MinCollection):
                     out_list.append_collection(coll)
                 else:  # ObjectList
                     out_list.append_object_list(coll)
                 return out_list
+
+        if self._global_partition is not None:
+            partition = self._global_partition
+        else:
+            partition = self._config['object_types'][object_type]['area_partition']
 
         if partition != 'None':
             if partition['type'] == 'healpix':
@@ -779,8 +785,15 @@ class SkyCatalog(object):
         '''
         pass
 
+    def register_external_source_type(self, object_type_name, object_class,
+                                      collection_class):
+        self.cat_cxt.register_source_type(object_type_name,
+                                          object_class=object_class,
+                                          collection_class=collection_class,
+                                          custom_load=True)
 
-def open_catalog(config_file, mp=False, skycatalog_root=None, loglevel="INFO"):
+
+def open_catalog(config_file, skycatalog_root=None, loglevel="INFO"):
     '''
     Parameters
     ----------
@@ -802,7 +815,7 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, loglevel="INFO"):
     from skycatalogs.utils.config_utils import open_config_file
 
     config_dict = open_config_file(config_file)
-    cat = SkyCatalog(config_dict, skycatalog_root=skycatalog_root, mp=mp,
+    cat = SkyCatalog(config_dict, skycatalog_root=skycatalog_root,
                      loglevel=loglevel)
 
     # Get bandpasses in case we need to compute fluxes
