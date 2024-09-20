@@ -216,6 +216,7 @@ class SsoSedFactory():
     Load the single SED used for SSO objects and make it available as galsim
     SED
     '''
+    DEFAULT_SED_BNAME = 'solar_sed_thin.txt'
     def __init__(self, sed_path=None):
         '''
         Format of sed file is two-column text file, which galsim can
@@ -223,10 +224,10 @@ class SsoSedFactory():
         "wavelength" (units angstroms) and "flux" (units flambda)
         '''
         if not sed_path:
-            fname = 'solar_sed'
             # Get directory for possible default sed files
             sed_path = os.path.join(_SKYCATALOGS_DIR, 'skycatalogs',
-                                    'data', 'sso', '.'.join([fname, 'txt']))
+                                    'data', 'sso',
+                                    SsoSedFactory.DEFAULT_SED_BNAME)
         wave_type = 'angstrom'
         flux_type = 'flambda'
         lut = galsim.LookupTable.from_file(sed_path, interpolant='linear')
