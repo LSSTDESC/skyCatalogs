@@ -14,7 +14,11 @@ def _add_roman_fluxes(fields):
                pa.field('roman_flux_J129', pa.float32(), True),
                pa.field('roman_flux_H158', pa.float32(), True),
                pa.field('roman_flux_F184', pa.float32(), True),
-               pa.field('roman_flux_K213', pa.float32(), True)]
+               pa.field('roman_flux_K213', pa.float32(), True),
+               pa.field('roman_flux_SNPrism', pa.float32(), True),
+               pa.field('roman_flux_Grism_0thOrder', pa.float32(), True),
+               pa.field('roman_flux_Grism_1stOrder', pa.float32(), True),
+              ]
     return fields
 
 

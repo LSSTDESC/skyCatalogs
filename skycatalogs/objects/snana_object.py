@@ -15,7 +15,11 @@ _map_SNANA_bands = {'R062': 'R',
                     'H158': 'H',
                     'F184': 'F',
                     'K213': 'K',
-                    'W146': 'W'}
+                    'W146': 'W',
+                    'SNPrism': 'S',
+                    'Grism_0thOrder': 'G0',
+                    'Grism_1stOrder': 'G1',
+                   }
 
 
 class SnanaObject(BaseObject):
