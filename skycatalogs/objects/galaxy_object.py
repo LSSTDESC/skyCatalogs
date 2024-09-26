@@ -49,9 +49,9 @@ class GalaxyObject(BaseObject):
         # Deceleration paramameter
         q  = -0.55
         # Angular diameter scaling approximation in pc
-        dA = (3e9/q**2)*(z*q+(q-1)*(np.sqrt(2*q*z+1)-1))/(1+z)**2*(1.4-0.53*z)
         # Using typical knot size 250pc, convert to sigma in arcmin
-        if z<0.6:
+        if z < 0.6:
+            dA = (3e9/q**2)*(z*q+(q-1)*(np.sqrt(2*q*z+1)-1))/(1+z)**2*(1.4-0.53*z)
             return 206264.8*250/dA/2.355
         else:
             # Above z=0.6, fractional contribution to post-convolved size 
