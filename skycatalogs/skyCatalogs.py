@@ -18,55 +18,12 @@ from skycatalogs.utils.sed_tools import TophatSedFactory, DiffskySedFactory
 from skycatalogs.utils.sed_tools import SsoSedFactory
 from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
-from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
-from skycatalogs.utils.shapes import compute_region_mask
 from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
 from skycatalogs.objects.diffsky_object import DiffskyObject
 from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
 
 __all__ = ['SkyCatalog', 'open_catalog']
-
-
-# This function should maybe be moved to utils
-def _get_intersecting_hps(hp_ordering, nside, region):
-    '''
-    Given healpixel structure defined by hp_ordering and nside, find
-    all healpixels which intersect region, where region may be a box,
-    a disk or a polygonal region.
-    Return as some kind of iterable
-    Note it's possible extra hps which don't actually intersect the region
-    will be returned
-    '''
-    # First convert region description to an array (4,3) with (x,y,z) coords
-    # for each vertex
-    if isinstance(region, Box):
-        vec = healpy.pixelfunc.ang2vec([region.ra_min, region.ra_max,
-                                        region.ra_max, region.ra_min],
-                                       [region.dec_min, region.dec_min,
-                                        region.dec_max, region.dec_max],
-                                       lonlat=True)
-
-        pixels = healpy.query_polygon(nside, vec, inclusive=True, nest=False)
-    elif isinstance(region, Disk):
-        # Convert inputs to the types query_disk expects
-        center = healpy.pixelfunc.ang2vec(region.ra, region.dec,
-                                          lonlat=True)
-        radius_rad = (region.radius_as * u.arcsec).to_value('radian')
-
-        pixels = healpy.query_disc(nside, center, radius_rad, inclusive=True,
-                                   nest=False)
-
-    elif isinstance(region, PolygonalRegion):
-        pixels = healpy.query_polygon(nside, region.get_vertices(),
-                                      inclusive=True, nest=False)
-    else:
-        raise ValueError('Unsupported region type')
-
-    # ensure pixels are always presented in the same order
-    pixels = list(pixels)
-    pixels.sort()
-    return pixels
 
 
 def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
@@ -106,47 +63,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
     variable_filter = ('mjd' in tbl)
 
     if region is not None:
-        if isinstance(region, PolygonalRegion):
-            # Using native PolygonalRegion selection is slow, so
-            # pre-mask the RA, Dec values using an acceptance
-            # cone that encloses all of the vertices.
-
-            # Compute the mean direction from the region vertices.
-            vertices = region.get_vertices()
-            mean_dir = vertices[0]
-            for vertex in vertices[1:]:
-                mean_dir += vertex
-            mean_dir = lsst.sphgeom.UnitVector3d(mean_dir)
-
-            # Find largest vertex offset from the mean direction in arcsec.
-            max_offset = np.degrees(np.arccos(min([mean_dir.dot(_)
-                                                   for _ in vertices])))*3600.
-
-            # Construct a "Disk" enclosing the polygonal region.
-            lon_lat = lsst.sphgeom.LonLat(mean_dir)
-            ra = lon_lat.getLon().asDegrees()
-            dec = lon_lat.getLat().asDegrees()
-            disk_region = Disk(ra, dec, max_offset)
-
-            mask = compute_region_mask(disk_region, tbl['ra'], tbl['dec'])
-            if all(mask):
-                if no_obj_type_return and no_mjd_return:
-                    return None, None, None, None
-                else:    # currently if object type is returned, mjd is not
-                    return None, None, None, None, None
-
-            # Get compressed ra, dec
-            ra_compress = ma.array(tbl['ra'], mask=mask).compressed()
-            dec_compress = ma.array(tbl['dec'], mask=mask).compressed()
-            poly_mask = compute_region_mask(region, ra_compress, dec_compress)
-
-            # Get indices of unmasked
-            ixes = np.where(~mask)
-
-            # Update bounding box mask with polygonal mask
-            mask[ixes] |= poly_mask
-        else:
-            mask = compute_region_mask(region, tbl['ra'], tbl['dec'])
+        mask = region.get_mask(tbl['ra'], tbl['dec'])
 
         if transient_filter:
             time_mask = _compute_transient_mask(mjd, tbl['start_mjd'],
@@ -512,8 +429,8 @@ class SkyCatalog(object):
             partition = self._config['object_types'][object_type]['area_partition']
         else:
             partition = self._global_partition
-        return _get_intersecting_hps(partition['ordering'], partition['nside'],
-                                     region)
+        return region.get_intersecting_hps(partition['nside'],
+                                           partition['ordering'])
 
     def get_object_type_names(self):
         '''
