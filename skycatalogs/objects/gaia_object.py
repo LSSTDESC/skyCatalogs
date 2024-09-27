@@ -19,7 +19,6 @@ from lsst.meas.algorithms import ReferenceObjectLoader
 import lsst.afw.table as afwtable
 from lsst.sphgeom import HtmPixelization, Circle, LonLat
 
-from skycatalogs.utils.shapes import Disk, PolygonalRegion, compute_region_mask
 from .base_object import BaseObject, ObjectCollection
 from .base_config_fragment import BaseConfigFragment
 
@@ -178,38 +177,10 @@ def _read_fits(htm_id, gaia_config, sky_root, out_dict, logger, region=None):
     ra_full_deg = np.degrees(ra_full)
     dec_full_deg = np.degrees(dec_full)
 
-    if isinstance(region, Disk):
-        mask = compute_region_mask(region, ra_full_deg, dec_full_deg)
-        if all(mask):
-            return
+    mask = region.get_mask(ra_full_deg, dec_full_deg)
 
-    elif isinstance(region, PolygonalRegion):
-        # First mask off points outside a bounding circle because it's
-        # relatively fast
-        circle = region._convex_polygon.getBoundingCircle()
-        v = circle.getCenter()
-        ra_c = LonLat.longitudeOf(v).asDegrees()
-        dec_c = LonLat.latitudeOf(v).asDegrees()
-        rad_as = circle.getOpeningAngle().asDegrees() * 3600
-        disk = Disk(ra_c, dec_c, rad_as)
-        mask = compute_region_mask(disk, ra_full_deg, dec_full_deg)
-        if all(mask):
-            return
-        if any(mask):
-            ra_compress = ma.array(ra_full, mask=mask).compressed()
-            dec_compress = ma.array(dec_full, mask=mask).compressed()
-        else:
-            ra_compress = ra_full
-            dec_compress = dec_full
-        poly_mask = compute_region_mask(region, np.degrees(ra_compress),
-                                        np.degrees(dec_compress))
-        if all(poly_mask):
-            return
-
-        # Get indices of unmasked
-        ixes = np.where(~mask)
-
-        mask[ixes] |= poly_mask
+    if all(mask):
+        return
 
     if any(mask):
         ra_compress = ma.array(ra_full, mask=mask).compressed()
