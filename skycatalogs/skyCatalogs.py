@@ -63,7 +63,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
     variable_filter = ('mjd' in tbl)
 
     if region is not None:
-        mask = region.get_mask(tbl['ra'], tbl['dec'])
+        mask = region.compute_mask(tbl['ra'], tbl['dec'])
 
         if transient_filter:
             time_mask = _compute_transient_mask(mjd, tbl['start_mjd'],

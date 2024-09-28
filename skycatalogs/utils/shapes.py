@@ -3,7 +3,8 @@ import numpy as np
 import healpy
 from astropy import units as u
 import healpy
-from lsst.sphgeom import ConvexPolygon, UnitVector3d, LonLat
+import lsst.geom
+from lsst.sphgeom import ConvexPolygon, UnitVector3d, LonLat, Circle
 
 __all__ = ['Box', 'Disk', 'PolygonalRegion']
 
@@ -24,6 +25,9 @@ class Region:
         raise NotImplementedError
 
     def compute_mask(self, ra, dec):
+        raise NotImplementedError
+
+    def refcat_region(self):
         raise NotImplementedError
 
 
@@ -64,7 +68,7 @@ class Disk(Region):
     def __init__(self, ra, dec, radius_as):
         self.ra = ra
         self.dec = dec
-        self.radius = radius*u.arcsec
+        self.radius = radius_as*u.arcsec
 
     def _get_intersecting_hps(self, nside, nest):
         center = healpy.pixelfunc.ang2vec(self.ra, self.dec, lonlat=True)
@@ -98,6 +102,13 @@ class Disk(Region):
         radius_rad = self.radius.to_value('radian')
         rad_chord_sq = 4 * np.square(np.sin(0.5 * radius_rad))
         return obj_chord_sq > rad_chord_sq
+
+    def refcat_region(self):
+        ra = lsst.geom.Angle(self.ra, lsst.geom.degrees)
+        dec = lsst.geom.Angle(self.dec, lsst.geom.degrees)
+        center = lsst.geom.SpherePoint(ra, dec)
+        radius = lsst.geom.Angle(self.radius.to_value("degree"))
+        return Circle(center.getVector(), radius)
 
 
 class PolygonalRegion(Region):
@@ -146,12 +157,13 @@ class PolygonalRegion(Region):
     def _get_bounding_disk(self):
         circle = self._convex_polygon.getBoundingCircle()
         center = circle.getCenter()
-        ra_c = LonLat.longitudeOf(v).asDegrees()
-        dec_c = LonLat.latitudeOf(v).asDegrees()
-        rad_as = circle.getOpeningAngle().asDegrees() * 3600
+        ra_c = LonLat.longitudeOf(center).asDegrees()
+        dec_c = LonLat.latitudeOf(center).asDegrees()
+        # The opening angle seems a bit small, so include a 5% safety factor.
+        rad_as = circle.getOpeningAngle().asDegrees() * 3600 * 1.05
         return Disk(ra_c, dec_c, rad_as)
 
-    def get_mask(self, ra, dec):
+    def compute_mask(self, ra, dec):
         '''
         Parameters
         ----------
@@ -159,9 +171,6 @@ class PolygonalRegion(Region):
                      they define the list of points to be checked for
                      containment
         '''
-        ra = np.radians(ra)
-        dec = np.radians(dec)
-
         # Pre-filter using Disk region to do the bulk of the masking quickly.
         disk_region = self._get_bounding_disk()
         mask = disk_region.compute_mask(ra, dec)
@@ -170,8 +179,8 @@ class PolygonalRegion(Region):
             return mask
 
         # Create masked arrays for the remaining positions.
-        ra_compress = ma.array(ra, mask=mask).compressed()
-        dec_compress = ma.array(dec, mask=mask).compressed()
+        ra_compress = np.radians(np.ma.array(ra, mask=mask).compressed())
+        dec_compress = np.radians(np.ma.array(dec, mask=mask).compressed())
         polygon_mask = self._convex_polygon.contains(ra_compress, dec_compress)
 
         # Indexes of unmasked by Disk.
@@ -183,5 +192,8 @@ class PolygonalRegion(Region):
         return mask
 
     def _get_intersecting_hps(self, nside, nest):
-        return healpy.query_polygon(nside, region.get_vertices(),
+        return healpy.query_polygon(nside, self.get_vertices(),
                                     inclusive=True, nest=nest)
+
+    def refcat_region(self):
+        return self._convex_polygon
