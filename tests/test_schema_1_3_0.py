@@ -6,15 +6,10 @@ import unittest
 import os
 from pathlib import Path
 import numpy as np
-
-# Not currently used
-#import pandas as pd
-
-
 from skycatalogs.skyCatalogs import SkyCatalog, open_catalog
-from skycatalogs.skyCatalogs import Box, Disk, PolygonalRegion
-from skycatalogs.skyCatalogs import _get_intersecting_hps
+from skycatalogs.utils import Box, Disk, PolygonalRegion
 from skycatalogs.objects.base_object import BaseObject
+
 
 class SchemaTester(unittest.TestCase):
     '''
@@ -62,7 +57,7 @@ class SchemaTester(unittest.TestCase):
 
         rgn = Box(ra_min_small, ra_max_small, dec_min_small, dec_max_small)
 
-        intersect_hps = _get_intersecting_hps('ring', 32, rgn)
+        intersect_hps = rgn.get_intersecting_hps(32, 'ring')
 
         print("For region ", rgn)
         print("intersecting pixels are ", intersect_hps)

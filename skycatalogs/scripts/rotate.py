@@ -11,7 +11,7 @@ from rubin_scheduler.utils import rotation_matrix_from_vectors, angular_separati
 from skycatalogs.skyCatalogs import open_catalog
 from skycatalogs.utils.parquet_schema_utils import make_galaxy_schema
 from skycatalogs.utils.creator_utils import make_MW_extinction_av
-from skycatalogs.utils.shapes import Disk
+from skycatalogs.utils import Disk
 
 DC2_RA = [68, 64, 58,
           68.5, 62, 55,
