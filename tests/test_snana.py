@@ -4,8 +4,7 @@ import os
 import numpy as np
 
 from skycatalogs.skyCatalogs import SkyCatalog, open_catalog
-from skycatalogs.skyCatalogs import Box, Disk, PolygonalRegion
-from skycatalogs.skyCatalogs import _get_intersecting_hps
+from skycatalogs.utils import Box
 from skycatalogs.objects.base_object import BaseObject
 
 

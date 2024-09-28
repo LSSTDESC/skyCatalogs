@@ -6,14 +6,8 @@ import unittest
 import os
 from pathlib import Path
 import numpy as np
-
-# Not currently used
-#import pandas as pd
-
-
 from skycatalogs.skyCatalogs import SkyCatalog, open_catalog
-from skycatalogs.skyCatalogs import Box, Disk, PolygonalRegion
-from skycatalogs.skyCatalogs import _get_intersecting_hps
+from skycatalogs.utils import Box, Disk, PolygonalRegion
 from skycatalogs.objects.base_object import BaseObject
 
 class APITester(unittest.TestCase):
@@ -57,8 +51,7 @@ class APITester(unittest.TestCase):
         dec_max_small = -35.9
 
         rgn = Box(ra_min_small, ra_max_small, dec_min_small, dec_max_small)
-
-        intersect_hps = _get_intersecting_hps('ring', 32, rgn)
+        intersect_hps = rgn.get_intersecting_hps(32, 'ring')
 
         print("For region ", rgn)
         print("intersecting pixels are ", intersect_hps)
@@ -115,6 +108,7 @@ class APITester(unittest.TestCase):
                     (ra_max_small, dec_max_small),
                     (ra_max_small, dec_min_small)]
         rgn_poly = PolygonalRegion(vertices_radec=vertices)
+        intersect_hps = rgn_poly.get_intersecting_hps(32, 'ring')
         print("For polygonal region ", rgn_poly)
         print("intersecting pixels are ", intersect_hps)
         assert(set(intersect_hps) == {9683, 9684, 9812})
@@ -124,8 +118,6 @@ class APITester(unittest.TestCase):
                                                 obj_type_set=set(['galaxy']) )
         t_end = time.time()
         print("Time to get box-like polygon objects: ", t_end - t0)
-
-
         print('Number of collections returned for polygon:  ',
               object_list.collection_count)
         assert(object_list.collection_count == 2)

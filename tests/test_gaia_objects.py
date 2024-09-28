@@ -6,6 +6,7 @@ import pandas as pd
 import lsst.daf.butler as daf_butler
 from skycatalogs import skyCatalogs
 from skycatalogs.objects import GaiaCollection
+from skycatalogs.utils import Disk
 
 
 PACKAGE_DIR = os.path.dirname(os.path.abspath(str(Path(__file__).parent)))
@@ -51,7 +52,7 @@ class GaiaObjectTestCase(unittest.TestCase):
     def test_proper_motion(self):
         ra, dec = 0, 0
         radius = 1
-        region = skyCatalogs.Disk(ra, dec, radius*3600.0)
+        region = Disk(ra, dec, radius*3600.0)
 
         # Use start of proper motion epoch, so ra, dec values should
         # be unchanged from refcat values.
