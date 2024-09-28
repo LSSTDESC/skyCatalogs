@@ -231,16 +231,7 @@ class GaiaCollection(ObjectCollection):
         '''
         if not skycatalog:
             raise ValueError('GaiaCollection.load_collection: skycatalog cannot be None')
-        if isinstance(region, Disk):
-            ra = lsst.geom.Angle(region.ra, lsst.geom.degrees)
-            dec = lsst.geom.Angle(region.dec, lsst.geom.degrees)
-            center = lsst.geom.SpherePoint(ra, dec)
-            radius = lsst.geom.Angle(region.radius_as, lsst.geom.arcseconds)
-            refcat_region = Circle(center.getVector(), radius)
-        elif isinstance(region, PolygonalRegion):
-            refcat_region = region._convex_polygon
-        else:
-            raise TypeError(f'GaiaCollection.load_collection: {region} not supported')
+        refcat_region = region.refcat_region()
         if GaiaCollection.get_config() is None:
             gaia_section = skycatalog.raw_config['object_types']['gaia_star']
             GaiaCollection.set_config(gaia_section)
