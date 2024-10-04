@@ -804,7 +804,7 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, verbose=False):
     '''
     # Get bandpasses in case we need to compute fluxes
     _ = load_lsst_bandpasses()
-    _ = load_roman_bandpasses()
+    _ = load_roman_bandpasses(include_non_imaging_bands=True)
 
     from skycatalogs.utils.config_utils import open_config_file
 
