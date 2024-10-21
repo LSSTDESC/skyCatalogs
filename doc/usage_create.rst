@@ -10,7 +10,7 @@ config fragment so that the skyCatalogs API can access the data.
 
 
 The script ``create_main.py`` and its options
--------------------------------------------
+---------------------------------------------
 ``create_main.py`` has a plethora of options, but few are of interest
 for most invocations and even fewer are required.  The options determine
 
