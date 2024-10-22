@@ -19,6 +19,6 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/skycat_doc2' }}
         with:
           publish_branch: gh-pages
-          # github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: _build/
           force_orphan: true
