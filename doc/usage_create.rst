@@ -67,7 +67,7 @@ star_input_fmt         string     "sqlite"      Format of star truth
 =====================  =========  ============  ===============================
 
 The script ``create_flux.py`` and its options
--------------------------------------------
+---------------------------------------------
 ``create_flux.py`` has most of the same options as ``create_main.py``
 plus a couple new ones. Only ``object_type`` is required but several
 others are specified for most invocations.
@@ -104,6 +104,8 @@ sso_sed                string     None          Path to file to SED to be
                                                 used for all SSOs. Defaults
                                                 to `solar_sed_thin.txt`,
                                                 included in repo.
+=====================  =========  ============  ===============================
+
 
 Example options files
 +++++++++++++++++++++
