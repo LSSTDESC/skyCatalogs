@@ -37,13 +37,15 @@ https://github.com/LSSTDESC/skyCatalogs.
    :caption: Reference:
    :hidden:
 
+   reeference_python
+
 .. toctree::
    :maxdepth: 2
    :caption: Contact:
    :hidden:
 
    contact
-   
+
 
 Indices and tables
 ==================
