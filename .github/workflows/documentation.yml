@@ -1,5 +1,7 @@
 name: Docs
-on: [push, pull_request, workflow_dispatch]
+# on: [push, pull_request, workflow_dispatch]
+# Make changes to "on:" just to force new build
+on: [push]
 jobs:
   docs:
     runs-on: ubuntu-latest
