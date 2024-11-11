@@ -20,6 +20,7 @@ from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.star_object import StarConfigFragment
 from .objects.galaxy_object import GalaxyConfigFragment
 from .objects.diffsky_object import DiffskyConfigFragment
+from .objects.trilegal_object import TrilegalConfigFragment
 from .sso_catalog_creator import SsoMainCatalogCreator
 
 """
