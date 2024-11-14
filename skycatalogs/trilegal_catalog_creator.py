@@ -70,11 +70,16 @@ class TrilegalMainCatalogCreator:
             pa.field('id', pa.string()),
             pa.field('ra', pa.float64()),
             pa.field('dec', pa.float64()),
-            pa.field('pmdec', pa.float64()), # proper motion in dec
-            pa.field('pmracosd', pa.float64()), # proper motion in cos(ra)
-            pa.field('vrad', pa.float64()), # radial velocity
-            pa.field('mu0', pa.float64()), # true distance modulus
-            #  pa.field('parallax', pa.float64()),
+            pa.field('pmdec', pa.float32()),  # proper motion in dec
+            pa.field('pmracosd', pa.float32()),  # proper motion in cos(ra)
+            pa.field('vrad', pa.float32()),  # radial velocity
+            pa.field('mu0', pa.float32()),  # true distance modulus
+            # pa.field('parallax', pa.float64()),  # leave out for now
+            #  The following are used in SED generation
+            pa.field('logte', pa.float32()), # log effective temp. (K)
+            pa.field('logg', pa.float32()), # log surface gravity (cgs)
+            pa.field('logl', pa.float32()), # log luminosity  (L_sun)
+            pa.field('metallicity', pa.float32()), # heavy element abund.
             ]
         # The truth catalog supplies only mu0, not parallax
         # from https://en.wikipedia.org/wiki/Distance_modulus
@@ -115,7 +120,8 @@ class TrilegalMainCatalogCreator:
         in_pixels = ','.join(str(p) for p in ring_pixels)
 
         # Form query
-        to_select = ['ra', 'dec', 'pmracosd', 'pmdec', 'vrad', 'mu0']
+        to_select = ['ra', 'dec', 'pmracosd', 'pmdec', 'vrad', 'mu0',
+                     'logte', 'logg', 'logl', 'z as metallicity']
         q = 'select ' + ','.join(to_select)
         q += f' from {self._truth_catalog} where ring256 in ({in_pixels})'
 
