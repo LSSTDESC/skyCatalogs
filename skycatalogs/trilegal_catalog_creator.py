@@ -84,7 +84,7 @@ class TrilegalMainCatalogCreator:
         # The truth catalog supplies only mu0, not parallax
         # from https://en.wikipedia.org/wiki/Distance_modulus
         # luminous distance in parsecs =
-        #  (1 + mu0/5) ** 10
+        #  10**(1 + mu0/5)
         #
         # Formula for distance using parallax:
         #     d = E-sun/tan(0.5*theta) where E-sun is one AU
