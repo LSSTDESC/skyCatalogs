@@ -43,6 +43,6 @@ class TrilegalObject(BaseObject):
 
 class TrilegalConfigFragment(BaseConfigFragment):
     def __init__(self, prov, area_partition=None, data_file_type=None):
-        super().__init__(prov, object_type_name='star',
+        super().__init__(prov, object_type_name='trilegal',
                          area_partition=area_partition,
                          data_file_type=data_file_type)

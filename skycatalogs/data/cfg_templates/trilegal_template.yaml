@@ -1,0 +1,9 @@
+area_partition:
+  nside: 32
+  ordering: ring
+  type: healpix
+data_file_type: parquet
+file_template: trilegal_(?P<healpix>\d+).parquet
+flux_file_template: trilegal_flux_(?P<healpix>\d+).parquet
+sed_file_template: trilegal_sed_(?P<healpix>\d+).hdf5
+internal_extinction: None

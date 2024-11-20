@@ -20,8 +20,9 @@ from .utils.creator_utils import make_MW_extinction_av, make_MW_extinction_rv
 from .objects.star_object import StarConfigFragment
 from .objects.galaxy_object import GalaxyConfigFragment
 from .objects.diffsky_object import DiffskyConfigFragment
-from .objects.trilegal_object import TrilegalConfigFragment
+# from .objects.trilegal_object import TrilegalConfigFragment
 from .sso_catalog_creator import SsoMainCatalogCreator
+from .trilegal_catalog_creator import TrilegalMainCatalogCreator
 
 """
 Code to create a sky catalog for particular object types
@@ -163,7 +164,7 @@ class MainCatalogCreator:
         Parameters
         ----------
         object_type     One of {"star", "cosmodc_galaxy", "diffsky_galaxy",
-                        "sso"}
+                        "sso", "trilegal"}
         parts           Segments for which catalog is to be generated. If
                         partition type is HEALpix, parts will be a collection
                         of HEALpix pixels
@@ -237,6 +238,9 @@ class MainCatalogCreator:
         self._obs_sed_factory = None
         if object_type == 'sso':
             self._sso_creator = SsoMainCatalogCreator(self, self._truth)
+        if object_type == 'trilegal':
+            self._trilegal_creator = TrilegalMainCatalogCreator(self,
+                                                                self._truth)
         self._run_options = run_options
         self._tophat_sed_bins = None
 
@@ -286,6 +290,8 @@ class MainCatalogCreator:
             self.create_pointsource_catalog()
         elif object_type == ('sso'):
             self._sso_creator.create_sso_catalog()
+        elif object_type == ('trilegal'):
+            self._trilegal_creator.create_catalog(self._parts)
         else:
             raise NotImplementedError(
                 f'MainCatalogCreator.create: unsupported object type {object_type}')

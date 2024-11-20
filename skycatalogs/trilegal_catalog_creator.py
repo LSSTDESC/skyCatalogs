@@ -1,26 +1,30 @@
 import os
-import sys
-from multiprocessing import Process, Pipe
-import sqlite3
+# import sys                        May be needed later
+# from multiprocessing import Process, Pipe    May be needed later
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import healpy
+import h5py
+import numpy as np
 import json
 from .objects.base_object import LSST_BANDS
 from .objects.trilegal_object import TrilegalConfigFragment
 from .utils.config_utils import assemble_provenance
-from .utils.config_utils import assemble_file_metadata
+# from .utils.config_utils import assemble_file_metadata  may be needed later
 
 """
 Code for creating sky catalogs for trilegal stars
 """
 
-__all__ = ['TrilegalMainCatalogCreator', 'TrilegalFluxCatalogCreator']
+__all__ = ['TrilegalMainCatalogCreator', 'TrilegalSEDGenerator']
+# __all__ = ['TrilegalMainCatalogCreator', 'TrilegalSEDGenerator',
+#            'TrilegalFluxCatalogCreator']
 
 _DEFAULT_ROW_GROUP_SIZE = 1000000
 _DEFAULT_TRUTH_CATALOG = 'lsst_sim.simdr2'
 _DEFAULT_START_EPOCH = 2000
+
 
 def _do_trilegal_flux_chunk(send_conn, trilegal_collection, instrument_needed,
                             l_bnd, u_bnd):
@@ -44,7 +48,7 @@ class TrilegalMainCatalogCreator:
     # separately installed
     from dl import queryClient as qc
 
-    def __init__(self, catalog_creator, truth_catalog=_DEFAULT_TRUTH_CATALOG,
+    def __init__(self, catalog_creator, truth_catalog,
                  start_epoch=_DEFAULT_START_EPOCH):
         '''
         Parameters
@@ -53,11 +57,15 @@ class TrilegalMainCatalogCreator:
         input_catalog    name of Trilegal catalog to be queried
         '''
         self._catalog_creator = catalog_creator
-        self._truth_catalog = truth_catalog
+        if not truth_catalog:
+            self._truth_catalog = _DEFAULT_TRUTH_CATALOG
+        else:
+            self._truth_catalog = truth_catalog
+
         self._start_epoch = start_epoch
         self._output_dir = catalog_creator._output_dir
-        self._logger = catalog_creator._output_dir
-        self._row_group_size = _DEFAULT_ROW_GROUP_SIZE
+        self._logger = catalog_creator._logger
+        self._stride = _DEFAULT_ROW_GROUP_SIZE
 
     @property
     def trilegal_truth(self):
@@ -74,12 +82,11 @@ class TrilegalMainCatalogCreator:
             pa.field('pmracosd', pa.float32()),  # proper motion in cos(ra)
             pa.field('vrad', pa.float32()),  # radial velocity
             pa.field('mu0', pa.float32()),  # true distance modulus
-            # pa.field('parallax', pa.float64()),  # leave out for now
             #  The following are used in SED generation
-            pa.field('logte', pa.float32()), # log effective temp. (K)
-            pa.field('logg', pa.float32()), # log surface gravity (cgs)
-            pa.field('logl', pa.float32()), # log luminosity  (L_sun)
-            pa.field('metallicity', pa.float32()), # heavy element abund.
+            pa.field('logT', pa.float32()),  # log effective temp. (K)
+            pa.field('logg', pa.float32()),  # log surface gravity (cgs)
+            pa.field('logL', pa.float32()),  # log luminosity  (L_sun)
+            pa.field('Z', pa.float32()),  # heavy element abund.
             ]
         # The truth catalog supplies only mu0, not parallax
         # from https://en.wikipedia.org/wiki/Distance_modulus
@@ -100,6 +107,19 @@ class TrilegalMainCatalogCreator:
         return pa.schema(fields, metadata=final_metadata)
 
     def _write_hp(self, hp, arrow_schema):
+        '''
+        Write out parquet file for specified healpixel
+
+        Parameters
+        ----------
+        hp             int             the healpixel
+        arrow_schema   pyarrow.schema  schema to use
+
+        Returns
+        -------
+        Number of files written (0 or 1)
+
+        '''
         from dl import queryClient as qc
         _NSIDE = 32
         _TRILEGAL_RING_NSIDE = 256
@@ -109,7 +129,7 @@ class TrilegalMainCatalogCreator:
 
         # Find all subpixels contained in our pixel with nside 256,
         # which is what the Trilegal catalog uses
-        current_nside _NSIDE
+        current_nside = _NSIDE
         pixels = [healpy.ring2nest(_NSIDE, hp)]
 
         while current_nside < _TRILEGAL_RING_NSIDE:
@@ -121,15 +141,176 @@ class TrilegalMainCatalogCreator:
 
         # Form query
         to_select = ['ra', 'dec', 'pmracosd', 'pmdec', 'vrad', 'mu0',
-                     'logte', 'logg', 'logl', 'z as metallicity']
+                     'logte as logT', 'logg', 'logl as logL', 'z as Z']
         q = 'select ' + ','.join(to_select)
         q += f' from {self._truth_catalog} where ring256 in ({in_pixels})'
 
         results = qc.query(adql=q, fmt='pandas')
         n_row = len(results['ra'])
+        if not n_row:
+            return 0
 
-        print(f'rows returned: {nrow}')
+        print(f'rows returned: {n_row}')
 
         # generate id
         id_prefix = f'{self._truth_catalog}_hp{hp}_'
         results['id'] = [f'{id_prefix}{n}' for n in range(n_row)]
+
+        l_bnd = 0
+        u_bnd = min(n_row, self._stride)
+        rg_written = 0
+        outpath = ''
+
+        while u_bnd > l_bnd:
+            out_dict = {k: results[k][l_bnd: u_bnd] for k in results}
+            out_df = pd.DataFrame.from_dict(out_dict)
+            out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
+            writer = None
+            if not writer:
+                outpath = os.path.join(self._output_dir,
+                                       f'trilegal_{hp}.parquet')
+                writer = pq.ParquetWriter(outpath, arrow_schema)
+            writer.write_table(out_table)
+            l_bnd = u_bnd
+            u_bnd = min(l_bnd + self._stride, n_row)
+            rg_written += 1
+
+        writer.close()
+        self._logger.debug(f'# row groups written to {outpath}: {rg_written}')
+        return rg_written
+
+    def create_catalog(self, hps):
+        schema = self._create_main_schema()
+        written = 0
+        for hp in hps:
+            written += self._write_hp(hp, schema)
+
+        if written == 0:
+            return
+        # Add config information for trilegal
+        prov = assemble_provenance(
+            self._catalog_creator._pkg_root,
+            inputs={'trilegal_truth': self._truth_catalog},
+            run_options=self._catalog_creator._run_options)
+        trilegal_fragment = TrilegalConfigFragment(prov)
+        self._catalog_creator._config_writer.write_configs(trilegal_fragment)
+
+class TrilegalSEDGenerator:
+    '''
+    This class is responsible for calculating SEDs for Trilegal sources
+    and storing them in an h5df file (one file per healpixel). The
+    strucure of the file is as follows:
+    metadata (group)   one or more key/value pairs, stored as the attributes
+                       of the top-level group "metadata". The group has no
+                       other content
+    wl_axis (dataset)  All SEDs use the same binning. It's stored here.
+                       Array of 4-byte floats
+    batches (group)    Contains subgroups with names like "batch_X" where
+                       X is the batch number
+    batch_X (group)    Has metadata (batch number, count of sources in the
+                       batch, maybe lower and upper limits of count within the
+                       full healpixel).  It also contains two datasets, "id"
+                       and "SED"
+    id (dataset)       1-d array of (string) ids in the batch
+    spectra (dataset)  2-d array indexed by [source_number, lambda]. 4-byte
+                       floats
+    '''
+    def __init__(self, input_dir, output_dir=None, lib='BTSettl'):
+        '''
+        Parameters
+        ----------
+        input_dir      Where to find parquet main files
+        output_dir     Where to write output.  Defaults to input_dir
+        lib            Name of pystelllibs library used to generate SEDs
+        '''
+        from pystellibs import BTSettl
+
+        self._pystellib = BTSettl(medres=False)
+        self._wl = self._pystellib._wavelength / 10  # Convert to nm
+
+        self._input_dir = input_dir
+        self._output_dir = output_dir
+        if not output_dir:
+            self._output_dir = input_dir
+        # self._logger = catalog_creator._logger
+
+    def _write_SED_batch(self, outfile_path, batch, id, wl_axis, spectra):
+        '''
+        Write a collection of SEDs, typically corresponding to a single row
+        group in the parquet main file, to output.
+        Parameters
+        ----------
+        outfile_path  File to which SEDs will be appended
+        batch         E.g. row group number
+        ids            Array of ids for the sources whose SEDs will be written
+        wl_axis       Array of wavelengths (nm) used for spectra
+        spectra       Flux values, units of flambda (erg/cm**2/s/nm)
+
+        '''
+        with h5py.File(outfile_path, 'a') as f:
+            if 'wl_axis' not in f.keys():
+                axis_ds = f.create_dataset('wl_axis', shape=(len(wl_axis),),
+                                           dtype='f4', data=np.array(wl_axis))
+                axis_ds.attrs.create('wl_units', ['nm'])
+            if 'batches' not in f.keys():
+                batches = f.create_group('batches')
+
+            batch_g = f.create_group(f'batches/batch_{batch}')
+            max_id_len = max([len(entry) for entry in id])
+            id_dat = np.array(id, dtype=f'S{max_id_len}')
+            id_dataset = batch_g.create_dataset('id', data=id_dat,
+                                                chunks=(50000),
+                                                compression='gzip')
+            spectra_dataset = batch_g.create_dataset('spectra',
+                                                     data=np.array(spectra),
+                                                     chunks=(200, len(wl_axis)),
+                                                     compression='gzip',
+                                                     # compression_opts=9,
+                                                     dtype='f4')
+
+    def _generate_hp(self, hp):
+        PSEC_TO_CM = 3.085677581e16 * 100
+        FOUR_PI = 4 * np.pi
+        # open parquet main file.
+        # For now use hardcoded templates.  Should read from config
+        # Modify to be suitable for creating rather than parsing a name
+        main_templ = 'trilegal_(?P<healpix>\d+).parquet'
+        sed_templ = 'trilegal_sed_(?P<healpix>\d+).hdf5'
+        in_fname = main_templ.replace('(?P<healpix>\\d+)', str(hp))
+        out_fname = sed_templ.replace('(?P<healpix>\\d+)', str(hp))
+
+        # Open input and output files
+        # For now read main file ourselves, not via skyCatalogs API
+        in_path = os.path.join(self._input_dir, in_fname)
+        pq_file = pq.ParquetFile(in_path)
+        hp5_path = os.path.join(self._output_dir, out_fname)
+        with h5py.File(hp5_path, 'w') as f:
+            f.create_group('metadata')
+            f['metadata'].attrs.create('input_path', [in_path])
+
+        n_gp = pq_file.metadata.num_row_groups
+
+        for batch in range(n_gp):
+            columns = ['id', 'logT', 'logg', 'logL', 'Z', 'mu0']
+            # tbl = pq_file.read_row_group(i, columns=columns)
+            py_dict = pq_file.read_row_group(batch, columns=columns).to_pydict()
+            for c in ['logT', 'logg', 'logL', 'Z', 'mu0']:
+                py_dict[c] = np.array(py_dict[c], dtype=np.float64)
+            wl_axis, spectra = self._pystellib.generate_individual_spectra(py_dict)
+            # Convert wl_axis from A to nm
+            wl_axis = wl_axis / 10
+            # Convert spectra from erg/s/A to erg/s/nm/cm**2
+            dl = 10**(1 + py_dict['mu0']/5) * PSEC_TO_CM
+            divisor = 0.1 * FOUR_PI * dl**2
+            spectra = np.transpose(np.transpose(spectra.magnitude)/divisor)
+            spectra_32 = spectra.astype(np.float32)
+            del spectra
+            print(f'len(wavelength axis): {len(wl_axis)}')
+            print(f'shape of spectra array: {spectra_32.shape}')
+            self._write_SED_batch(hp5_path, batch, py_dict['id'],
+                                  wl_axis, spectra_32)
+
+    def generate(self, hps):
+
+        for hp in hps:
+            self._generate_hp(hp)
