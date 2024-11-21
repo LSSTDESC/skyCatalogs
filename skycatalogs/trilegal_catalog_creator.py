@@ -11,7 +11,7 @@ import json
 from .objects.base_object import LSST_BANDS
 from .objects.trilegal_object import TrilegalConfigFragment
 from .utils.config_utils import assemble_provenance
-# from .utils.config_utils import assemble_file_metadata  may be needed later
+from .utils.config_utils import assemble_file_metadata
 
 """
 Code for creating sky catalogs for trilegal stars
@@ -195,6 +195,7 @@ class TrilegalMainCatalogCreator:
         trilegal_fragment = TrilegalConfigFragment(prov)
         self._catalog_creator._config_writer.write_configs(trilegal_fragment)
 
+
 class TrilegalSEDGenerator:
     '''
     This class is responsible for calculating SEDs for Trilegal sources
@@ -242,7 +243,7 @@ class TrilegalSEDGenerator:
         ----------
         outfile_path  File to which SEDs will be appended
         batch         E.g. row group number
-        ids            Array of ids for the sources whose SEDs will be written
+        id            Array of ids for the sources whose SEDs will be written
         wl_axis       Array of wavelengths (nm) used for spectra
         spectra       Flux values, units of flambda (erg/cm**2/s/nm)
 
@@ -256,6 +257,7 @@ class TrilegalSEDGenerator:
                 batches = f.create_group('batches')
 
             batch_g = f.create_group(f'batches/batch_{batch}')
+            batch_g.attrs.create('source_count', [len(id)])
             max_id_len = max([len(entry) for entry in id])
             id_dat = np.array(id, dtype=f'S{max_id_len}')
             id_dataset = batch_g.create_dataset('id', data=id_dat,
@@ -314,3 +316,142 @@ class TrilegalSEDGenerator:
 
         for hp in hps:
             self._generate_hp(hp)
+
+
+class TrilegalFluxCatalogCreator:
+    def __init__(self, catalog_creator):
+        '''
+        Parameters
+        ----------
+        catalog_creator   instance of FluxCatalogCreator
+        '''
+        self._catalog_creator = catalog_creator
+        self._output_dir = catalog_creator._output_dir
+        self._logger = catalog_creator._logger
+
+    def _create_flux_schema(self, metadata_input=None,
+                            metadata_key='provenance'):
+        # id and 6 flux fields (for now.  Maybe later also Roman)
+        fields = [
+            pa.field('id', pa.string()),
+            # pa.field('mjd', pa.float64()),
+            pa.field('lsst_flux_u', pa.float32(), True),
+            pa.field('lsst_flux_g', pa.float32(), True),
+            pa.field('lsst_flux_r', pa.float32(), True),
+            pa.field('lsst_flux_i', pa.float32(), True),
+            pa.field('lsst_flux_z', pa.float32(), True),
+            pa.field('lsst_flux_y', pa.float32(), True)]
+        if metadata_input:
+            metadata_bytes = json.dumps(metadata_input).encode('utf8')
+            final_metadata = {metadata_key: metadata_bytes}
+        else:
+            final_metadata = None
+
+        return pa.schema(fields, metadata=final_metadata)
+
+    ####################
+    def create_trilegal_flux_pixel(self, pixel, arrow_schema):
+        output_filename = f'trilegal_flux_{pixel}.parquet'
+        output_path = os.path.join(self._catalog_creator._output_dir,
+                                   output_filename)
+
+        object_list = self._cat.get_object_type_by_hp(pixel, 'trilegal')
+        n_parallel = self._catalog_creator._flux_parallel
+
+        colls = object_list.get_collections()
+        writer = pq.ParquetWriter(output_path, arrow_schema)
+        fields_needed = arrow_schema.names
+        instrument_needed = ['lsst']
+        rg_written = 0
+        writer = None
+
+        # There is only one row group per main healpixel file currently
+        # so the loop could be dispensed with
+        for c in colls:
+            trilegal_collection = c
+            l_bnd = 0
+            u_bnd = len(c)
+            if (u_bnd - l_bnd) < 5 * n_parallel:
+                n_parallel = 1
+            if n_parallel == 1:
+                n_per = u_bnd - l_bnd
+            else:
+                n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
+
+            lb = l_bnd
+            u = min(l_bnd + n_per, u_bnd)
+            readers = []
+            if n_parallel == 1:
+                out_dict = _do_trilegal_flux_chunk(None, c, instrument_needed,
+                                                   l_bnd, u_bnd)
+            else:
+                raise Exception('Parallel flux computation for trilegal NYI')
+                # out_dict = {}
+                # for field in fields_needed:
+                #     out_dict[field] = []
+
+                # tm = max(int((n_per*60)/500), 10)
+                # self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+                # p_list = []
+                # for i in range(n_parallel):
+                #     conn_rd, conn_wrt = Pipe(duplex=False)
+                #     readers.append(conn_rd)
+
+                #     # For debugging call directly
+                #     proc = Process(target=_do_trilegal_flux_chunk,
+                #                    name=f'proc_{i}',
+                #                    args=(conn_wrt, _trilegal_collection,
+                #                          instrument_needed, lb, u))
+                #     proc.start()
+                #     p_list.append(proc)
+                #     lb = u
+                #     u = min(lb + n_per, u_bnd)
+                # self._logger.debug('Processes started')
+                # for i in range(n_parallel):
+                #     ready = readers[i].poll(tm)
+                #     if not ready:
+                #         self._logger.error(f'Process {i} timed out after {tm} sec')
+                #         sys.exit(1)
+                #     dat = readers[i].recv()
+                #     for field in fields_needed:
+                #         out_dict[field] += dat[field]
+                # for p in p_list:
+                #     p.join()
+
+            out_df = pd.DataFrame.from_dict(out_dict)
+            out_table = pa.Table.from_pandas(out_df,
+                                             schema=arrow_schema)
+
+            if not writer:
+                writer = pq.ParquetWriter(output_path, arrow_schema)
+            writer.write_table(out_table)
+
+            rg_written += 1
+
+        writer.close()
+        self._logger.debug(f'# row groups written to flux file: {rg_written}')
+
+    def create_trilegal_flux_catalog(self):
+        """
+        Create trilegal flux catalog.  Includes id, and fluxes.
+        """
+
+        self._cat = self._catalog_creator._cat
+        trilegal_config = self._cat.raw_config['object_types']['trilegal']
+        self._flux_template = trilegal_config['flux_file_template']
+        self._main_template = trilegal_config['file_template']
+
+        thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
+        file_metadata = assemble_file_metadata(
+            self._catalog_creator._pkg_root,
+            # inputs={'trilegal_sed_path': self._cat.??},
+            run_options=self._catalog_creator._run_options,
+            flux_file=True,
+            throughputs_versions=thru_v)
+
+        arrow_schema = self._create_flux_schema(metadata_input=file_metadata)
+
+        self._logger.info('Creating trilegal flux files')
+
+        for p in self._catalog_creator._parts:
+            self._create_trilegal_flux_pixel(p, arrow_schema)
