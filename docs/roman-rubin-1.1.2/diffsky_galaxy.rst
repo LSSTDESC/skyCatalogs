@@ -29,7 +29,9 @@ shear2                         double    N/A         Shear (gamma) component 2,
                                                      treecorr/Galsim convention
 convergence                    double    N/A         Convergence (kappa)
 spheroidHalfLightRadiusArcsec  float     arcsec      Bulge component half-light
+                                                     radius
 diskHalfLightRadiusArcsec      float     arcsec      Disk component half-light
+                                                     radius
 diskEllipticity1               double    N/A         Ellipticity component 1
                                                      for disk, not lensed
 diskEllipticity2               double    N/A         Ellipticity component 2
@@ -38,7 +40,7 @@ spheroidEllipticity1           double    N/A         Ellipticity component 1
                                                      for bulge, not lensed
 spheroidEllipticity2           double    N/A         Ellipticity component 2
                                                      for bulge, not lensed
-um_source_galaxy_obs_sm        float     solar mass  stellar mass
+um_source_galaxy_obs_sm        float     solar mass  Stellar mass
                                          (h=0.7)
 MW_rv                          float     N/A         Extinction parameter
 MW_av                          float     N/A         Extinction parameter
