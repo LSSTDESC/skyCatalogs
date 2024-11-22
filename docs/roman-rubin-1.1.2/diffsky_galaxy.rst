@@ -13,35 +13,37 @@ SED files.  In all cases <hp> is the id of the healpixel covered by the file.
 Galaxy main file
 ----------------
 
-=============================  ========  =======  ==========================
-Name                           Datatype  Units    Description
-=============================  ========  =======  ==========================
-galaxy_id                      int64     N/A      Unique object identifier
-ra                             double    degrees  Object right ascension
-dec                            double    degrees  Object declination
-redshift                       double    N/A      Cosmological redshift
-                                                  with line-of-sight motion
-redshiftHubble                 double    N/A      Cosmological redshift
-peculiarVelocity               double    km/sec   Peculiar velocity
-shear1                         double    N/A      Shear (gamma) component 1,
-                                                  treecorr/Galsim convention
-shear2                         double    N/A      Shear (gamma) component 2,
-                                                  treecorr/Galsim convention
-convergence                    double    N/A      Convergence (kappa)
-spheroidHalfLightRadiusArcsec  float     arcsec
-diskHalfLisghtRadiusArcsec     float     arcsec
-diskEllipticity1               double    N/A      Ellipticity component 1
-                                                  for disk, not lensed
-diskEllipticity2               double    N/A      Ellipticity component 2
-                                                  for disk, not lensed
-spheroidEllipticity1           double    N/A      Ellipticity component 1
-                                                  for bulge, not lensed
-spheroidEllipticity2           double    N/A      Ellipticity component 2
-                                                  for bulge, not lensed
-MW_rv                          float     N/A      Extinction parameter
-MW_av                          float     N/A      Extinction parameter
-                                                  from F19 dust map
-=============================  ========  =======  ==========================
+=============================  ========  ==========  ==========================
+Name                           Datatype  Units       Description
+=============================  ========  ==========  ==========================
+galaxy_id                      int64     N/A         Unique object identifier
+ra                             double    degrees     Object right ascension
+dec                            double    degrees     Object declination
+redshift                       double    N/A         Cosmological redshift
+                                                     with line-of-sight motion
+redshiftHubble                 double    N/A         Cosmological redshift
+peculiarVelocity               double    km/sec      Peculiar velocity
+shear1                         double    N/A         Shear (gamma) component 1,
+                                                     treecorr/Galsim convention
+shear2                         double    N/A         Shear (gamma) component 2,
+                                                     treecorr/Galsim convention
+convergence                    double    N/A         Convergence (kappa)
+spheroidHalfLightRadiusArcsec  float     arcsec      Bulge component half-light
+diskHalfLightRadiusArcsec      float     arcsec      Disk component half-light
+diskEllipticity1               double    N/A         Ellipticity component 1
+                                                     for disk, not lensed
+diskEllipticity2               double    N/A         Ellipticity component 2
+                                                     for disk, not lensed
+spheroidEllipticity1           double    N/A         Ellipticity component 1
+                                                     for bulge, not lensed
+spheroidEllipticity2           double    N/A         Ellipticity component 2
+                                                     for bulge, not lensed
+um_source_galaxy_obs_sm        float     solar mass  stellar mass
+                                         (h=0.7)
+MW_rv                          float     N/A         Extinction parameter
+MW_av                          float     N/A         Extinction parameter
+                                                     from F19 dust map
+=============================  ========  ==========  ==========================
 
 
 
