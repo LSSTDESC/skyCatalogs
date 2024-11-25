@@ -78,6 +78,7 @@ class TrilegalMainCatalogCreator:
             pa.field('id', pa.string()),
             pa.field('ra', pa.float64()),
             pa.field('dec', pa.float64()),
+            pa.field('av', pa.float64()),
             pa.field('pmdec', pa.float32()),  # proper motion in dec
             pa.field('pmracosd', pa.float32()),  # proper motion in cos(ra)
             pa.field('vrad', pa.float32()),  # radial velocity
@@ -140,7 +141,7 @@ class TrilegalMainCatalogCreator:
         in_pixels = ','.join(str(p) for p in ring_pixels)
 
         # Form query
-        to_select = ['ra', 'dec', 'pmracosd', 'pmdec', 'vrad', 'mu0',
+        to_select = ['ra', 'dec', 'av', 'pmracosd', 'pmdec', 'vrad', 'mu0',
                      'logte as logT', 'logg', 'logl as logL', 'z as Z']
         q = 'select ' + ','.join(to_select)
         q += f' from {self._truth_catalog} where ring256 in ({in_pixels})'
@@ -267,7 +268,6 @@ class TrilegalSEDGenerator:
                                                      data=np.array(spectra),
                                                      chunks=(200, len(wl_axis)),
                                                      compression='gzip',
-                                                     # compression_opts=9,
                                                      dtype='f4')
 
     def _generate_hp(self, hp):
@@ -360,15 +360,17 @@ class TrilegalFluxCatalogCreator:
 
         colls = object_list.get_collections()
         writer = pq.ParquetWriter(output_path, arrow_schema)
-        fields_needed = arrow_schema.names
+        #  fields_needed = arrow_schema.names
         instrument_needed = ['lsst']
         rg_written = 0
         writer = None
 
-        # There is only one row group per main healpixel file currently
-        # so the loop could be dispensed with
+        # Get all the objects in the pixel
+        obj_collection = self._catalog_creator._cat.get_object_type_by_hp(
+            pixel, 'trilegal').get_collections()[0]  # there only is one
+
         for c in colls:
-            trilegal_collection = c
+            # trilegal_collection = c
             l_bnd = 0
             u_bnd = len(c)
             if (u_bnd - l_bnd) < 5 * n_parallel:
@@ -379,8 +381,8 @@ class TrilegalFluxCatalogCreator:
                 n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
 
             lb = l_bnd
-            u = min(l_bnd + n_per, u_bnd)
-            readers = []
+            #  u = min(l_bnd + n_per, u_bnd)
+            #  readers = []
             if n_parallel == 1:
                 out_dict = _do_trilegal_flux_chunk(None, c, instrument_needed,
                                                    l_bnd, u_bnd)

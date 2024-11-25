@@ -15,7 +15,7 @@ from skycatalogs.objects.sso_object import SsoObject, SsoCollection
 from skycatalogs.objects.sso_object import EXPOSURE_DEFAULT
 from skycatalogs.readers import ParquetReader
 from skycatalogs.utils.sed_tools import TophatSedFactory, DiffskySedFactory
-from skycatalogs.utils.sed_tools import SsoSedFactory
+from skycatalogs.utils.sed_tools import TrilegalSedFactory, SsoSedFactory
 from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.shapes import Box, Disk, PolygonalRegion
@@ -24,6 +24,7 @@ from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
 from skycatalogs.objects.diffsky_object import DiffskyObject
 from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
+from skycatalogs.objects.trilegal_object import TrilegalObject, TrilegalCollection
 
 __all__ = ['SkyCatalog', 'open_catalog']
 
@@ -100,7 +101,7 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
         tbl[id_column] = [str(an_id) for an_id in tbl[id_column]]
 
     no_obj_type_return = (source_type in {'galaxy', 'diffsky_galaxy',
-                                          'snana', 'sso'})
+                                          'snana', 'sso', 'trilegal'})
     no_mjd_return = (source_type != 'sso')   # for now
     transient_filter = ('start_mjd' in tbl) and ('end_mjd' in tbl) and mjd is not None
     variable_filter = ('mjd' in tbl)
@@ -338,6 +339,7 @@ class SkyCatalog(object):
             if not self._sso_sed_factory:
                 self._logger.warning('SSO appear in the list of available object types but supporting files do not exist')
                 self._logger.warning('SSOs will not be simulated')
+
         self._extinguisher = MilkyWayExtinction()
 
         # Make our properties accessible to BaseObject, etc.
@@ -367,6 +369,14 @@ class SkyCatalog(object):
                 self.cat_cxt.register_source_type('sso',
                                                   object_class=SsoObject,
                                                   collection_class=SsoCollection)
+        if 'trilegal' in config['object_types']:
+            trilegal_config = config['object_types']['trilegal']
+            self.cat_cxt.register_source_type(
+                'trilegal',
+                object_class=TrilegalObject,
+                collection_class=TrilegalCollection)
+            self._trilegal_sed_factory = TrilegalSedFactory(trilegal_config,
+                                                            self._cat_dir)
 
     @property
     def observed_sed_factory(self):
@@ -658,6 +668,9 @@ class SkyCatalog(object):
         elif object_type in ['star']:
             columns = ['object_type', 'id', 'ra', 'dec']
             id_name = 'id'
+        elif object_type in ['trilegal']:
+            columns = ['id', 'ra', 'dec']
+            id_name = 'id'
         elif object_type in ['sso']:
             id_name = 'id'
             columns = ['id', 'ra', 'dec', 'mjd']
@@ -705,7 +718,8 @@ class SkyCatalog(object):
             # Make a collection for each row group
             for rg in range(rdr.n_row_groups):
                 arrow_t = rdr.read_columns(columns, None, rg)
-                if object_type in {'galaxy', 'diffsky_galaxy', 'snana'}:
+                if object_type in {'galaxy', 'diffsky_galaxy', 'snana',
+                                   'trilegal'}:
                     ra_c, dec_c, id_c, mask =\
                         _compress_via_mask(arrow_t,
                                            id_name,
