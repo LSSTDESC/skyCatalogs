@@ -12,6 +12,7 @@ from .utils.parquet_schema_utils import make_star_flux_schema
 from .objects.base_object import LSST_BANDS
 from .objects.base_object import ROMAN_BANDS
 from .sso_catalog_creator import SsoFluxCatalogCreator
+from .trilegal_catalog_creator import TrilegalFluxCatalogCreator
 
 """
 Code to create flux sky catalogs for particular object types
@@ -80,7 +81,8 @@ class FluxCatalogCreator:
 
         Parameters
         ----------
-        object_type     'cosmodc2_galaxy', 'diffsky_galaxy', 'star', or 'sso'
+        object_type     'cosmodc2_galaxy', 'diffsky_galaxy', 'star', 'sso'
+                        or 'trilegal'
         parts           Segments for which catalog is to be generated. If
                         partition type is HEALpix, parts will be a collection
                         of HEALpix pixels
@@ -147,6 +149,7 @@ class FluxCatalogCreator:
         self._include_roman_flux = include_roman_flux
         self._obs_sed_factory = None
         self._sso_creator = SsoFluxCatalogCreator(self)
+        self._trilegal_creator = TrilegalFluxCatalogCreator(self)
         self._run_options = run_options
         self._tophat_sed_bins = None
         self._sed_gen = None
@@ -166,6 +169,8 @@ class FluxCatalogCreator:
             self.create_pointsource_flux_catalog()
         elif object_type == ('sso'):
             self._sso_creator.create_sso_flux_catalog()
+        elif object_type == ('trilegal'):
+            self._trilegal_creator.create_trilegal_flux_catalog()
 
         else:
             raise NotImplementedError(
