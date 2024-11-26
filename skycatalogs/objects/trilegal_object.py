@@ -12,11 +12,15 @@ class TrilegalObject(BaseObject):
 
     _type_name = 'trilegal'
 
+    def __init__(self, ra, dec, id, object_type, belongs_to, belongs_index):
+        super().__init__(ra, dec, id, self._type_name, belongs_to,
+                         belongs_index)
+
     def _get_sed(self, mjd=None, redshift=0):
         '''
         '''
-        factory = self.belongs_to.sky.sky_catalog._trilegal_sed_factory
-        return factory.get_sed(self._id)    # unextincted
+        factory = self._belongs_to._sky_catalog._trilegal_sed_factory
+        return factory.get_sed(self)    # unextincted
 
     def get_gsobject_components(self, gsparams=None, rng=None):
         if gsparams is not None:

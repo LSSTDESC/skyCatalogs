@@ -211,12 +211,159 @@ class DiffskySedFactory:
         return seds
 
 
+class TrilegalSedFactory():
+
+    def __init__(self, object_type_config, sed_dir):
+        '''
+        Parameters
+        ----------
+        object_type_config  dict containing section of the sky catalog
+                            config pertaining to object type 'trilegal'
+        sed_dir             directory containing SED files
+                            Use None if no SED files
+        '''
+        if sed_dir:
+            tmpl = object_type_config.get('sed_file_template', None)
+            self._hp_lookup = {}
+            if not tmpl:
+                raise Exception('Bad config file for Trilegal')
+            self.tmpl = tmpl
+            self.sed_dir = sed_dir
+
+            self._wl = None
+            self._pystellib = None
+
+    def get_hp_sedfile(self, hp):
+        if hp not in self._hp_lookup:
+            self._hp_lookup[hp] = TrilegalSedFile(self, hp)
+
+        return self._hp_lookup[hp]
+
+    def get_sed(self, trilegal_object):
+        '''
+        Return galsim sed object for the id.
+
+        Find row in sed file and values for wl axis
+        Make galsim object
+        '''
+
+        if self.sed_dir:
+            id = trilegal_object.id
+            # extract hp from id
+            cmps = id.split('_')
+
+            # next to last component is of form "hpXX" where XX is hp id
+            # Last component is index of this object in the list of
+            # objects belonging to the hp
+            hp = int(cmps[-2][2:])
+
+            sedfile = self.get_hp_sedfile(hp)
+
+            row = sedfile.get_sed_row(id)
+            if row is None:
+                return None
+            lut = galsim.LookupTable(x=sedfile.wl_axis, f=row,
+                                     interpolant='linear')
+            sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
+
+        else:       # use pystellib
+            if not self._pystellib:
+                from pystellibs import BSettl
+                self._pystellib = BSettl(medres=False)
+                self._wl = self._pystellib.wavelngth / 10
+
+        return sed
+
+
+class TrilegalSedFile():
+    '''
+    Represents SED file for a single healpixel
+    '''
+    def __init__(self, factory, hp):
+        self._fpath = os.path.join(
+            factory.sed_dir, factory.tmpl.replace('(?P<healpix>\\d+)', str(hp)))
+
+        self._hp = hp
+
+        # init the batchs
+        self._batches = []
+
+        with h5py.File(self._fpath) as f:
+            self._wl = np.array(f['wl_axis'])
+            for b in f['batches']:
+                self._batches.append(_SEDBatch(b, self._fpath, f))
+
+    @property
+    def wl_axis(self):
+        return self._wl
+
+    def get_sed_row(self, id):
+        cmps = id.split('_')
+        if cmps[-2] != f'hp{self._hp}':
+            raise Exception(f'This source is not in hp {self._hp}')
+        for b in self._batches:
+            sed_row = b.get_sed_row(id)
+            if sed_row is not None:
+                return sed_row   #  maybe should make a copy and return that
+                                 # so file will close?
+        # Should have warning log message here
+        print(f'No SED for id {id}')
+        return None
+
+
+class _SEDBatch:
+    def __init__(self, batch_name, fpath, f):
+        self._batch_name = batch_name
+        self._fpath = fpath
+
+        # self._batch = f['batches'][batch_name]
+        ids = f['batches'][batch_name]['id']
+        self._spectra = None
+
+        # Format for id is <truth_name>_hp<hp_id>_<count>
+        # where <count> is the index of this source within the healpixel
+        first_id = ids[0].decode()
+        cmps = first_id.split('_')
+        self._min_hp_ix = int(cmps[-1])
+        last_id = ids[-1].decode()
+        cmps = last_id.split('_')
+        self._max_hp_ix = int(cmps[-1])
+        self._n_ids = len(ids)
+
+    @property
+    def ids(self):
+        return self._ids
+
+    def get_sed_row(self, id):
+        cmps = id.split('_')
+        id_ix = int(cmps[-1])
+        if (id_ix < self._min_hp_ix) or (id_ix > self._max_hp_ix):
+            return None         # Not in this batch
+
+        # Don't cache all the spectra. Just return the one needed
+        # if not self._spectra:
+        with h5py.File(self._fpath) as f:
+            spectra = f['batches'][self._batch_name]['spectra']
+            return spectra[id_ix - self._min_hp_ix]
+
+    def get_sed_batch(self):
+        '''
+        Return all SEDs for the batch.  The file will stay open
+        until the caller does del on the returned value.
+        '''
+        if not self._spectra:
+            with h5py.File(self._fpath) as f:
+                spectra = f['batches'][self._batch]['spectra']
+                return spectra
+
+
 class SsoSedFactory():
     '''
     Load the single SED used for SSO objects and make it available as galsim
     SED
     '''
     DEFAULT_SED_BNAME = 'solar_sed_thin.txt'
+
     def __init__(self, sed_path=None):
         '''
         Format of sed file is two-column text file, which galsim can
