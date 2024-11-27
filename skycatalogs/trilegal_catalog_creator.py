@@ -8,18 +8,17 @@ import healpy
 import h5py
 import numpy as np
 import json
-from .objects.base_object import LSST_BANDS
-from .objects.trilegal_object import TrilegalConfigFragment
-from .utils.config_utils import assemble_provenance
-from .utils.config_utils import assemble_file_metadata
+from skycatalogs.objects.base_object import LSST_BANDS
+from skycatalogs.objects.trilegal_object import TrilegalConfigFragment
+from skycatalogs.utils.config_utils import assemble_provenance
+from skycatalogs.utils.config_utils import assemble_file_metadata
 
 """
 Code for creating sky catalogs for trilegal stars
 """
 
-__all__ = ['TrilegalMainCatalogCreator', 'TrilegalSEDGenerator']
-# __all__ = ['TrilegalMainCatalogCreator', 'TrilegalSEDGenerator',
-#            'TrilegalFluxCatalogCreator']
+__all__ = ['TrilegalMainCatalogCreator', 'TrilegalSEDGenerator',
+           'TrilegalFluxCatalogCreator']
 
 _DEFAULT_ROW_GROUP_SIZE = 1000000
 _DEFAULT_TRUTH_CATALOG = 'lsst_sim.simdr2'
@@ -299,11 +298,11 @@ class TrilegalSEDGenerator:
             for c in ['logT', 'logg', 'logL', 'Z', 'mu0']:
                 py_dict[c] = np.array(py_dict[c], dtype=np.float64)
             wl_axis, spectra = self._pystellib.generate_individual_spectra(py_dict)
-            # Convert wl_axis from A to nm
+            # Convert wl_axis from A to nm. Also need to multiply spectra by 10
             wl_axis = wl_axis / 10
             # Convert spectra from erg/s/A to erg/s/nm/cm**2
             dl = 10**(1 + py_dict['mu0']/5) * PSEC_TO_CM
-            divisor = 0.1 * FOUR_PI * dl**2
+            divisor = FOUR_PI * dl**2 * 0.1
             spectra = np.transpose(np.transpose(spectra.magnitude)/divisor)
             spectra_32 = spectra.astype(np.float32)
             del spectra

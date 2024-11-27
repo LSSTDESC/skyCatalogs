@@ -233,22 +233,37 @@ class TrilegalSedFactory():
             self._wl = None
             self._pystellib = None
 
-    def get_hp_sedfile(self, hp):
+    def get_hp_sedfile(self, hp, silent=True):
         if hp not in self._hp_lookup:
-            self._hp_lookup[hp] = TrilegalSedFile(self, hp)
+            try:
+                self._hp_lookup[hp] = TrilegalSedFile(self, hp)
+            except FileNotFoundError:
+                if silent:
+                    return None
+                else:
+                    raise
 
         return self._hp_lookup[hp]
 
-    def get_sed(self, trilegal_object):
+    def get_sed(self, tri):
         '''
-        Return galsim sed object for the id.
+        Parameters
+        ----------
+        tri
 
-        Find row in sed file and values for wl axis
-        Make galsim object
+        Returns
+        -------
+        galsim sed object.
+
+        If SED file present, find row and wave length values in sed file
+        Otherwise use quantities in main parquet file + pystellibs
+        Return thinned galsim SED object
         '''
+        PSEC_TO_CM = 3.085677581e16 * 100
+        FOUR_PI = 4 * np.pi
 
         if self.sed_dir:
-            id = trilegal_object.id
+            id = tri.id
             # extract hp from id
             cmps = id.split('_')
 
@@ -258,21 +273,36 @@ class TrilegalSedFactory():
             hp = int(cmps[-2][2:])
 
             sedfile = self.get_hp_sedfile(hp)
+            if sedfile:
+                row = sedfile.get_sed_row(id)
+                if row is None:
+                    return None
+                lut = galsim.LookupTable(x=sedfile.wl_axis, f=row,
+                                         interpolant='linear')
+                sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
+                return sed.thin()
 
-            row = sedfile.get_sed_row(id)
-            if row is None:
-                return None
-            lut = galsim.LookupTable(x=sedfile.wl_axis, f=row,
-                                     interpolant='linear')
-            sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
+        # Otherwise have to calculate
+        if not self._pystellib:
+            from pystellibs import BTSettl
+            self._pystellib = BTSettl(medres=False)
+            self._wl = self._pystellib.wavelength / 10
 
-        else:       # use pystellib
-            if not self._pystellib:
-                from pystellibs import BSettl
-                self._pystellib = BSettl(medres=False)
-                self._wl = self._pystellib.wavelngth / 10
+        # Get inputs from parquet file
+        native = ['logT', 'logg', 'logL', 'Z']
+        spec_inputs = [tri.get_native_attribute(x) for x in native]
+        spectrum = self._pystellib.generate_stellar_spectrum(*spec_inputs) * 10
+        mu0 = tri.get_native_attribute('mu0')
 
-        return sed
+        # Convert spectrum from erg/s/A to erg/s/nm/cm**2;
+        # take into account distance from sun
+        dl = 10**(1 + mu0/5) * PSEC_TO_CM
+        # divisor = FOUR_PI * dl**2
+        spectrum = spectrum/(FOUR_PI * dl**2)
+        sed_table = galsim.LookupTable(self._wl, spectrum)
+        sed = galsim.SED(sed_table, 'nm', 'flambda')
+
+        return sed.thin()
 
 
 class TrilegalSedFile():
@@ -280,18 +310,22 @@ class TrilegalSedFile():
     Represents SED file for a single healpixel
     '''
     def __init__(self, factory, hp):
-        self._fpath = os.path.join(
+        fpath = os.path.join(
             factory.sed_dir, factory.tmpl.replace('(?P<healpix>\\d+)', str(hp)))
+
+        # See if it's there.   Let it raise exception if it's not
+        with open(fpath) as f:
+            self._fpath = fpath
 
         self._hp = hp
 
         # init the batchs
-        self._batches = []
+        self._batches = {}
 
         with h5py.File(self._fpath) as f:
             self._wl = np.array(f['wl_axis'])
             for b in f['batches']:
-                self._batches.append(_SEDBatch(b, self._fpath, f))
+                self._batches[b] = _SEDBatch(b, self._fpath, f)
 
     @property
     def wl_axis(self):
@@ -302,13 +336,19 @@ class TrilegalSedFile():
         if cmps[-2] != f'hp{self._hp}':
             raise Exception(f'This source is not in hp {self._hp}')
         for b in self._batches:
-            sed_row = b.get_sed_row(id)
+            sed_row = self._batches[b].get_sed_row(id)
             if sed_row is not None:
                 return sed_row   #  maybe should make a copy and return that
                                  # so file will close?
         # Should have warning log message here
         print(f'No SED for id {id}')
         return None
+
+    def get_sed_batch(self, batch_name):
+        '''
+        Return 2d array of all SEDs belonging to the batch
+        '''
+        return self._batches[b].get_sed_batch()
 
 
 class _SEDBatch:
@@ -351,10 +391,9 @@ class _SEDBatch:
         Return all SEDs for the batch.  The file will stay open
         until the caller does del on the returned value.
         '''
-        if not self._spectra:
-            with h5py.File(self._fpath) as f:
-                spectra = f['batches'][self._batch]['spectra']
-                return spectra
+        with h5py.File(self._fpath) as f:
+            spectra = f['batches'][self._batch]['spectra']
+            return spectra
 
 
 class SsoSedFactory():
