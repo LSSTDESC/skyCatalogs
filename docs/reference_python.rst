@@ -2,7 +2,7 @@
 The ``skyCatalogs`` package
 ===========================
 
-Reference documentation for core objects with the ``sktyCatalogs`` package
+Reference documentation for core objects with the ``skyCatalogs`` package
 
 .. _skyCatalog_class:
 
