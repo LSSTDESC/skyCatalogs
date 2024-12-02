@@ -48,15 +48,18 @@ class DiffskyObject(BaseObject):
         """
         # Deceleration paramameter
         q = -0.5
+
+        if z >= 0.6:
+            # Above z=0.6, fractional contribution to post-convolved size
+            # is <20% for smallest Roman PSF size, so can treat as point source
+            # This also ensures sqrt in formula below has a
+            # non-negative argument
+            return None
+
         # Angular diameter scaling approximation in pc
         dA = (3e9/q**2)*(z*q+(q-1)*(np.sqrt(2*q*z+1)-1))/(1+z)**2*(1.4-0.53*z)
         # Using typical knot size 250pc, convert to sigma in arcmin
-        if z < 0.6:
-            return 206264.8*250/dA/2.355
-        else:
-            # Above z=0.6, fractional contribution to post-convolved size
-            # is <20% for smallest Roman PSF size, so can treat as point source
-            return None
+        return 206264.8*250/dA/2.355
 
     def get_knot_n(self, rng=None):
         """
