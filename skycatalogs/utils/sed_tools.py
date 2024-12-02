@@ -338,8 +338,10 @@ class TrilegalSedFile():
         for b in self._batches:
             sed_row = self._batches[b].get_sed_row(id)
             if sed_row is not None:
-                return sed_row   #  maybe should make a copy and return that
-                                 # so file will close?
+                #  maybe should make a copy and return that
+                #  so file will close?
+                return sed_row
+
         # Should have warning log message here
         print(f'No SED for id {id}')
         return None
@@ -348,7 +350,12 @@ class TrilegalSedFile():
         '''
         Return 2d array of all SEDs belonging to the batch
         '''
-        return self._batches[b].get_sed_batch()
+        return self._batches[batch_name].get_sed_batch()
+
+    @property
+    def batches(self):
+        # Dictionary of batches belonging to this hp
+        return self._batches
 
 
 class _SEDBatch:
@@ -371,8 +378,12 @@ class _SEDBatch:
         self._n_ids = len(ids)
 
     @property
-    def ids(self):
-        return self._ids
+    def min_hp_ix(self):
+        return self._min_hp_ix
+
+    @property
+    def max_hp_ix(self):
+        return self._max_hp_ix
 
     def get_sed_row(self, id):
         cmps = id.split('_')

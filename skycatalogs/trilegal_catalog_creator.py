@@ -25,23 +25,6 @@ _DEFAULT_TRUTH_CATALOG = 'lsst_sim.simdr2'
 _DEFAULT_START_EPOCH = 2000
 
 
-def _do_trilegal_flux_chunk(send_conn, trilegal_collection, instrument_needed,
-                            l_bnd, u_bnd):
-    '''
-    end_conn         output connection
-    trilegal_collection  information from main file
-    instrument_needed List of which calculations should be done
-    l_bnd, u_bnd     demarcates slice to process
-
-    returns
-                    dict with keys id, lsst_flux_u, ... lsst_flux_y
-    '''
-    out_dict = {}
-
-    # Not implemented yet
-    return out_dict
-
-
 class TrilegalMainCatalogCreator:
     # Note dl is not part of desc-python or LSST Pipelines; it must be
     # separately installed
@@ -284,12 +267,12 @@ class TrilegalSEDGenerator:
         # For now read main file ourselves, not via skyCatalogs API
         in_path = os.path.join(self._input_dir, in_fname)
         pq_file = pq.ParquetFile(in_path)
+        n_gp = pq_file.metadata.num_row_groups
         hp5_path = os.path.join(self._output_dir, out_fname)
         with h5py.File(hp5_path, 'w') as f:
             f.create_group('metadata')
-            f['metadata'].attrs.create('input_path', [in_path])
-
-        n_gp = pq_file.metadata.num_row_groups
+            f['metadata'].attrs.create('input_path', in_path)
+            f['metadata'].attrs.create('n_batch', n_gp)  # was in brackets
 
         for batch in range(n_gp):
             columns = ['id', 'logT', 'logg', 'logL', 'Z', 'mu0']
@@ -315,6 +298,64 @@ class TrilegalSEDGenerator:
 
         for hp in hps:
             self._generate_hp(hp)
+
+
+def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
+                            l_bnd, u_bnd, row_group):
+    '''
+    end_conn         output connection.  If none return output
+    collection       object collection we're processing
+    instrument_needed indicates which fluxes need to be computed
+                     Ignored for now.  Just do LSST fluxes
+    l_bnd, u_bnd     demarcates slice to process
+    row_group        row group this chunk belongs to.
+                     Row group # = (SED file) batch #
+
+    returns
+                    dict with keys id, lsst_flux_u, ... lsst_flux_y
+    '''
+    out_dict = {}
+
+    hp = collection._partition_id
+    skycat = collection._sky_catalog
+    factory = skycat._trilegal_sed_factory
+    sedfile = factory.get_hp_sedfile(hp, silent=False)  # should be there
+    extinguisher = skycat._extinguisher
+
+    # SEDs we need should be in group named "batch_XX" where XX is row
+    # group number
+    spectra = sedfile.get_sed_batch(f"batch_{row_group}")
+    av = collection.get_native_attribute('av')
+    id = collection.get_native_attribute('id')
+    out_dict['id'] = id[l_bnd, u_bnd]
+    fluxes = []
+    for ix in range(l_bnd, u_bnd):
+        obj_fluxes = []
+        sed_extincted = extinguisher(spectra[ix], av[ix])
+        if sed_extincted is None:
+            obj_fluxes = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        else:
+            for band in LSST_BANDS:
+                obj_fluxes.append(collection[ix].get_LSST_flux(
+                    band, sed=sed_extincted, cache=False))
+        fluxes.append(obj_fluxes)
+
+    colnames = [f'lsst_flux_{band}' for band in LSST_BANDS]
+    fluxes_transpose = zip(*fluxes)
+    flux_dict = dict(zip(colnames, fluxes_transpose))
+    out_dict.update(flux_dict)
+
+    if send_conn:
+        send_conn.send(out_dict)
+    else:
+        return out_dict
+
+    # Find all batches we need in our file
+    # batches = sedfile.batches
+    # needed = []
+    # for b in batches.items():
+    #     if l_bnd <= b.max_hp_ix and u_bnd >= b.min_hp_ix:
+    #         needed.append(b)
 
 
 class TrilegalFluxCatalogCreator:
@@ -348,7 +389,6 @@ class TrilegalFluxCatalogCreator:
 
         return pa.schema(fields, metadata=final_metadata)
 
-    ####################
     def create_trilegal_flux_pixel(self, pixel, arrow_schema):
         output_filename = f'trilegal_flux_{pixel}.parquet'
         output_path = os.path.join(self._catalog_creator._output_dir,
@@ -357,7 +397,6 @@ class TrilegalFluxCatalogCreator:
         object_list = self._cat.get_object_type_by_hp(pixel, 'trilegal')
         n_parallel = self._catalog_creator._flux_parallel
 
-        colls = object_list.get_collections()
         writer = pq.ParquetWriter(output_path, arrow_schema)
         #  fields_needed = arrow_schema.names
         instrument_needed = ['lsst']
@@ -365,11 +404,13 @@ class TrilegalFluxCatalogCreator:
         writer = None
 
         # Get all the objects in the pixel
-        obj_collection = self._catalog_creator._cat.get_object_type_by_hp(
-            pixel, 'trilegal').get_collections()[0]  # there only is one
+        # For test pixel there is only one row group so only one collection
+        # In general may have to iterate over row groups
+        obj_list = self._catalog_creator._cat.get_object_type_by_hp(
+            pixel, 'trilegal')
 
-        for c in colls:
-            # trilegal_collection = c
+        for ix, c in enumerate(obj_list.get_collections()):
+            # av = c.get_native_attribute('av')
             l_bnd = 0
             u_bnd = len(c)
             if (u_bnd - l_bnd) < 5 * n_parallel:
@@ -384,7 +425,7 @@ class TrilegalFluxCatalogCreator:
             #  readers = []
             if n_parallel == 1:
                 out_dict = _do_trilegal_flux_chunk(None, c, instrument_needed,
-                                                   l_bnd, u_bnd)
+                                                   l_bnd, u_bnd, ix)
             else:
                 raise Exception('Parallel flux computation for trilegal NYI')
                 # out_dict = {}
@@ -402,7 +443,7 @@ class TrilegalFluxCatalogCreator:
                 #     proc = Process(target=_do_trilegal_flux_chunk,
                 #                    name=f'proc_{i}',
                 #                    args=(conn_wrt, _trilegal_collection,
-                #                          instrument_needed, lb, u))
+                #                          instrument_needed, lb, u, ix))
                 #     proc.start()
                 #     p_list.append(proc)
                 #     lb = u
