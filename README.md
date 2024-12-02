@@ -1,10 +1,13 @@
 # The skyCatalogs package
 
-This package will contain 
+This package contains 
 * code to create sky catalogs from input like cosmoDC2 (for galaxies) and similar catalogs for other source types
-* implement an API to access information in the catalogs and products, such as flux calculations, derived from the catalogs
+* an API to access information in the catalogs and products, such as flux calculations, derived from the catalogs
 
 Sky Catalogs are chiefly intended for use by simulation programs. The physical representation is meant to compactly represent information needed to compute fluxes at a given time, under specified conditions (e.g. band).
+
+For more complete information on installation and use see
+[https://lsstdesc.org/skyCatalogs/](https://lsstdesc.org/skyCatalogs/)
 
 ## Set-up and testing
 From bash
