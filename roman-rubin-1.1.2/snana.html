@@ -1,0 +1,354 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SNANA quantities for Roman-Rubin sims &mdash; skyCatalogs 1.7.0-rc4 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=a86fb981"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="The skyCatalogs package" href="../reference_python.html" />
+    <link rel="prev" title="Star quantities for Roman-Rubin sims" href="UW_stars.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            skyCatalogs
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation Instructions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage_read.html">Reading Catalogs with skyCatalogs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage_read.html#structure-of-skycatalogs-configs">Structure of skyCatalogs Configs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage_read.html#adding-supported-object-types-to-a-catalog">Adding Supported Object Types to a Catalog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage_create.html">Creating New Catalogs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ops-rehearsals-3-4/galaxies.html">Galaxy quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ops-rehearsals-3-4/UW_stars.html">Star quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ops-rehearsals-3-4/SSO.html">Solar System Object (SSO) quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="diffsky_galaxy.html">Galaxy quantities for Roman-Rubin joint simulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="UW_stars.html">Star quantities for Roman-Rubin sims</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">SNANA quantities for Roman-Rubin sims</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#snana-main-file">SNANA main file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#snana-varying-quantities">SNANA varying quantities</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../reference_python.html">The <code class="docutils literal notranslate"><span class="pre">skyCatalogs</span></code> package</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contact:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../contact.html">Contact</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">skyCatalogs</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">SNANA quantities for Roman-Rubin sims</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/roman-rubin-1.1.2/snana.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <style>
+.wy-table-responsive table td,.wy-table-responsive table th{white-space:normal}
+</style><section id="snana-quantities-for-roman-rubin-sims">
+<h1>SNANA quantities for Roman-Rubin sims<a class="headerlink" href="#snana-quantities-for-roman-rubin-sims" title="Link to this heading"></a></h1>
+<p>Data are partitioned by (nside=32, ring ordering) healpixel. For each pixel
+there is a so-called “main file” in parquet format, containing static
+quantities associated with each source, and an hdf5 file for quantities
+which vary with time or wavelength or both.</p>
+<section id="snana-main-file">
+<h2>SNANA main file<a class="headerlink" href="#snana-main-file" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Datatype</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>id</p></td>
+<td><p>int64</p></td>
+<td><p>N/A</p></td>
+<td><p>Unique object identifier</p></td>
+</tr>
+<tr class="row-odd"><td><p>ra</p></td>
+<td><p>double</p></td>
+<td><p>degrees</p></td>
+<td><p>Object right ascension</p></td>
+</tr>
+<tr class="row-even"><td><p>dec</p></td>
+<td><p>double</p></td>
+<td><p>degrees</p></td>
+<td><p>Object declination</p></td>
+</tr>
+<tr class="row-odd"><td><p>host_id</p></td>
+<td><p>int64</p></td>
+<td><p>N/A</p></td>
+<td><p>Host galaxy</p></td>
+</tr>
+<tr class="row-even"><td><p>gentype</p></td>
+<td><p>int32</p></td>
+<td><p>N/A</p></td>
+<td><p>Type of object simulated</p></td>
+</tr>
+<tr class="row-odd"><td><p>model_name</p></td>
+<td><p>string</p></td>
+<td><p>N/A</p></td>
+<td><p>Type name</p></td>
+</tr>
+<tr class="row-even"><td><p>start_mjd</p></td>
+<td><p>float</p></td>
+<td><p>days</p></td>
+<td><p>Earliest visibility</p></td>
+</tr>
+<tr class="row-odd"><td><p>end_mjd</p></td>
+<td><p>float</p></td>
+<td><p>days</p></td>
+<td><p>Latest visibility</p></td>
+</tr>
+<tr class="row-even"><td><p>z_CMB</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>redshift</p></td>
+</tr>
+<tr class="row-odd"><td><p>mw_EBV</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>MW extinction parameter</p></td>
+</tr>
+<tr class="row-even"><td><p>mw_extinction_applied</p></td>
+<td><p>boolean</p></td>
+<td><p>N/A</p></td>
+<td><p>Here always False</p></td>
+</tr>
+<tr class="row-odd"><td><p>AV</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>For host galaxy, randomly
+assigned</p></td>
+</tr>
+<tr class="row-even"><td><p>RV</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>For host galaxy</p></td>
+</tr>
+<tr class="row-odd"><td><p>v_pec</p></td>
+<td><p>float</p></td>
+<td><p>km/sec</p></td>
+<td><p>Peculiar velocity. Not
+yet simulated so zero.</p></td>
+</tr>
+<tr class="row-even"><td><p>host_ra</p></td>
+<td><p>double</p></td>
+<td><p>degrees</p></td>
+<td><p>Host galaxy RA</p></td>
+</tr>
+<tr class="row-odd"><td><p>host_dec</p></td>
+<td><p>double</p></td>
+<td><p>degrees</p></td>
+<td><p>Host galaxy decl.</p></td>
+</tr>
+<tr class="row-even"><td><p>host_mag_g</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>Host mag. in Rubin g-band</p></td>
+</tr>
+<tr class="row-odd"><td><p>host_mag_i</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>Host mag. in Rubin i-band</p></td>
+</tr>
+<tr class="row-even"><td><p>host_mag_F</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>Host mag. in Roman F-band</p></td>
+</tr>
+<tr class="row-odd"><td><p>host_sn_sep</p></td>
+<td><p>float</p></td>
+<td><p>arcsec</p></td>
+<td><p>Separation from host</p></td>
+</tr>
+<tr class="row-even"><td><p>peak_mjd</p></td>
+<td><p>float</p></td>
+<td><p>days</p></td>
+<td><p>Time of peak flux
+(model-dependent)</p></td>
+</tr>
+<tr class="row-odd"><td><p>peak_mag_g</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>g-band mag. at peak</p></td>
+</tr>
+<tr class="row-even"><td><p>peak_mag_i</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>i-band mag. at peak</p></td>
+</tr>
+<tr class="row-odd"><td><p>peak_mag_F</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>F-band mag. at peak</p></td>
+</tr>
+<tr class="row-even"><td><p>lens_dmu_applied</p></td>
+<td><p>boolean</p></td>
+<td><p>N/A</p></td>
+<td><p>False (distance modulus
+lensing shift not applied)</p></td>
+</tr>
+<tr class="row-odd"><td><p>model_param_names</p></td>
+<td><p>list(string)</p></td>
+<td><p>N/A</p></td>
+<td><p>Model parameter names</p></td>
+</tr>
+<tr class="row-even"><td><p>model_param_values</p></td>
+<td><p>list(string)</p></td>
+<td><p>N/A</p></td>
+<td><p>Model parameter values</p></td>
+</tr>
+<tr class="row-odd"><td><p>MW_av</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>MW extinction parameter</p></td>
+</tr>
+<tr class="row-even"><td><p>MW_rv</p></td>
+<td><p>float</p></td>
+<td><p>N/A</p></td>
+<td><p>MW extinction parameter</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="snana-varying-quantities">
+<h2>SNANA varying quantities<a class="headerlink" href="#snana-varying-quantities" title="Link to this heading"></a></h2>
+<p>The top-level keys for each file are the ids for sources in that pixel, the
+same as the ids appearing in the parquet file but here stored as strings.
+Under each id are the following keys</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Datatype</p></th>
+<th class="head"><p>Units</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>mjd</p></td>
+<td><p>float array</p></td>
+<td><p>days</p></td>
+<td><p>Time axis for flambda</p></td>
+</tr>
+<tr class="row-odd"><td><p>lambda</p></td>
+<td><p>double array</p></td>
+<td><p>angstroms</p></td>
+<td><p>Wavelength axis for flambda</p></td>
+</tr>
+<tr class="row-even"><td><p>flambda</p></td>
+<td><p>float 2-d array</p></td>
+<td><p>erg/sec/A/cm^2</p></td>
+<td><p>Flux indexed by (mjd,lambda)</p></td>
+</tr>
+<tr class="row-odd"><td><p>mag_&lt;band&gt;</p></td>
+<td><p>float array</p></td>
+<td><p>N/A</p></td>
+<td><p>Magnitude for each mjd computed
+using 5 angstrom bins.</p></td>
+</tr>
+<tr class="row-even"><td><p>magcor_&lt;band&gt;</p></td>
+<td><p>float array</p></td>
+<td><p>N/A</p></td>
+<td><p>Correction to magnitude
+computed using flambda</p></td>
+</tr>
+<tr class="row-odd"><td><p>synmag_&lt;band&gt;</p></td>
+<td><p>float array</p></td>
+<td><p>N/A</p></td>
+<td><p>Magnitude computed from flambda</p></td>
+</tr>
+</tbody>
+</table>
+<p>where &lt;band&gt; takes on values u, g, r, i, z, y (Rubin bandpasses) and F, H, J,
+K, R, W, Y, Z (for Roman).</p>
+<p>mjd values have uniform spacing of 1 day. lambda values have uniform spacing
+of 100 angstroms.</p>
+<p>synmag + magcor = mag</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="UW_stars.html" class="btn btn-neutral float-left" title="Star quantities for Roman-Rubin sims" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../reference_python.html" class="btn btn-neutral float-right" title="The skyCatalogs package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2020-2024, LSSTDESC.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

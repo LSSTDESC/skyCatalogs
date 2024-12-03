@@ -1,0 +1,412 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Creating New Catalogs &mdash; skyCatalogs 1.7.0-rc4 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=a86fb981"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Galaxy quantities for ops-rehearsals 3 and 4" href="ops-rehearsals-3-4/galaxies.html" />
+    <link rel="prev" title="Reading Catalogs with skyCatalogs" href="usage_read.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            skyCatalogs
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation Instructions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage_read.html">Reading Catalogs with skyCatalogs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage_read.html#structure-of-skycatalogs-configs">Structure of skyCatalogs Configs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage_read.html#adding-supported-object-types-to-a-catalog">Adding Supported Object Types to a Catalog</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Creating New Catalogs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-script-create-main-py-and-its-options">The script <code class="docutils literal notranslate"><span class="pre">create_main.py</span></code> and its options</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#options-table">Options table</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#the-script-create-flux-py-and-its-options">The script <code class="docutils literal notranslate"><span class="pre">create_flux.py</span></code> and its options</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id1">Options table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-options-files">Example options files</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ops-rehearsals-3-4/galaxies.html">Galaxy quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ops-rehearsals-3-4/UW_stars.html">Star quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ops-rehearsals-3-4/SSO.html">Solar System Object (SSO) quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roman-rubin-1.1.2/diffsky_galaxy.html">Galaxy quantities for Roman-Rubin joint simulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roman-rubin-1.1.2/UW_stars.html">Star quantities for Roman-Rubin sims</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roman-rubin-1.1.2/snana.html">SNANA quantities for Roman-Rubin sims</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="reference_python.html">The <code class="docutils literal notranslate"><span class="pre">skyCatalogs</span></code> package</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contact:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">skyCatalogs</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Creating New Catalogs</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/usage_create.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <style>
+.wy-table-responsive table td,.wy-table-responsive table th{white-space:normal}
+</style><section id="creating-new-catalogs">
+<h1>Creating New Catalogs<a class="headerlink" href="#creating-new-catalogs" title="Link to this heading"></a></h1>
+<p>Catalogs - both the binary data files and yaml config - for some object types
+can be created using the script <cite>create_main.py</cite> and
+<cite>create_flux.py</cite>.  Creation of the main catalog must precede
+creation of the flux catalog for the same sky region.
+For other object types the data are
+created by other means, but it is still necessary to make a suitable
+config fragment so that the skyCatalogs API can access the data.</p>
+<section id="the-script-create-main-py-and-its-options">
+<h2>The script <code class="docutils literal notranslate"><span class="pre">create_main.py</span></code> and its options<a class="headerlink" href="#the-script-create-main-py-and-its-options" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">create_main.py</span></code> has a plethora of options, but few are of interest
+for most invocations and even fewer are required.  The options determine</p>
+<ul class="simple">
+<li><p>object type for which files will be created (required)</p></li>
+<li><p>region of the sky for which files will be created.</p></li>
+<li><p>where the output goes</p></li>
+<li><p>inputs (usually defaulted, depending on object type)</p></li>
+<li><p>numerous options conditioning exactly how the output is to be created,
+most of which are usually defaulted</p></li>
+</ul>
+<p>One particularly handy option, <code class="docutils literal notranslate"><span class="pre">--options-file</span></code>, allows you to specify
+everything else as key-value pairs in a yaml file.</p>
+<section id="options-table">
+<h3>Options table<a class="headerlink" href="#options-table" title="Link to this heading"></a></h3>
+<p>Here is the complete list of options as they appear in an options file.
+On the command line, prepend <code class="docutils literal notranslate"><span class="pre">--</span></code> and change all underscores to hyphens.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Datatype</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>object_type</p></td>
+<td><p>string</p></td>
+<td></td>
+<td><p>Required. One of {star, sso,
+cosmodc2_galaxy, diffsky_galaxy}</p></td>
+</tr>
+<tr class="row-odd"><td><p>catalog_dir</p></td>
+<td><p>string</p></td>
+<td><p>“.”</p></td>
+<td><p>Location of catalog relative
+to skycatalog_root
+(see below)</p></td>
+</tr>
+<tr class="row-even"><td><p>catalog_name</p></td>
+<td><p>string</p></td>
+<td><p>“skyCatalog”</p></td>
+<td><p>Name of top-level yaml config
+file</p></td>
+</tr>
+<tr class="row-odd"><td><p>config_path</p></td>
+<td><p>string</p></td>
+<td><p>None</p></td>
+<td><p>where to write config. If
+<code class="docutils literal notranslate"><span class="pre">None</span></code>, same folder as data</p></td>
+</tr>
+<tr class="row-even"><td><p>dc2</p></td>
+<td><p>boolean</p></td>
+<td><p>False</p></td>
+<td><p>Use dc2 conventions</p></td>
+</tr>
+<tr class="row-odd"><td><p>galaxy_magnitude_cut</p></td>
+<td><p>float</p></td>
+<td><p>29.0</p></td>
+<td><p>Discard galaxies above cut.
+Ignored for non-galaxy
+object types</p></td>
+</tr>
+<tr class="row-even"><td><p>nside</p></td>
+<td><p>int</p></td>
+<td><p>32</p></td>
+<td><p>nside for healpixels</p></td>
+</tr>
+<tr class="row-odd"><td><p>stride</p></td>
+<td><p>int</p></td>
+<td><p>1_000_000</p></td>
+<td><p>Max objects output per row
+group</p></td>
+</tr>
+<tr class="row-even"><td><p>truth</p></td>
+<td><p>string</p></td>
+<td><p>None</p></td>
+<td><p>Default depends on object_type</p></td>
+</tr>
+<tr class="row-odd"><td><p>knots_magnitude_cut</p></td>
+<td><p>float</p></td>
+<td><p>27.0</p></td>
+<td><p>Omit knots component from
+galaxies with i-mag above cut</p></td>
+</tr>
+<tr class="row-even"><td><p>log_level</p></td>
+<td><p>string</p></td>
+<td><p>“INFO”</p></td>
+<td><p>Log level</p></td>
+</tr>
+<tr class="row-odd"><td><p>no_knots</p></td>
+<td><p>boolean</p></td>
+<td><p>False</p></td>
+<td><p>Omit knot component</p></td>
+</tr>
+<tr class="row-even"><td><p>options_file</p></td>
+<td><p>string</p></td>
+<td><p>None</p></td>
+<td><p>Path to file where other
+options are set</p></td>
+</tr>
+<tr class="row-odd"><td><p>pixels</p></td>
+<td><p>int list</p></td>
+<td><p>[9556]</p></td>
+<td><p>healpix pixels for which
+catalog will be created</p></td>
+</tr>
+<tr class="row-even"><td><p>skip_done</p></td>
+<td><p>boolean</p></td>
+<td><p>False</p></td>
+<td><p>do not overwrite existing files</p></td>
+</tr>
+<tr class="row-odd"><td><p>skycatalog_root</p></td>
+<td><p>string</p></td>
+<td><p>None</p></td>
+<td><p>Abs. path. See catalog_dir</p></td>
+</tr>
+<tr class="row-even"><td><p>sso_sed</p></td>
+<td><p>string</p></td>
+<td><p>None</p></td>
+<td><p>Path to file to SED to be
+used for all SSOs. Defaults
+to <cite>solar_sed_thin.txt</cite>,
+included in repo.</p></td>
+</tr>
+<tr class="row-odd"><td><p>star_input_fmt</p></td>
+<td><p>string</p></td>
+<td><p>“sqlite”</p></td>
+<td><p>Format of star truth</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="the-script-create-flux-py-and-its-options">
+<h2>The script <code class="docutils literal notranslate"><span class="pre">create_flux.py</span></code> and its options<a class="headerlink" href="#the-script-create-flux-py-and-its-options" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">create_flux.py</span></code> has most of the same options as <code class="docutils literal notranslate"><span class="pre">create_main.py</span></code>
+plus a couple new ones. Only <code class="docutils literal notranslate"><span class="pre">object_type</span></code> is required but several
+others are specified for most invocations.</p>
+<section id="id1">
+<h3>Options table<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<p>Here is the complete list of options as they appear in an options file.
+On the command line, prepend <code class="docutils literal notranslate"><span class="pre">--</span></code> and change all underscores to hyphens.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Datatype</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>object_type</p></td>
+<td><p>string</p></td>
+<td></td>
+<td><p>Required. One of {star, sso,
+cosmodc2_galaxy, diffsky_galaxy}</p></td>
+</tr>
+<tr class="row-odd"><td><p>catalog_dir</p></td>
+<td><p>string</p></td>
+<td><p>“.”</p></td>
+<td><p>Location of catalog relative
+to skycatalog_root
+(see below)</p></td>
+</tr>
+<tr class="row-even"><td><p>catalog_name</p></td>
+<td><p>string</p></td>
+<td><p>“skyCatalog”</p></td>
+<td><p>Name of top-level yaml config
+file</p></td>
+</tr>
+<tr class="row-odd"><td><p>config_path</p></td>
+<td><p>string</p></td>
+<td><p>None</p></td>
+<td><p>where to write config. If
+<code class="docutils literal notranslate"><span class="pre">None</span></code>, same folder as data</p></td>
+</tr>
+<tr class="row-even"><td><p>flux_parallel</p></td>
+<td><p>int</p></td>
+<td><p>16</p></td>
+<td><p># processes to run in parallel
+when computing fluxes</p></td>
+</tr>
+<tr class="row-odd"><td><p>iclude_roman_flux</p></td>
+<td><p>boolean</p></td>
+<td><p>False</p></td>
+<td><p>If True calculate &amp; store Roman
+as well as Rubin fluxes.</p></td>
+</tr>
+<tr class="row-even"><td><p>log_level</p></td>
+<td><p>string</p></td>
+<td><p>“INFO”</p></td>
+<td><p>Log level</p></td>
+</tr>
+<tr class="row-odd"><td><p>options_file</p></td>
+<td><p>string</p></td>
+<td><p>None</p></td>
+<td><p>Path to file where other
+options are set</p></td>
+</tr>
+<tr class="row-even"><td><p>pixels</p></td>
+<td><p>int list</p></td>
+<td><p>[9556]</p></td>
+<td><p>healpix pixels for which
+catalog will be created</p></td>
+</tr>
+<tr class="row-odd"><td><p>skip_done</p></td>
+<td><p>boolean</p></td>
+<td><p>False</p></td>
+<td><p>do not overwrite existing files</p></td>
+</tr>
+<tr class="row-even"><td><p>skycatalog_root</p></td>
+<td><p>string</p></td>
+<td><p>None</p></td>
+<td><p>Abs. path. See catalog_dir</p></td>
+</tr>
+<tr class="row-odd"><td><p>sso_sed</p></td>
+<td><p>string</p></td>
+<td><p>None</p></td>
+<td><p>Path to file to SED to be
+used for all SSOs. Defaults
+to <cite>solar_sed_thin.txt</cite>,
+included in repo.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="example-options-files">
+<h3>Example options files<a class="headerlink" href="#example-options-files" title="Link to this heading"></a></h3>
+<p>Create cosmodc2-style galaxies main file.  This file was one I wrote
+primarily for testing the creation code. In order to speed things up, I
+set <code class="docutils literal notranslate"><span class="pre">galaxy_magnitude_cut</span></code> down to 20.0. The output file is about 1000 times
+smaller than with the default cut.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">object_type</span><span class="p">:</span><span class="w">          </span><span class="l l-Scalar l-Scalar-Plain">cosmodc2_galaxy</span>
+<span class="nt">catalog_dir</span><span class="p">:</span><span class="w">          </span><span class="l l-Scalar l-Scalar-Plain">just_testing</span>
+<span class="nt">pixels</span><span class="p">:</span><span class="w">               </span><span class="p p-Indicator">[</span><span class="nv">9683</span><span class="p p-Indicator">]</span>
+<span class="nt">galaxy_magnitude_cut</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20.0</span><span class="w">    </span><span class="c1"># Default is 29.0</span>
+<span class="nt">log_level</span><span class="p">:</span><span class="w">            </span><span class="l l-Scalar l-Scalar-Plain">DEBUG</span><span class="w">   </span><span class="c1"># Default is INFO</span>
+</pre></div>
+</div>
+<p>Suppose the file is called <cite>main_galaxy.yaml</cite>. It can be invoked as follows:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>cosmodc2_galaxy<span class="w"> </span>--options-file<span class="w"> </span>main_galaxy.yaml
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Since <code class="docutils literal notranslate"><span class="pre">object_type</span></code> is required it must be specified both on the
+command line and in the options file.</p>
+</div>
+<p>Create star flux file for a couple healpixels.
+The default value of <code class="docutils literal notranslate"><span class="pre">flux_parallel</span></code> is rather conservative for Perlmutter,
+so use something higher to make the process go faster.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">catalog_dir</span><span class="p">:</span><span class="w">          </span><span class="l l-Scalar l-Scalar-Plain">just_testing</span>
+<span class="nt">pixels</span><span class="p">:</span><span class="w">               </span><span class="p p-Indicator">[</span><span class="nv">9683</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">9684</span><span class="p p-Indicator">]</span>
+<span class="nt">flux_parallel</span><span class="p">:</span><span class="w">        </span><span class="l l-Scalar l-Scalar-Plain">24</span><span class="w">      </span><span class="c1"># Default is 16</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The star main files for both healpixels must already exist in the output
+directory since they are input to the flux generation.</p>
+</div>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="usage_read.html" class="btn btn-neutral float-left" title="Reading Catalogs with skyCatalogs" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="ops-rehearsals-3-4/galaxies.html" class="btn btn-neutral float-right" title="Galaxy quantities for ops-rehearsals 3 and 4" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2020-2024, LSSTDESC.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

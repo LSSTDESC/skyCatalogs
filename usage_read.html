@@ -1,0 +1,320 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reading Catalogs with skyCatalogs &mdash; skyCatalogs 1.7.0-rc4 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=a86fb981"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Creating New Catalogs" href="usage_create.html" />
+    <link rel="prev" title="Installation Instructions" href="installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            skyCatalogs
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation Instructions</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Reading Catalogs with skyCatalogs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#opening-a-catalog">Opening a Catalog</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#structure-of-skycatalogs-configs">Structure of skyCatalogs Configs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#using-include">Using !include</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#description-of-an-object-type">Description of an object type</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#adding-supported-object-types-to-a-catalog">Adding Supported Object Types to a Catalog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#supported-object-types">Supported object types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage_create.html">Creating New Catalogs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ops-rehearsals-3-4/galaxies.html">Galaxy quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ops-rehearsals-3-4/UW_stars.html">Star quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ops-rehearsals-3-4/SSO.html">Solar System Object (SSO) quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roman-rubin-1.1.2/diffsky_galaxy.html">Galaxy quantities for Roman-Rubin joint simulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roman-rubin-1.1.2/UW_stars.html">Star quantities for Roman-Rubin sims</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roman-rubin-1.1.2/snana.html">SNANA quantities for Roman-Rubin sims</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="reference_python.html">The <code class="docutils literal notranslate"><span class="pre">skyCatalogs</span></code> package</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contact:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">skyCatalogs</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Reading Catalogs with skyCatalogs</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/usage_read.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <style>
+.wy-table-responsive table td,.wy-table-responsive table th{white-space:normal}
+</style><section id="reading-catalogs-with-skycatalogs">
+<h1>Reading Catalogs with skyCatalogs<a class="headerlink" href="#reading-catalogs-with-skycatalogs" title="Link to this heading"></a></h1>
+<p>Typically making use of skyCatalogs involves three steps:</p>
+<ol class="arabic simple">
+<li><p>“Open” the catalog. This is accomplished by reading a <em>config</em>: one or more
+yaml files which describes features of the catalog.  Config files will
+be described in detail below.</p></li>
+<li><p>Select objects of specified types (e.g. galaxies or stars or both) within
+a region of the sky.</p></li>
+<li><p>Obtain properties of the objects for use by your application.</p></li>
+</ol>
+<p>The last two steps are often executed multiple times.</p>
+<section id="opening-a-catalog">
+<h2>Opening a Catalog<a class="headerlink" href="#opening-a-catalog" title="Link to this heading"></a></h2>
+<p>You open a catalog like this:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">skycatalogs.skyCatalogs</span> <span class="kn">import</span> <span class="n">open_catalog</span>
+
+<span class="n">skycatalog_root</span> <span class="o">=</span> <span class="s2">&quot;some_path/data_folder&quot;</span>
+<span class="n">config_file</span> <span class="o">=</span> <span class="s2">&quot;another_path/skyCatalog.yaml&quot;</span>
+
+<span class="n">cat</span> <span class="o">=</span> <span class="n">open_catalog</span><span class="p">(</span><span class="n">config_file</span><span class="p">,</span> <span class="n">skycatalog_root</span><span class="o">=</span><span class="n">skycatalog_root</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Often the config file is in the same folder as the data but it need not be.</p>
+<p>If <code class="docutils literal notranslate"><span class="pre">skycatalog_root</span></code> is not specified, the code will use the value of the
+environment variable <code class="docutils literal notranslate"><span class="pre">SKYCATALOG_ROOT</span></code> if it exists,</p>
+</section>
+</section>
+<section id="structure-of-skycatalogs-configs">
+<h1>Structure of skyCatalogs Configs<a class="headerlink" href="#structure-of-skycatalogs-configs" title="Link to this heading"></a></h1>
+<p>Configs contain a variety of information.   Some of it is required for the
+skyCatalogs API to find and make sense of the binary data.  Other quantities
+are primarily for human consumption. An up-to-date config (version 1.3.0
+or later) is a mapping with only a few keys, currently <code class="docutils literal notranslate"><span class="pre">skycatalog_root</span></code>,
+<code class="docutils literal notranslate"><span class="pre">catalog_dir</span></code>, <code class="docutils literal notranslate"><span class="pre">catalog_name</span></code>, <code class="docutils literal notranslate"><span class="pre">schema_version</span></code> and <code class="docutils literal notranslate"><span class="pre">object_types</span></code>. The
+first three are used to find the data. <code class="docutils literal notranslate"><span class="pre">schema_version</span></code> refers to the
+version of the config structure.  The value of <code class="docutils literal notranslate"><span class="pre">object_types</span></code>
+is a mapping with a key for each object type having data in the catalog.
+The bulk of the information may be found
+under those keys. That information may be included literally in the
+config file but it is preferable to isolate information pertaining to each
+object type in its own yaml file and use the yaml <strong>!include</strong>
+directive to incorporate it.</p>
+<section id="using-include">
+<h2>Using !include<a class="headerlink" href="#using-include" title="Link to this heading"></a></h2>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">catalog_dir</span><span class="p">:</span><span class="w">        </span><span class="l l-Scalar l-Scalar-Plain">.</span><span class="w">             </span><span class="c1"># See Note 1.</span>
+<span class="nt">catalog_name</span><span class="p">:</span><span class="w">       </span><span class="l l-Scalar l-Scalar-Plain">skyCatalog</span><span class="w">    </span><span class="c1"># default name for top-level yaml file</span>
+<span class="nt">object_types</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">galaxy</span><span class="p">:</span><span class="w"> </span><span class="kt">!include</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">galaxy.yaml</span><span class="w">    </span><span class="c1"># See Note 2.</span>
+<span class="w">  </span><span class="nt">star</span><span class="p">:</span><span class="w"> </span><span class="kt">!include</span><span class="w"> </span><span class="p p-Indicator">|-</span><span class="w">               </span><span class="c1"># The  |- indicates continue to next line</span>
+<span class="w">    </span><span class="no">star.yaml                     # &amp; may appear in auto-generated top files</span>
+<span class="nt">skycatalog_root</span><span class="p">:</span><span class="w">    </span><span class="l l-Scalar l-Scalar-Plain">/some/path/often/absolute</span><span class="w">   </span><span class="c1"># see Note 3.</span>
+<span class="nt">schema_version</span><span class="p">:</span><span class="w">     </span><span class="l l-Scalar l-Scalar-Plain">1.3.0</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">catalog_dir</span></code> indicates where yaml and data files are to be found
+relative to skycatalog_root.  See also Note 3.</p></li>
+<li><p>The <strong>!include</strong> directive is not supported by yaml natively, but one can
+add an implementation.  This has been done for the skyCatalogs API.</p></li>
+<li><p>When the top-level yaml file is written, <code class="docutils literal notranslate"><span class="pre">skycatalog_root</span></code> is normally
+an absolute path. That file is in the <code class="docutils literal notranslate"><span class="pre">catalog_dir</span></code> subdirectory of
+<code class="docutils literal notranslate"><span class="pre">skycatalog_root</span></code>. But, in case the catalog has been copied,
+<code class="docutils literal notranslate"><span class="pre">skycatalog_root</span></code> may be overridden at run time when invoking
+<code class="docutils literal notranslate"><span class="pre">open_catalog</span></code>. <code class="docutils literal notranslate"><span class="pre">catalog_dir</span></code> is then interpreted to be relative to
+the new value of <code class="docutils literal notranslate"><span class="pre">skycatalog_root</span></code>.</p></li>
+</ol>
+</div>
+</section>
+<section id="description-of-an-object-type">
+<h2>Description of an object type<a class="headerlink" href="#description-of-an-object-type" title="Link to this heading"></a></h2>
+<p>For the most part the configuration file fragment for an object type will
+either be written by the code generating the binary data for that object
+type or will be provided some other way by whoever provides the data.  It
+is not normally something users of the skyCatalogs API need be concerned with.
+However, for those who are curious, such fragments usually include several
+kinds of information:</p>
+<ul class="simple">
+<li><p>information allowing the API to find the data files for the object type</p></li>
+<li><p>provenance, which in turn may consist of some or all of the following:</p>
+<ul>
+<li><p>inputs used in the creation of the data files</p></li>
+<li><p>run options supplied to the creating program</p></li>
+<li><p>schema version</p></li>
+<li><p>version of the program and information about the state of the git repo containing the program source</p></li>
+</ul>
+</li>
+<li><p>other information associated with the object type</p></li>
+</ul>
+<p>Here is an example file for the <code class="docutils literal notranslate"><span class="pre">star</span></code> object type:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">area_partition</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">nside</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">32</span>
+<span class="w">  </span><span class="nt">ordering</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ring</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">healpix</span>
+<span class="nt">data_file_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parquet</span>
+<span class="nt">file_template</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pointsource_(?P&lt;healpix&gt;\d+).parquet</span>
+<span class="nt">flux_file_template</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pointsource_flux_(?P&lt;healpix&gt;\d+).parquet</span>
+<span class="nt">provenance</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">inputs</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">star_truth</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/global/cfs/cdirs/lsst/groups/SSim/DC2/dc2_stellar_healpixel.db</span>
+<span class="w">  </span><span class="nt">run_options</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">catalog_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out_config</span>
+<span class="w">    </span><span class="nt">catalog_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">skyCatalog</span>
+<span class="w">    </span><span class="nt">config_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+<span class="w">    </span><span class="nt">dc2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">flux_parallel</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">16</span>
+<span class="w">    </span><span class="nt">galaxy_magnitude_cut</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">29.0</span>
+<span class="w">    </span><span class="nt">galaxy_nside</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">32</span>
+<span class="w">    </span><span class="nt">galaxy_stride</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000000</span>
+<span class="w">    </span><span class="nt">galaxy_truth</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+<span class="w">    </span><span class="nt">galaxy_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cosmodc2</span>
+<span class="w">    </span><span class="nt">include_roman_flux</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">knots_magnitude_cut</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">27.0</span>
+<span class="w">    </span><span class="nt">log_level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DEBUG</span>
+<span class="w">    </span><span class="nt">no_flux</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">no_galaxies</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">no_knots</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">no_main</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">no_pointsources</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">options_file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local/out_config/star_main.yaml</span>
+<span class="w">    </span><span class="nt">pixels</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">9556</span>
+<span class="w">    </span><span class="nt">sed_subdir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">galaxyTopHatSED</span>
+<span class="w">    </span><span class="nt">skip_done</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">skycatalog_root</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+<span class="w">    </span><span class="nt">sso</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">sso_sed</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+<span class="w">    </span><span class="nt">sso_truth</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+<span class="w">    </span><span class="nt">star_input_fmt</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<span class="w">  </span><span class="nt">skyCatalogs_repo</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">git_branch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">u/jrbogart/config_reorg</span>
+<span class="w">    </span><span class="nt">git_hash</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6da4f9636cc63010480c1a1c086cbde8f6ca4dd4</span>
+<span class="w">    </span><span class="nt">git_status</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">UNCOMMITTED_FILES</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">UNTRACKED_FILES</span>
+<span class="w">  </span><span class="nt">versioning</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">code_version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.7.0-rc4</span>
+<span class="w">    </span><span class="nt">schema_version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.3.0</span>
+<span class="nt">sed_file_root_env_var</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SIMS_SED_LIBRARY_DIR</span>
+<span class="nt">sed_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">file_nm</span>
+<span class="nt">file_nm</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">units</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nm</span>
+<span class="nt">internal_extinction</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">None</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="adding-supported-object-types-to-a-catalog">
+<h1>Adding Supported Object Types to a Catalog<a class="headerlink" href="#adding-supported-object-types-to-a-catalog" title="Link to this heading"></a></h1>
+<p>We expect most users will use pre-assembled catalogs, already containing
+all the kinds of objects they need, but it’s possible someone will have to
+add a new type to a collection.  Assuming the data files and a suitable
+config fragment for the new type exist somewhere else, one only needs to
+copy them to the catalog directory, then edit the top-level config file
+by adding a line to the <code class="docutils literal notranslate"><span class="pre">object_types</span></code> section:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">object_types</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">galaxy</span><span class="p">:</span><span class="w"> </span><span class="kt">!include</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">galaxy.yaml</span>
+<span class="w">  </span><span class="nt">star</span><span class="p">:</span><span class="w"> </span><span class="kt">!include</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">star.yaml</span>
+<span class="w">  </span><span class="nt">sso</span><span class="p">:</span><span class="w"> </span><span class="kt">!include</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sso.yaml</span><span class="w">      </span><span class="c1"># the new one</span>
+</pre></div>
+</div>
+<p>Of course the skyCatalogs API has to know how to handle the new type.</p>
+<section id="supported-object-types">
+<h2>Supported object types<a class="headerlink" href="#supported-object-types" title="Link to this heading"></a></h2>
+<p>As of August, 2024, the following object types are supported.</p>
+<dl class="simple glossary">
+<dt id="term-star">star<a class="headerlink" href="#term-star" title="Link to this term"></a></dt><dd><p>as in the DC2 simulation, generated from the UW database</p>
+</dd>
+<dt id="term-galaxy">galaxy<a class="headerlink" href="#term-galaxy" title="Link to this term"></a></dt><dd><p>as in the DC2 simulation, generated from the cosmodc2 catalog</p>
+</dd>
+<dt id="term-diffsky_galaxy">diffsky_galaxy<a class="headerlink" href="#term-diffsky_galaxy" title="Link to this term"></a></dt><dd><p>galaxies simulated from simple stellar populations</p>
+</dd>
+<dt id="term-snana">snana<a class="headerlink" href="#term-snana" title="Link to this term"></a></dt><dd><p>SNe generated by the SNANA simulation program, using either
+galaxy or diffsky_galaxy objects as hosts</p>
+</dd>
+<dt id="term-sso">sso<a class="headerlink" href="#term-sso" title="Link to this term"></a></dt><dd><p>solar system objects generated by Sorcha</p>
+</dd>
+<dt id="term-gaia_star">gaia_star<a class="headerlink" href="#term-gaia_star" title="Link to this term"></a></dt><dd><p>Gaia catalog dr2</p>
+</dd>
+</dl>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="installation.html" class="btn btn-neutral float-left" title="Installation Instructions" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="usage_create.html" class="btn btn-neutral float-right" title="Creating New Catalogs" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2020-2024, LSSTDESC.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
