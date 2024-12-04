@@ -235,12 +235,12 @@ class TrilegalSEDGenerator:
             if 'wl_axis' not in f.keys():
                 axis_ds = f.create_dataset('wl_axis', shape=(len(wl_axis),),
                                            dtype='f4', data=np.array(wl_axis))
-                axis_ds.attrs.create('wl_units', ['nm'])
+                axis_ds.attrs.create('wl_units', 'nm')
             if 'batches' not in f.keys():
                 batches = f.create_group('batches')
 
             batch_g = f.create_group(f'batches/batch_{batch}')
-            batch_g.attrs.create('source_count', [len(id)])
+            batch_g.attrs.create('source_count', len(id))
             max_id_len = max([len(entry) for entry in id])
             id_dat = np.array(id, dtype=f'S{max_id_len}')
             id_dataset = batch_g.create_dataset('id', data=id_dat,
