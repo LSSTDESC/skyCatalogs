@@ -332,6 +332,9 @@ class TrilegalSedFile():
         return self._wl
 
     def get_sed_row(self, id):
+        '''
+        Returns:  An arraoy of flambda values.  NOT a SED
+        '''
         cmps = id.split('_')
         if cmps[-2] != f'hp{self._hp}':
             raise Exception(f'This source is not in hp {self._hp}')
@@ -340,7 +343,7 @@ class TrilegalSedFile():
             if sed_row is not None:
                 #  maybe should make a copy and return that
                 #  so file will close?
-                return sed_row
+                return np.array(sed_row)
 
         # Should have warning log message here
         print(f'No SED for id {id}')
@@ -386,6 +389,9 @@ class _SEDBatch:
         return self._max_hp_ix
 
     def get_sed_row(self, id):
+        '''
+        Returns:  An arraoy of flambda values.  NOT a SED
+        '''
         cmps = id.split('_')
         id_ix = int(cmps[-1])
         if (id_ix < self._min_hp_ix) or (id_ix > self._max_hp_ix):
@@ -395,7 +401,7 @@ class _SEDBatch:
         # if not self._spectra:
         with h5py.File(self._fpath) as f:
             spectra = f['batches'][self._batch_name]['spectra']
-            return spectra[id_ix - self._min_hp_ix]
+            return np.array(spectra[id_ix - self._min_hp_ix])
 
     def get_sed_batch(self):
         '''
@@ -403,7 +409,8 @@ class _SEDBatch:
         until the caller does del on the returned value.
         '''
         with h5py.File(self._fpath) as f:
-            spectra = f['batches'][self._batch]['spectra']
+            # Force a copy
+            spectra = np.array(f['batches'][self._batch_name]['spectra'])
             return spectra
 
 

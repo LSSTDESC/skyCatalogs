@@ -8,6 +8,7 @@ import healpy
 import h5py
 import numpy as np
 import json
+import galsim
 from skycatalogs.objects.base_object import LSST_BANDS
 from skycatalogs.objects.trilegal_object import TrilegalConfigFragment
 from skycatalogs.utils.config_utils import assemble_provenance
@@ -303,7 +304,7 @@ class TrilegalSEDGenerator:
 def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
                             l_bnd, u_bnd, row_group):
     '''
-    end_conn         output connection.  If none return output
+    send_conn         output connection.  If none return output
     collection       object collection we're processing
     instrument_needed indicates which fluxes need to be computed
                      Ignored for now.  Just do LSST fluxes
@@ -325,13 +326,16 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     # SEDs we need should be in group named "batch_XX" where XX is row
     # group number
     spectra = sedfile.get_sed_batch(f"batch_{row_group}")
+    wl = sedfile.wl_axis
     av = collection.get_native_attribute('av')
     id = collection.get_native_attribute('id')
-    out_dict['id'] = id[l_bnd, u_bnd]
+    out_dict['id'] = id[l_bnd: u_bnd]
     fluxes = []
     for ix in range(l_bnd, u_bnd):
         obj_fluxes = []
-        sed_extincted = extinguisher(spectra[ix], av[ix])
+        lut = galsim.LookupTable(wl, spectra[ix], interpolant='linear')
+        sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
+        sed_extincted = extinguisher.extinguish(sed, av[ix])
         if sed_extincted is None:
             obj_fluxes = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         else:
@@ -389,12 +393,11 @@ class TrilegalFluxCatalogCreator:
 
         return pa.schema(fields, metadata=final_metadata)
 
-    def create_trilegal_flux_pixel(self, pixel, arrow_schema):
+    def _create_trilegal_flux_pixel(self, pixel, arrow_schema):
         output_filename = f'trilegal_flux_{pixel}.parquet'
         output_path = os.path.join(self._catalog_creator._output_dir,
                                    output_filename)
 
-        object_list = self._cat.get_object_type_by_hp(pixel, 'trilegal')
         n_parallel = self._catalog_creator._flux_parallel
 
         writer = pq.ParquetWriter(output_path, arrow_schema)
@@ -406,8 +409,7 @@ class TrilegalFluxCatalogCreator:
         # Get all the objects in the pixel
         # For test pixel there is only one row group so only one collection
         # In general may have to iterate over row groups
-        obj_list = self._catalog_creator._cat.get_object_type_by_hp(
-            pixel, 'trilegal')
+        obj_list = self._cat.get_object_type_by_hp(pixel, 'trilegal')
 
         for ix, c in enumerate(obj_list.get_collections()):
             # av = c.get_native_attribute('av')
