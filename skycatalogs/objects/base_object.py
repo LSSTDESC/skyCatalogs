@@ -316,7 +316,7 @@ class BaseObject(object):
         Use supplied sed if there is one
         """
 
-        if not sed:
+        if sed is None:
             sed = self.get_total_observer_sed(mjd=mjd)
 
         if sed is None:
