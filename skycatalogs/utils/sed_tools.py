@@ -245,6 +245,8 @@ class TrilegalSedFactory():
 
         return self._hp_lookup[hp]
 
+
+    #  NOTE:  may need to normalize using i_mag
     def get_sed(self, tri):
         '''
         Parameters

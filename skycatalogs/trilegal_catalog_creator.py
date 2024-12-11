@@ -9,7 +9,7 @@ import h5py
 import numpy as np
 import json
 import galsim
-from skycatalogs.objects.base_object import LSST_BANDS
+from skycatalogs.objects.base_object import LSST_BANDS, load_lsst_bandpasses
 from skycatalogs.objects.trilegal_object import TrilegalConfigFragment
 from skycatalogs.utils.config_utils import assemble_provenance
 from skycatalogs.utils.config_utils import assemble_file_metadata
@@ -71,6 +71,13 @@ class TrilegalMainCatalogCreator:
             pa.field('logg', pa.float32()),  # log surface gravity (cgs)
             pa.field('logL', pa.float32()),  # log luminosity  (L_sun)
             pa.field('Z', pa.float32()),  # heavy element abund.
+            # Add in magnitudes for verification
+            pa.field('umag', pa.float32()),
+            pa.field('gmag', pa.float32()),
+            pa.field('rmag', pa.float32()),
+            pa.field('imag', pa.float32()),
+            pa.field('zmag', pa.float32()),
+            pa.field('ymag', pa.float32()),
             ]
         # The truth catalog supplies only mu0, not parallax
         # from https://en.wikipedia.org/wiki/Distance_modulus
@@ -125,7 +132,8 @@ class TrilegalMainCatalogCreator:
 
         # Form query
         to_select = ['ra', 'dec', 'av', 'pmracosd', 'pmdec', 'vrad', 'mu0',
-                     'logte as logT', 'logg', 'logl as logL', 'z as Z']
+                     'logte as logT', 'logg', 'logl as logL', 'z as Z',
+                     'umag', 'gmag', 'rmag', 'imag', 'zmag', 'ymag']
         q = 'select ' + ','.join(to_select)
         q += f' from {self._truth_catalog} where ring256 in ({in_pixels})'
 
@@ -217,6 +225,7 @@ class TrilegalSEDGenerator:
         self._output_dir = output_dir
         if not output_dir:
             self._output_dir = input_dir
+
         # self._logger = catalog_creator._logger
 
     def _write_SED_batch(self, outfile_path, batch, id, wl_axis, spectra):
@@ -319,6 +328,7 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     returns
                     dict with keys id, lsst_flux_u, ... lsst_flux_y
     '''
+    global tri_lsst_bandpasses
     out_dict = {}
 
     hp = collection._partition_id
@@ -333,12 +343,16 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     wl = sedfile.wl_axis
     av = collection.get_native_attribute('av')
     id = collection.get_native_attribute('id')
+    imag = collection.get_native_attribute('imag')
     out_dict['id'] = id[l_bnd: u_bnd]
     fluxes = []
     for ix in range(l_bnd, u_bnd):
         obj_fluxes = []
         lut = galsim.LookupTable(wl, spectra[ix], interpolant='linear')
         sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
+
+        # Normalize
+        sed = sed.withMagnitude(imag[ix], tri_lsst_bandpasses['i'])
         sed_extincted = extinguisher.extinguish(sed, av[ix])
         if sed_extincted is None:
             obj_fluxes = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -376,6 +390,8 @@ class TrilegalFluxCatalogCreator:
         self._catalog_creator = catalog_creator
         self._output_dir = catalog_creator._output_dir
         self._logger = catalog_creator._logger
+        global tri_lsst_bandpasses
+        tri_lsst_bandpasses = load_lsst_bandpasses()
 
     def _create_flux_schema(self, metadata_input=None,
                             metadata_key='provenance'):
