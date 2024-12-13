@@ -137,6 +137,8 @@ class TrilegalMainCatalogCreator:
         q = 'select ' + ','.join(to_select)
         q += f' from {self._truth_catalog} where ring256 in ({in_pixels})'
 
+        q += ' and label = 1'
+
         results = qc.query(adql=q, fmt='pandas')
         n_row = len(results['ra'])
         if not n_row:
