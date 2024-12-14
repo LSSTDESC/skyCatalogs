@@ -288,25 +288,15 @@ class TrilegalSEDGenerator:
 
         for batch in range(n_gp):
             columns = ['id', 'logT', 'logg', 'logL', 'Z', 'mu0']
-            # tbl = pq_file.read_row_group(i, columns=columns)
-            # py_dict = pq_file.read_row_group(batch, columns=columns).to_pydict()
-            # for c in ['logT', 'logg', 'logL', 'Z', 'mu0']:
-            #     py_dict[c] = np.array(py_dict[c], dtype=np.float64)
-            # wl_axis, spectra = self._pystellib.generate_individual_spectra(py_dict)
             df = pq_file.read_row_group(batch, columns=columns).to_pandas()
             wl_axis, spectra = self._pystellib.generate_individual_spectra(df)
-            # Convert wl_axis from A to nm. Also need to multiply spectra by 10
+            # Convert wl_axis, spectra from A to nm.
             wl_axis = wl_axis / 10
-            # Convert spectra from erg/s/A to erg/s/nm/cm**2
-            # dl = 10**(1 + py_dict['mu0']/5) * PSEC_TO_CM
-            dl = np.array(10**(1 + df['mu0']/5) * PSEC_TO_CM, dtype=np.float64)
-            divisor = FOUR_PI * dl**2 * 0.1
-            spectra = np.transpose(np.transpose(spectra.magnitude)/divisor)
+            spectra = spectra * 10
             spectra_32 = spectra.astype(np.float32)
             del spectra
             print(f'len(wavelength axis): {len(wl_axis)}')
             print(f'shape of spectra array: {spectra_32.shape}')
-            # self._write_SED_batch(hp5_path, batch, py_dict['id'],
             self._write_SED_batch(hp5_path, batch, df['id'],
                                   wl_axis, spectra_32)
 
