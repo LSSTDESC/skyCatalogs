@@ -1,7 +1,7 @@
 # import os
 import galsim
 # import h5py
-from .base_object import BaseObject, ObjectCollection
+from .base_object import BaseObject, ObjectCollection, load_lsst_bandpasses
 # from ..utils import normalize_sed
 from .base_config_fragment import BaseConfigFragment
 
@@ -36,7 +36,8 @@ class TrilegalObject(BaseObject):
         if sed is not None:
             sed = self._apply_component_extinction(sed)
             imag = self.get_native_attribute('imag')
-            sed = sed.withMagnitude(imag, super().lsst_bandpasses['i'])
+            sed = sed.withMagnitude(imag,
+                                    self._belongs_to._lsst_bandpasses['i'])
         return sed
 
     def _get_dust(self):
@@ -75,6 +76,7 @@ class TrilegalCollection(ObjectCollection):
         super().__init__(ra, dec, id, object_type, hp, sky_catalog,
                          region=region, mjd=mjd, mask=mask,
                          readers=readers, row_group=row_group)
+        self._lsst_bandpasses = load_lsst_bandpasses()
 
         # See also classes TrilegalSedFactory, TrilegalSedFile, _SEDBatch in
         # sed_tools.py

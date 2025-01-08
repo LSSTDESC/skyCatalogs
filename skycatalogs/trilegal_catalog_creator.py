@@ -48,7 +48,8 @@ class TrilegalMainCatalogCreator:
         self._start_epoch = start_epoch
         self._output_dir = catalog_creator._output_dir
         self._logger = catalog_creator._logger
-        self._stride = _DEFAULT_ROW_GROUP_SIZE
+        # self._stride = _DEFAULT_ROW_GROUP_SIZE
+        self._stride = self._catalog_creator._stride
 
     @property
     def trilegal_truth(self):
@@ -155,15 +156,16 @@ class TrilegalMainCatalogCreator:
         rg_written = 0
         outpath = ''
 
+        writer = None
+        if not writer:
+            outpath = os.path.join(self._output_dir,
+                                   f'trilegal_{hp}.parquet')
+            writer = pq.ParquetWriter(outpath, arrow_schema)
+
         while u_bnd > l_bnd:
             out_dict = {k: results[k][l_bnd: u_bnd] for k in results}
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
-            writer = None
-            if not writer:
-                outpath = os.path.join(self._output_dir,
-                                       f'trilegal_{hp}.parquet')
-                writer = pq.ParquetWriter(outpath, arrow_schema)
             writer.write_table(out_table)
             l_bnd = u_bnd
             u_bnd = min(l_bnd + self._stride, n_row)
@@ -255,12 +257,14 @@ class TrilegalSEDGenerator:
             batch_g.attrs.create('source_count', len(id))
             max_id_len = max([len(entry) for entry in id])
             id_dat = np.array(id, dtype=f'S{max_id_len}')
+            id_chunk_size = min(50000, len(id_dat))
             _ = batch_g.create_dataset('id', data=id_dat,
-                                       chunks=(50000),
+                                       chunks=(id_chunk_size),
                                        compression='gzip')
+            data_chunk_nrow = min(1000, len(id_dat))
             _ = batch_g.create_dataset('spectra',
                                        data=np.array(spectra),
-                                       chunks=(200, len(wl_axis)),
+                                       chunks=(data_chunk_nrow, len(wl_axis)),
                                        compression='gzip',
                                        dtype='f4')
 
