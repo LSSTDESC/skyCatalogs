@@ -137,7 +137,7 @@ class TrilegalMainCatalogCreator:
         q = 'select ' + ','.join(to_select)
         q += f' from {self._truth_catalog} where ring256 in ({in_pixels})'
 
-        q += ' and label = 1'
+        q += ' and label = 1'  # main sequence only
 
         results = qc.query(adql=q, fmt='pandas')
         n_row = len(results['ra'])
@@ -249,24 +249,22 @@ class TrilegalSEDGenerator:
                                            dtype='f4', data=np.array(wl_axis))
                 axis_ds.attrs.create('wl_units', 'nm')
             if 'batches' not in f.keys():
-                batches = f.create_group('batches')
+                _ = f.create_group('batches')
 
             batch_g = f.create_group(f'batches/batch_{batch}')
             batch_g.attrs.create('source_count', len(id))
             max_id_len = max([len(entry) for entry in id])
             id_dat = np.array(id, dtype=f'S{max_id_len}')
-            id_dataset = batch_g.create_dataset('id', data=id_dat,
-                                                chunks=(50000),
-                                                compression='gzip')
-            spectra_dataset = batch_g.create_dataset('spectra',
-                                                     data=np.array(spectra),
-                                                     chunks=(200, len(wl_axis)),
-                                                     compression='gzip',
-                                                     dtype='f4')
+            _ = batch_g.create_dataset('id', data=id_dat,
+                                       chunks=(50000),
+                                       compression='gzip')
+            _ = batch_g.create_dataset('spectra',
+                                       data=np.array(spectra),
+                                       chunks=(200, len(wl_axis)),
+                                       compression='gzip',
+                                       dtype='f4')
 
     def _generate_hp(self, hp):
-        PSEC_TO_CM = 3.085677581e16 * 100
-        FOUR_PI = 4 * np.pi
         # open parquet main file.
         # For now use hardcoded templates.  Should read from config
         # Modify to be suitable for creating rather than parsing a name
@@ -342,16 +340,16 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
         obj_fluxes = []
         lut = galsim.LookupTable(wl, spectra[ix], interpolant='linear')
         sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
+        sed = extinguisher.extinguish(sed, av[ix])
 
-        # Normalize
-        sed = sed.withMagnitude(imag[ix], tri_lsst_bandpasses['i'])
-        sed_extincted = extinguisher.extinguish(sed, av[ix])
-        if sed_extincted is None:
+        if sed is None:
             obj_fluxes = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         else:
+            # Normalize; calculate fluxes
+            sed = sed.withMagnitude(imag[ix], tri_lsst_bandpasses['i'])
             for band in LSST_BANDS:
                 obj_fluxes.append(collection[ix].get_LSST_flux(
-                    band, sed=sed_extincted, cache=False))
+                    band, sed=sed, cache=False))
         fluxes.append(obj_fluxes)
 
     colnames = [f'lsst_flux_{band}' for band in LSST_BANDS]
@@ -363,13 +361,6 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
         send_conn.send(out_dict)
     else:
         return out_dict
-
-    # Find all batches we need in our file
-    # batches = sedfile.batches
-    # needed = []
-    # for b in batches.items():
-    #     if l_bnd <= b.max_hp_ix and u_bnd >= b.min_hp_ix:
-    #         needed.append(b)
 
 
 class TrilegalFluxCatalogCreator:
