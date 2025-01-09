@@ -1,6 +1,7 @@
 import os
 # import sys                        May be needed later
 # from multiprocessing import Process, Pipe    May be needed later
+from datetime import datetime
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -67,12 +68,14 @@ class TrilegalMainCatalogCreator:
             pa.field('pmracosd', pa.float32()),  # proper motion in cos(ra)
             pa.field('vrad', pa.float32()),  # radial velocity
             pa.field('mu0', pa.float32()),  # true distance modulus
+
             #  The following are used in SED generation
             pa.field('logT', pa.float32()),  # log effective temp. (K)
             pa.field('logg', pa.float32()),  # log surface gravity (cgs)
             pa.field('logL', pa.float32()),  # log luminosity  (L_sun)
             pa.field('Z', pa.float32()),  # heavy element abund.
-            # Add in magnitudes for verification
+
+            # Add in magnitudes for verification and normalization (imag)
             pa.field('umag', pa.float32()),
             pa.field('gmag', pa.float32()),
             pa.field('rmag', pa.float32()),
@@ -80,15 +83,6 @@ class TrilegalMainCatalogCreator:
             pa.field('zmag', pa.float32()),
             pa.field('ymag', pa.float32()),
             ]
-        # The truth catalog supplies only mu0, not parallax
-        # from https://en.wikipedia.org/wiki/Distance_modulus
-        # luminous distance in parsecs =
-        #  10**(1 + mu0/5)
-        #
-        # Formula for distance using parallax:
-        #     d = E-sun/tan(0.5*theta) where E-sun is one AU
-        # and 0.5*theta is parallax.   Or, approximately for small angles
-        #    d (in parsecs) ~= 1/parallax
 
         if metadata_input:
             metadata_bytes = json.dumps(metadata_input).encode('utf8')
@@ -261,6 +255,9 @@ class TrilegalSEDGenerator:
             _ = batch_g.create_dataset('id', data=id_dat,
                                        chunks=(id_chunk_size),
                                        compression='gzip')
+
+            # Larger chunks speed up i/o but require more memory.
+            # Optimal value is TBD
             data_chunk_nrow = min(1000, len(id_dat))
             _ = batch_g.create_dataset('spectra',
                                        data=np.array(spectra),
@@ -324,6 +321,8 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     '''
     global tri_lsst_bandpasses
     out_dict = {}
+    now = datetime.now().isoformat()[:19]
+    print(f'{now}  Entering _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}')
 
     hp = collection._partition_id
     skycat = collection._sky_catalog
@@ -350,6 +349,7 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
             obj_fluxes = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         else:
             # Normalize; calculate fluxes
+            sed = sed.thin()
             sed = sed.withMagnitude(imag[ix], tri_lsst_bandpasses['i'])
             for band in LSST_BANDS:
                 obj_fluxes.append(collection[ix].get_LSST_flux(
@@ -360,6 +360,9 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     fluxes_transpose = zip(*fluxes)
     flux_dict = dict(zip(colnames, fluxes_transpose))
     out_dict.update(flux_dict)
+
+    now = datetime.now().isoformat()[:19]
+    print(f'{now}  Leaving _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}')
 
     if send_conn:
         send_conn.send(out_dict)

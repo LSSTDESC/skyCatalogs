@@ -11,8 +11,8 @@ from dust_extinction.parameter_averages import F19
 import galsim
 
 __all__ = ['TophatSedFactory', 'DiffskySedFactory', 'SsoSedFactory',
-           'MilkyWayExtinction', 'get_star_sed_path', 'generate_sed_path',
-           'normalize_sed']
+           'MilkyWayExtinction', 'TrilegalSedFactory', 'get_star_sed_path',
+           'generate_sed_path', 'normalize_sed']
 
 _FILE_PATH = str(PurePath(__file__))
 _SKYCATALOGS_DIR = _FILE_PATH[:_FILE_PATH.rindex('/skycatalogs')]
@@ -222,13 +222,13 @@ class TrilegalSedFactory():
         sed_dir             directory containing SED files
                             Use None if no SED files
         '''
+        self.sed_dir = sed_dir
         if sed_dir:
             tmpl = object_type_config.get('sed_file_template', None)
             self._hp_lookup = {}
             if not tmpl:
                 raise Exception('Bad config file for Trilegal')
             self.tmpl = tmpl
-            self.sed_dir = sed_dir
 
             self._wl = None
             self._pystellib = None
@@ -259,10 +259,13 @@ class TrilegalSedFactory():
 
         If SED file present, find row and wave length values in sed file
         Otherwise use quantities in main parquet file + pystellibs
-        Return thinned galsim SED object
+        In either case return unextincted, unnormalized, unthinned SED,
+        just as calculated by pystellib, except converted from Angstroms
+        to nm. The other transformations are handled elsewhere
         '''
-        PSEC_TO_CM = 3.085677581e16 * 100
-        FOUR_PI = 4 * np.pi
+        #
+        # PSEC_TO_CM = 3.085677581e16 * 100
+        # FOUR_PI = 4 * np.pi
 
         if self.sed_dir:
             id = tri.id
@@ -282,29 +285,33 @@ class TrilegalSedFactory():
                 lut = galsim.LookupTable(x=sedfile.wl_axis, f=row,
                                          interpolant='linear')
                 sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
-                return sed.thin()
+                # return sed.thin()
+                return sed
 
         # Otherwise have to calculate
         if not self._pystellib:
             from pystellibs import BTSettl
             self._pystellib = BTSettl(medres=False)
-            self._wl = self._pystellib.wavelength / 10
+            self._wl = self._pystellib.wavelength / 10 # convert to nm
 
         # Get inputs from parquet file
         native = ['logT', 'logg', 'logL', 'Z']
         spec_inputs = [tri.get_native_attribute(x) for x in native]
+
+        # Convert spectrum units as well
         spectrum = self._pystellib.generate_stellar_spectrum(*spec_inputs) * 10
-        mu0 = tri.get_native_attribute('mu0')
+        # mu0 = tri.get_native_attribute('mu0')
 
         # Convert spectrum from erg/s/A to erg/s/nm/cm**2;
         # take into account distance from sun
-        dl = 10**(1 + mu0/5) * PSEC_TO_CM
+        # dl = 10**(1 + mu0/5) * PSEC_TO_CM
         # divisor = FOUR_PI * dl**2
-        spectrum = spectrum/(FOUR_PI * dl**2)
+        # spectrum = spectrum/(FOUR_PI * dl**2)
         sed_table = galsim.LookupTable(self._wl, spectrum)
         sed = galsim.SED(sed_table, 'nm', 'flambda')
 
-        return sed.thin()
+        # return sed.thin()
+        return sed
 
 
 class TrilegalSedFile():
