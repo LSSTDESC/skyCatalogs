@@ -231,7 +231,7 @@ class GaiaCollection(ObjectCollection):
         '''
         if not skycatalog:
             raise ValueError('GaiaCollection.load_collection: skycatalog cannot be None')
-        refcat_region = region.refcat_region()
+        refcat_region = region.sphgeom_region()
         if GaiaCollection.get_config() is None:
             gaia_section = skycatalog.raw_config['object_types']['gaia_star']
             GaiaCollection.set_config(gaia_section)

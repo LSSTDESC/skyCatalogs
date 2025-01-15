@@ -27,7 +27,7 @@ class Region:
     def compute_mask(self, ra, dec):
         raise NotImplementedError
 
-    def refcat_region(self):
+    def sphgeom_region(self):
         raise NotImplementedError
 
 
@@ -42,6 +42,7 @@ class Box(Region):
         self.dec_max = dec_max
 
     def get_radec_bounds(self):
+        """Return the bounds on ra, dec that enclose the region."""
         return self.ra_min, self.ra_max, self.dec_min, self.dec_max
 
     def _get_intersecting_hps(self, nside, nest):
@@ -54,6 +55,15 @@ class Box(Region):
         return healpy.query_polygon(nside, vec, inclusive=True, nest=nest)
 
     def compute_mask(self, ra, dec):
+        '''
+        Compute the mask for excluding entries in the ra, dec arrays.
+
+        Parameters
+        ----------
+        ra, dec      parallel float arrays, units are degrees. Together
+                     they define the list of points to be checked for
+                     containment
+        '''
         mask = np.logical_or((ra < self.ra_min),
                              (ra > self.ra_max))
         mask = np.logical_or(mask, (dec < self.dec_min))
@@ -76,6 +86,7 @@ class Disk(Region):
                                  inclusive=True, nest=nest)
 
     def get_radec_bounds(self):
+        """Return the bounds on ra, dec that enclose the region."""
         radius = self.radius.to_value("degree")
         dec_min = self.dec - radius
         dec_max = self.dec + radius
@@ -85,6 +96,15 @@ class Disk(Region):
         return ra_min, ra_max, dec_min, dec_max
 
     def compute_mask(self, ra, dec):
+        '''
+        Compute the mask for excluding entries in the ra, dec arrays.
+
+        Parameters
+        ----------
+        ra, dec      parallel float arrays, units are degrees. Together
+                     they define the list of points to be checked for
+                     containment
+        '''
         # Use healpy rather than lsst.sphgeom because healpy takes
         # array inputs
         p_vec = healpy.pixelfunc.ang2vec(ra, dec, lonlat=True)
@@ -103,7 +123,8 @@ class Disk(Region):
         rad_chord_sq = 4 * np.square(np.sin(0.5 * radius_rad))
         return obj_chord_sq > rad_chord_sq
 
-    def refcat_region(self):
+    def sphgeom_region(self):
+        """Enclosing region expressed as lsst.sphgeom.Circle."""
         ra = lsst.geom.Angle(self.ra, lsst.geom.degrees)
         dec = lsst.geom.Angle(self.dec, lsst.geom.degrees)
         center = lsst.geom.SpherePoint(ra, dec)
@@ -137,6 +158,7 @@ class PolygonalRegion(Region):
                          'convex_polygon must have an acceptable value')
 
     def get_radec_bounds(self):
+        """Return the bounds on ra, dec that enclose the region."""
         ra_vals, dec_vals = np.array(self.get_vertices_radec()).T
         return min(ra_vals), max(ra_vals), min(dec_vals), max(dec_vals)
 
@@ -165,6 +187,8 @@ class PolygonalRegion(Region):
 
     def compute_mask(self, ra, dec):
         '''
+        Compute the mask for excluding entries in the ra, dec arrays.
+
         Parameters
         ----------
         ra, dec      parallel float arrays, units are degrees. Together
