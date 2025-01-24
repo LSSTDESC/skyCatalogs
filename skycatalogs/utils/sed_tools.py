@@ -274,7 +274,8 @@ class MilkyWayExtinction:
     def extinguish(self, sed, mwAv):
         ext = self.extinction.extinguish(self.wls*u.nm, Av=mwAv)
         lut = galsim.LookupTable(self.wls, ext, interpolant='linear')
-        mw_ext = galsim.SED(lut, wave_type='nm', flux_type='1').thin()
+        # mw_ext = galsim.SED(lut, wave_type='nm', flux_type='1').thin()
+        mw_ext = galsim.SED(lut, wave_type='nm', flux_type='1')
         sed = sed*mw_ext
         return sed
 
