@@ -186,6 +186,7 @@ class TrilegalMainCatalogCreator:
         self._catalog_creator._config_writer.write_configs(trilegal_fragment)
 
 
+import logging
 class TrilegalSEDGenerator:
     '''
     This class is responsible for calculating SEDs for Trilegal sources
@@ -206,7 +207,8 @@ class TrilegalSEDGenerator:
     spectra (dataset)  2-d array indexed by [source_number, lambda]. 4-byte
                        floats
     '''
-    def __init__(self, input_dir, output_dir=None, lib='BTSettl'):
+    def __init__(self, input_dir, output_dir=None, lib='BTSettl',
+                 log_level='INFO'):
         '''
         Parameters
         ----------
@@ -223,6 +225,16 @@ class TrilegalSEDGenerator:
         self._output_dir = output_dir
         if not output_dir:
             self._output_dir = input_dir
+
+        self._logger = logging.getLogger('trilegal_SED')
+        if not self._logger.hasHandlers():
+            self._logger.setLevel(log_level)
+            ch = logging.StreamHandler()
+            ch.setLevel(log_level)
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            ch.setFormatter(formatter)
+            self._logger.addHandler(ch)
+
 
         # self._logger = catalog_creator._logger
 
@@ -286,18 +298,21 @@ class TrilegalSEDGenerator:
             f['metadata'].attrs.create('n_batch', n_gp)  # was in brackets
 
         for batch in range(n_gp):
+            self._logger.info(f'Starting batch {batch}')
             columns = ['id', 'logT', 'logg', 'logL', 'Z', 'mu0']
             df = pq_file.read_row_group(batch, columns=columns).to_pandas()
             wl_axis, spectra = self._pystellib.generate_individual_spectra(df)
+            self._logger.info('Computed spectra')
             # Convert wl_axis, spectra from A to nm.
             wl_axis = wl_axis / 10
             spectra = spectra * 10
             spectra_32 = spectra.astype(np.float32)
             del spectra
-            print(f'len(wavelength axis): {len(wl_axis)}')
+            # print(f'len(wavelength axis): {len(wl_axis)}')
             print(f'shape of spectra array: {spectra_32.shape}')
             self._write_SED_batch(hp5_path, batch, df['id'],
                                   wl_axis, spectra_32)
+            self._logger.info(f'Batch {batch} written')
 
     def generate(self, hps):
 
