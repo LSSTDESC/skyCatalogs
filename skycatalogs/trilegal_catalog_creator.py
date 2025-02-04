@@ -68,6 +68,7 @@ class TrilegalMainCatalogCreator:
             pa.field('pmracosd', pa.float32()),  # proper motion in cos(ra)
             pa.field('vrad', pa.float32()),  # radial velocity
             pa.field('mu0', pa.float32()),  # true distance modulus
+            pa.field('evol_label', pa.int32()),  # evolutionary phase
 
             #  The following are used in SED generation
             pa.field('logT', pa.float32()),  # log effective temp. (K)
@@ -127,12 +128,13 @@ class TrilegalMainCatalogCreator:
 
         # Form query
         to_select = ['ra', 'dec', 'av', 'pmracosd', 'pmdec', 'vrad', 'mu0',
-                     'logte as logT', 'logg', 'logl as logL', 'z as Z',
+                     'label as evol_label', 'logte as logT', 'logg',
+                     'logl as logL', 'z as Z',
                      'umag', 'gmag', 'rmag', 'imag', 'zmag', 'ymag']
         q = 'select ' + ','.join(to_select)
         q += f' from {self._truth_catalog} where ring256 in ({in_pixels})'
 
-        q += ' and label = 1'  # main sequence only
+        ###   q += ' and label = 1'  # main sequence only
 
         results = qc.query(adql=q, fmt='pandas')
         n_row = len(results['ra'])
@@ -347,11 +349,13 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
 
     # SEDs we need should be in group named "batch_XX" where XX is row
     # group number
+    bad_sed = {i :0 for i in range(10)}       # temporary for diagnostics
     spectra = sedfile.get_sed_batch(f"batch_{row_group}")
     wl = sedfile.wl_axis
     av = collection.get_native_attribute('av')
     id = collection.get_native_attribute('id')
     imag = collection.get_native_attribute('imag')
+    label = collection.get_native_attribute('evol_label')
     out_dict['id'] = id[l_bnd: u_bnd]
     fluxes = []
     for ix in range(l_bnd, u_bnd):
@@ -362,6 +366,12 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
 
         if sed is None:
             obj_fluxes = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            bad_sed[label[ix]] +=1                  # temporary for diagnostics
+            # print(f'Bad SED id {id[ix]} evol_label {label[ix]}\n')
+        elif np.isnan(spectra[ix][0]):
+            obj_fluxes = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            bad_sed[label[ix]] +=1                  # temporary for diagnostics
+            # print(f'Bad SED for id {id[ix]} evol_label {label[ix]}\n')
         else:
             # Normalize; calculate fluxes
             sed = sed.thin()
@@ -370,6 +380,11 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
                 obj_fluxes.append(collection[ix].get_LSST_flux(
                     band, sed=sed, cache=False))
         fluxes.append(obj_fluxes)
+
+    # temporary for diagnostics
+    print('Bad SEDs by label')
+    for key,value in bad_sed.items():
+        print(f'{key}:  {value}')
 
     colnames = [f'lsst_flux_{band}' for band in LSST_BANDS]
     fluxes_transpose = zip(*fluxes)
