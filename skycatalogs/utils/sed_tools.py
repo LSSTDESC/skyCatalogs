@@ -245,8 +245,6 @@ class TrilegalSedFactory():
 
         return self._hp_lookup[hp]
 
-
-    #  NOTE:  may need to normalize using i_mag
     def get_sed(self, tri):
         '''
         Parameters
@@ -282,10 +280,12 @@ class TrilegalSedFactory():
                 row = sedfile.get_sed_row(id)
                 if row is None:
                     return None
+                if np.isnan(row[0]):
+                    return None
+
                 lut = galsim.LookupTable(x=sedfile.wl_axis, f=row,
                                          interpolant='linear')
                 sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
-                # return sed.thin()
                 return sed
 
         # Otherwise have to calculate
@@ -300,6 +300,8 @@ class TrilegalSedFactory():
 
         # Convert spectrum units as well
         spectrum = self._pystellib.generate_stellar_spectrum(*spec_inputs) * 10
+        if np.isnan(spectrum[0]):
+            return None
         # mu0 = tri.get_native_attribute('mu0')
 
         # Convert spectrum from erg/s/A to erg/s/nm/cm**2;
@@ -310,7 +312,6 @@ class TrilegalSedFactory():
         sed_table = galsim.LookupTable(self._wl, spectrum)
         sed = galsim.SED(sed_table, 'nm', 'flambda')
 
-        # return sed.thin()
         return sed
 
 

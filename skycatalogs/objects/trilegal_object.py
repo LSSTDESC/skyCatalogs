@@ -35,7 +35,7 @@ class TrilegalObject(BaseObject):
 
         if sed is not None:
             sed = self._apply_component_extinction(sed)
-            sed = sed.thin()
+            sed = sed.thin()                   # might not want this
             imag = self.get_native_attribute('imag')
             sed = sed.withMagnitude(imag,
                                     self._belongs_to._lsst_bandpasses['i'])
@@ -81,7 +81,6 @@ class TrilegalCollection(ObjectCollection):
 
         # See also classes TrilegalSedFactory, TrilegalSedFile, _SEDBatch in
         # sed_tools.py
-
 
         # Is this necessary? Probably not
         our_config = self.sky_catalog._config['object_types'][object_type]
