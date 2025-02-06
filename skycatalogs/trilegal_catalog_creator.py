@@ -142,7 +142,7 @@ class TrilegalMainCatalogCreator:
         if not n_row:
             return 0
 
-        print(f'rows returned: {n_row}')
+        self._logger.info(f'rows returned: {n_row}')
 
         # generate id
         id_prefix = f'{self._truth_catalog}_hp{hp}_'
@@ -308,7 +308,7 @@ class TrilegalSEDGenerator:
             spectra_32 = spectra.astype(np.float32)
             del spectra
             # print(f'len(wavelength axis): {len(wl_axis)}')
-            print(f'shape of spectra array: {spectra_32.shape}')
+            self._debug.info(f'shape of spectra array: {spectra_32.shape}')
             self._write_SED_batch(hp5_path, batch, df['id'],
                                   wl_axis, spectra_32)
             self._logger.info(f'Batch {batch} written')
@@ -363,21 +363,14 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
 
         if sed is None:
             obj_fluxes = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            bad_sed[label[ix]] += 1                 # temporary for diagnostics
-            # print(f'Bad SED id {id[ix]} evol_label {label[ix]}\n')
         else:
             # Normalize; calculate fluxes
-            sed = sed.thin()
+            # sed = sed.thin()
             sed = sed.withMagnitude(imag[ix], tri_lsst_bandpasses['i'])
             for band in LSST_BANDS:
                 obj_fluxes.append(collection[ix].get_LSST_flux(
                     band, sed=sed, cache=False))
         fluxes.append(obj_fluxes)
-
-    # temporary for diagnostics
-    print('Bad SEDs by label')
-    for key, value in bad_sed.items():
-        print(f'{key}:  {value}')
 
     colnames = [f'lsst_flux_{band}' for band in LSST_BANDS]
     fluxes_transpose = zip(*fluxes)
