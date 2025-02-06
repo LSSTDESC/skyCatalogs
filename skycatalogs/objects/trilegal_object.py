@@ -35,7 +35,7 @@ class TrilegalObject(BaseObject):
 
         if sed is not None:
             sed = self._apply_component_extinction(sed)
-            sed = sed.thin()                   # might not want this
+            # sed = sed.thin()                   # might not want this
             imag = self.get_native_attribute('imag')
             sed = sed.withMagnitude(imag,
                                     self._belongs_to._lsst_bandpasses['i'])
