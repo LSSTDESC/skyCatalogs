@@ -231,7 +231,7 @@ class TrilegalSedFactory():
             self.tmpl = tmpl
 
             self._wl = None
-            self._pystellib = None
+        self._pystellib = None
 
     def get_hp_sedfile(self, hp, silent=True):
         if hp not in self._hp_lookup:
@@ -249,7 +249,7 @@ class TrilegalSedFactory():
         '''
         Parameters
         ----------
-        tri
+        tri  a trilegal object
 
         Returns
         -------
@@ -314,6 +314,40 @@ class TrilegalSedFactory():
 
         return sed
 
+    def get_spectra_batch(self, pq_main, batch):
+        '''
+        Return spectra (still will need to be converted to observer SED)
+        as computed by pystellibs for a subset (row group
+        in the case of parquet input which for now is the only type
+        supported).
+
+        Parameters
+        ----------
+        pq_main     ParquetFile object for the "main" catalog for
+                    healpixel of interest
+        batch       row group for which spectra are to be returned
+
+        Returns
+        -------
+        wavelength axis  numpy array of dimension n_wl
+        flux values      numpy array  with shape (n_obj, n_wl)
+
+        '''
+        if not self._pystellib:
+            from pystellibs import BTSettl
+            self._pystellib = BTSettl(medres=False)
+
+        columns = ['id', 'logT', 'logg', 'logL', 'Z', 'mu0']
+        df = pq_main.read_row_group(batch, columns=columns).to_pandas()
+        wl_axis, spectra = self._pystellib.generate_individual_spectra(df)
+        #    self._logger.info('Computed spectra')
+        # Convert wl_axis, spectra from A to nm.
+        wl_axis = wl_axis / 10
+        spectra = spectra * 10
+        spectra_32 = spectra.astype(np.float32)
+        del spectra
+        return wl_axis, spectra_32
+
 
 class TrilegalSedFile():
     '''
@@ -321,7 +355,8 @@ class TrilegalSedFile():
     '''
     def __init__(self, factory, hp):
         fpath = os.path.join(
-            factory.sed_dir, factory.tmpl.replace('(?P<healpix>\\d+)', str(hp)))
+            factory.sed_dir, factory.tmpl.replace('(?P<healpix>\\d+)',
+                                                  str(hp)))
 
         # See if it's there.   Let it raise exception if it's not
         with open(fpath) as f:

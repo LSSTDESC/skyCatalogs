@@ -7,7 +7,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import healpy
-import h5py
+#  ## import h5py
 import numpy as np
 import json
 import galsim
@@ -20,7 +20,7 @@ from skycatalogs.utils.config_utils import assemble_file_metadata
 Code for creating sky catalogs for trilegal stars
 """
 
-__all__ = ['TrilegalMainCatalogCreator', 'TrilegalSEDGenerator',
+__all__ = ['TrilegalMainCatalogCreator',  # 'TrilegalSEDGenerator',
            'TrilegalFluxCatalogCreator']
 
 _DEFAULT_ROW_GROUP_SIZE = 1000000
@@ -189,144 +189,146 @@ class TrilegalMainCatalogCreator:
         self._catalog_creator._config_writer.write_configs(trilegal_fragment)
 
 
-class TrilegalSEDGenerator:
-    '''
-    This class is responsible for calculating SEDs for Trilegal sources
-    and storing them in an h5df file (one file per healpixel). The
-    strucure of the file is as follows:
-    metadata (group)   one or more key/value pairs, stored as the attributes
-                       of the top-level group "metadata". The group has no
-                       other content
-    wl_axis (dataset)  All SEDs use the same binning. It's stored here.
-                       Array of 4-byte floats
-    batches (group)    Contains subgroups with names like "batch_X" where
-                       X is the batch number
-    batch_X (group)    Has metadata (batch number, count of sources in the
-                       batch, maybe lower and upper limits of count within the
-                       full healpixel).  It also contains two datasets, "id"
-                       and "SED"
-    id (dataset)       1-d array of (string) ids in the batch
-    spectra (dataset)  2-d array indexed by [source_number, lambda]. 4-byte
-                       floats
-    '''
-    def __init__(self, input_dir, output_dir=None, lib='BTSettl',
-                 log_level='INFO'):
-        '''
-        Parameters
-        ----------
-        input_dir      Where to find parquet main files
-        output_dir     Where to write output.  Defaults to input_dir
-        lib            Name of pystelllibs library used to generate SEDs
-        '''
-        from pystellibs import BTSettl
+# class TrilegalSEDGenerator:
+#     '''
+#     This class is responsible for calculating SEDs for Trilegal sources
+#     and storing them in an h5df file (one file per healpixel). The
+#     strucure of the file is as follows:
+#     metadata (group)   one or more key/value pairs, stored as the attributes
+#                        of the top-level group "metadata". The group has no
+#                        other content
+#     wl_axis (dataset)  All SEDs use the same binning. It's stored here.
+#                        Array of 4-byte floats
+#     batches (group)    Contains subgroups with names like "batch_X" where
+#                        X is the batch number
+#     batch_X (group)    Has metadata (batch number, count of sources in the
+#                        batch, maybe lower and upper limits of count within the
+#                        full healpixel).  It also contains two datasets, "id"
+#                        and "SED"
+#     id (dataset)       1-d array of (string) ids in the batch
+#     spectra (dataset)  2-d array indexed by [source_number, lambda]. 4-byte
+#                        floats
+#     '''
+#     def __init__(self, input_dir, output_dir=None, lib='BTSettl',
+#                  log_level='INFO'):
+#         '''
+#         Parameters
+#         ----------
+#         input_dir      Where to find parquet main files
+#         output_dir     Where to write output.  Defaults to input_dir
+#         lib            Name of pystelllibs library used to generate SEDs
+#         '''
+#         from pystellibs import BTSettl
 
-        self._pystellib = BTSettl(medres=False)
-        self._wl = self._pystellib._wavelength / 10  # Convert to nm
+#         self._pystellib = BTSettl(medres=False)
+#         self._wl = self._pystellib._wavelength / 10  # Convert to nm
 
-        self._input_dir = input_dir
-        self._output_dir = output_dir
-        if not output_dir:
-            self._output_dir = input_dir
+#         self._input_dir = input_dir
+#         self._output_dir = output_dir
+#         if not output_dir:
+#             self._output_dir = input_dir
 
-        self._logger = logging.getLogger('trilegal_SED')
-        if not self._logger.hasHandlers():
-            self._logger.setLevel(log_level)
-            ch = logging.StreamHandler()
-            ch.setLevel(log_level)
-            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-            ch.setFormatter(formatter)
-            self._logger.addHandler(ch)
+#         self._logger = logging.getLogger('trilegal_SED')
+#         if not self._logger.hasHandlers():
+#             self._logger.setLevel(log_level)
+#             ch = logging.StreamHandler()
+#             ch.setLevel(log_level)
+#             formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+#             ch.setFormatter(formatter)
+#             self._logger.addHandler(ch)
 
-    def _write_SED_batch(self, outfile_path, batch, id, wl_axis, spectra):
-        '''
-        Write a collection of SEDs, typically corresponding to a single row
-        group in the parquet main file, to output.
-        Parameters
-        ----------
-        outfile_path  File to which SEDs will be appended
-        batch         E.g. row group number
-        id            Array of ids for the sources whose SEDs will be written
-        wl_axis       Array of wavelengths (nm) used for spectra
-        spectra       Flux values, units of flambda (erg/cm**2/s/nm)
+#     def _write_SED_batch(self, outfile_path, batch, id, wl_axis, spectra):
+#         '''
+#         Write a collection of SEDs, typically corresponding to a single row
+#         group in the parquet main file, to output.
+#         Parameters
+#         ----------
+#         outfile_path  File to which SEDs will be appended
+#         batch         E.g. row group number
+#         id            Array of ids for the sources whose SEDs will be written
+#         wl_axis       Array of wavelengths (nm) used for spectra
+#         spectra       Flux values, units of flambda (erg/cm**2/s/nm)
 
-        '''
-        with h5py.File(outfile_path, 'a') as f:
-            if 'wl_axis' not in f.keys():
-                axis_ds = f.create_dataset('wl_axis', shape=(len(wl_axis),),
-                                           dtype='f4', data=np.array(wl_axis))
-                axis_ds.attrs.create('wl_units', 'nm')
-            if 'batches' not in f.keys():
-                _ = f.create_group('batches')
+#         '''
+#         with h5py.File(outfile_path, 'a') as f:
+#             if 'wl_axis' not in f.keys():
+#                 axis_ds = f.create_dataset('wl_axis', shape=(len(wl_axis),),
+#                                            dtype='f4', data=np.array(wl_axis))
+#                 axis_ds.attrs.create('wl_units', 'nm')
+#             if 'batches' not in f.keys():
+#                 _ = f.create_group('batches')
 
-            batch_g = f.create_group(f'batches/batch_{batch}')
-            batch_g.attrs.create('source_count', len(id))
-            max_id_len = max([len(entry) for entry in id])
-            id_dat = np.array(id, dtype=f'S{max_id_len}')
-            id_chunk_size = min(50000, len(id_dat))
-            _ = batch_g.create_dataset('id', data=id_dat,
-                                       chunks=(id_chunk_size),
-                                       compression='gzip')
+#             batch_g = f.create_group(f'batches/batch_{batch}')
+#             batch_g.attrs.create('source_count', len(id))
+#             max_id_len = max([len(entry) for entry in id])
+#             id_dat = np.array(id, dtype=f'S{max_id_len}')
+#             id_chunk_size = min(50000, len(id_dat))
+#             _ = batch_g.create_dataset('id', data=id_dat,
+#                                        chunks=(id_chunk_size),
+#                                        compression='gzip')
 
-            # Larger chunks speed up i/o but require more memory.
-            # Optimal value is TBD
-            data_chunk_nrow = min(1000, len(id_dat))
-            _ = batch_g.create_dataset('spectra',
-                                       data=np.array(spectra),
-                                       chunks=(data_chunk_nrow, len(wl_axis)),
-                                       compression='gzip',
-                                       dtype='f4')
+#             # Larger chunks speed up i/o but require more memory.
+#             # Optimal value is TBD
+#             data_chunk_nrow = min(1000, len(id_dat))
+#             _ = batch_g.create_dataset('spectra',
+#                                        data=np.array(spectra),
+#                                        chunks=(data_chunk_nrow, len(wl_axis)),
+#                                        compression='gzip',
+#                                        dtype='f4')
 
-    def _generate_hp(self, hp):
-        # open parquet main file.
-        # For now use hardcoded templates.  Should read from config
-        # Modify to be suitable for creating rather than parsing a name
-        main_templ = 'trilegal_(?P<healpix>\d+).parquet'
-        sed_templ = 'trilegal_sed_(?P<healpix>\d+).hdf5'
-        in_fname = main_templ.replace('(?P<healpix>\\d+)', str(hp))
-        out_fname = sed_templ.replace('(?P<healpix>\\d+)', str(hp))
+#     def _generate_hp(self, hp):
+#         # open parquet main file.
+#         # For now use hardcoded templates.  Should read from config
+#         # Modify to be suitable for creating rather than parsing a name
+#         main_templ = 'trilegal_(?P<healpix>\d+).parquet'
+#         sed_templ = 'trilegal_sed_(?P<healpix>\d+).hdf5'
+#         in_fname = main_templ.replace('(?P<healpix>\\d+)', str(hp))
+#         out_fname = sed_templ.replace('(?P<healpix>\\d+)', str(hp))
 
-        # Open input and output files
-        # For now read main file ourselves, not via skyCatalogs API
-        in_path = os.path.join(self._input_dir, in_fname)
-        pq_file = pq.ParquetFile(in_path)
-        n_gp = pq_file.metadata.num_row_groups
-        hp5_path = os.path.join(self._output_dir, out_fname)
-        with h5py.File(hp5_path, 'w') as f:
-            f.create_group('metadata')
-            f['metadata'].attrs.create('input_path', in_path)
-            f['metadata'].attrs.create('n_batch', n_gp)  # was in brackets
+#         # Open input and output files
+#         # For now read main file ourselves, not via skyCatalogs API
+#         in_path = os.path.join(self._input_dir, in_fname)
+#         pq_file = pq.ParquetFile(in_path)
+#         n_gp = pq_file.metadata.num_row_groups
+#         hp5_path = os.path.join(self._output_dir, out_fname)
+#         with h5py.File(hp5_path, 'w') as f:
+#             f.create_group('metadata')
+#             f['metadata'].attrs.create('input_path', in_path)
+#             f['metadata'].attrs.create('n_batch', n_gp)  # was in brackets
 
-        for batch in range(n_gp):
-            self._logger.info(f'Starting batch {batch}')
-            columns = ['id', 'logT', 'logg', 'logL', 'Z', 'mu0']
-            df = pq_file.read_row_group(batch, columns=columns).to_pandas()
-            wl_axis, spectra = self._pystellib.generate_individual_spectra(df)
-            self._logger.info('Computed spectra')
-            # Convert wl_axis, spectra from A to nm.
-            wl_axis = wl_axis / 10
-            spectra = spectra * 10
-            spectra_32 = spectra.astype(np.float32)
-            del spectra
-            # print(f'len(wavelength axis): {len(wl_axis)}')
-            self._debug.info(f'shape of spectra array: {spectra_32.shape}')
-            self._write_SED_batch(hp5_path, batch, df['id'],
-                                  wl_axis, spectra_32)
-            self._logger.info(f'Batch {batch} written')
+#         for batch in range(n_gp):
+#             self._logger.info(f'Starting batch {batch}')
+#             columns = ['id', 'logT', 'logg', 'logL', 'Z', 'mu0']
+#             df = pq_file.read_row_group(batch, columns=columns).to_pandas()
+#             wl_axis, spectra = self._pystellib.generate_individual_spectra(df)
+#             self._logger.info('Computed spectra')
+#             # Convert wl_axis, spectra from A to nm.
+#             wl_axis = wl_axis / 10
+#             spectra = spectra * 10
+#             spectra_32 = spectra.astype(np.float32)
+#             del spectra
+#             # print(f'len(wavelength axis): {len(wl_axis)}')
+#             self._debug.info(f'shape of spectra array: {spectra_32.shape}')
+#             self._write_SED_batch(hp5_path, batch, df['id'],
+#                                   wl_axis, spectra_32)
+#             self._logger.info(f'Batch {batch} written')
 
-    def generate(self, hps):
+#     def generate(self, hps):
 
-        for hp in hps:
-            self._generate_hp(hp)
+#         for hp in hps:
+#             self._generate_hp(hp)
 
 
 def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
-                            l_bnd, u_bnd, row_group):
+                            l_bnd, u_bnd,  main_path, row_group):
     '''
     send_conn         output connection.  If none return output
     collection       object collection we're processing
     instrument_needed indicates which fluxes need to be computed
                      Ignored for now.  Just do LSST fluxes
     l_bnd, u_bnd     demarcates slice to process
+    main_path        Path main skyCatalogs file for
+                     current healpixel
     row_group        row group this chunk belongs to.
                      Row group # = (SED file) batch #
 
@@ -336,23 +338,28 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     global tri_lsst_bandpasses
     out_dict = {}
     now = datetime.now().isoformat()[:19]
-    print(f'{now}  Entering _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}')
+    print(f'{now}  Entering _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}', flush=True)
 
-    hp = collection._partition_id
+    # hp = collection._partition_id
     skycat = collection._sky_catalog
     factory = skycat._trilegal_sed_factory
-    sedfile = factory.get_hp_sedfile(hp, silent=False)  # should be there
+    #  ## sedfile = factory.get_hp_sedfile(hp, silent=False)  # should be there
     extinguisher = skycat._extinguisher
+
+    pq_main = pq.ParquetFile(main_path)
 
     # SEDs we need should be in group named "batch_XX" where XX is row
     # group number
-    bad_sed = {i: 0 for i in range(10)}       # temporary for diagnostics
-    spectra = sedfile.get_sed_batch(f"batch_{row_group}")
-    wl = sedfile.wl_axis
+
+    # ## spectra = sedfile.get_sed_batch(f"batch_{row_group}")
+    # ## wl = sedfile.wl_axis
+    wl, spectra = factory.get_spectra_batch(pq_main, row_group)
+    now = datetime.now().isoformat()[:19]
+    print(f'{now} Spectra computed', flush=True)
     av = collection.get_native_attribute('av')
     id = collection.get_native_attribute('id')
     imag = collection.get_native_attribute('imag')
-    label = collection.get_native_attribute('evol_label')
+    # label = collection.get_native_attribute('evol_label')
     out_dict['id'] = id[l_bnd: u_bnd]
     fluxes = []
     for ix in range(l_bnd, u_bnd):
@@ -378,7 +385,7 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     out_dict.update(flux_dict)
 
     now = datetime.now().isoformat()[:19]
-    print(f'{now}  Leaving _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}')
+    print(f'{now}  Leaving _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}', flush=True)
 
     if send_conn:
         send_conn.send(out_dict)
@@ -398,6 +405,7 @@ class TrilegalFluxCatalogCreator:
         self._logger = catalog_creator._logger
         global tri_lsst_bandpasses
         tri_lsst_bandpasses = load_lsst_bandpasses()
+        # self._sed_factory = catalog_creator._trilegal_sed_factory
 
     def _create_flux_schema(self, metadata_input=None,
                             metadata_key='provenance'):
@@ -423,6 +431,10 @@ class TrilegalFluxCatalogCreator:
         output_filename = f'trilegal_flux_{pixel}.parquet'
         output_path = os.path.join(self._catalog_creator._output_dir,
                                    output_filename)
+
+        main_filename = f'trilegal_{pixel}.parquet'
+        main_path = os.path.join(self._catalog_creator._output_dir,
+                                 main_filename)
 
         n_parallel = self._catalog_creator._flux_parallel
 
@@ -453,7 +465,7 @@ class TrilegalFluxCatalogCreator:
             #  readers = []
             if n_parallel == 1:
                 out_dict = _do_trilegal_flux_chunk(None, c, instrument_needed,
-                                                   l_bnd, u_bnd, ix)
+                                                   l_bnd, u_bnd, main_path, ix)
             else:
                 raise Exception('Parallel flux computation for trilegal NYI')
                 # out_dict = {}
@@ -471,7 +483,8 @@ class TrilegalFluxCatalogCreator:
                 #     proc = Process(target=_do_trilegal_flux_chunk,
                 #                    name=f'proc_{i}',
                 #                    args=(conn_wrt, _trilegal_collection,
-                #                          instrument_needed, lb, u, ix))
+                #                          instrument_needed, lb, u,
+                #                          main_path, ix))
                 #     proc.start()
                 #     p_list.append(proc)
                 #     lb = u
