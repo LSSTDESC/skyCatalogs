@@ -167,6 +167,9 @@ class TrilegalMainCatalogCreator:
             l_bnd = u_bnd
             u_bnd = min(l_bnd + self._stride, n_row)
             rg_written += 1
+            del out_dict
+            del out_df
+            del out_table
 
         writer.close()
         self._logger.debug(f'# row groups written to {outpath}: {rg_written}')
@@ -383,6 +386,7 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     fluxes_transpose = zip(*fluxes)
     flux_dict = dict(zip(colnames, fluxes_transpose))
     out_dict.update(flux_dict)
+    del fluxes_transpose
 
     now = datetime.now().isoformat()[:19]
     print(f'{now}  Leaving _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}', flush=True)

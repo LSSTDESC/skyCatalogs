@@ -345,6 +345,7 @@ class TrilegalSedFactory():
         wl_axis = wl_axis / 10
         spectra = spectra * 10
         spectra_32 = spectra.astype(np.float32)
+        del df
         del spectra
         return wl_axis, spectra_32
 
