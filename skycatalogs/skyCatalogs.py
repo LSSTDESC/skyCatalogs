@@ -375,10 +375,7 @@ class SkyCatalog(object):
                 'trilegal',
                 object_class=TrilegalObject,
                 collection_class=TrilegalCollection)
-            # self._trilegal_sed_factory = TrilegalSedFactory(trilegal_config,
-            #                                                self._cat_dir)
-            self._trilegal_sed_factory = TrilegalSedFactory(trilegal_config,
-                                                            None)
+            self._trilegal_sed_factory = TrilegalSedFactory(trilegal_config)
 
     @property
     def observed_sed_factory(self):

@@ -213,7 +213,7 @@ class DiffskySedFactory:
 
 class TrilegalSedFactory():
 
-    def __init__(self, object_type_config, sed_dir):
+    def __init__(self, object_type_config):
         '''
         Parameters
         ----------
@@ -222,28 +222,7 @@ class TrilegalSedFactory():
         sed_dir             directory containing SED files
                             Use None if no SED files
         '''
-        self.sed_dir = sed_dir
-        if sed_dir:
-            tmpl = object_type_config.get('sed_file_template', None)
-            self._hp_lookup = {}
-            if not tmpl:
-                raise Exception('Bad config file for Trilegal')
-            self.tmpl = tmpl
-
-            self._wl = None
         self._pystellib = None
-
-    def get_hp_sedfile(self, hp, silent=True):
-        if hp not in self._hp_lookup:
-            try:
-                self._hp_lookup[hp] = TrilegalSedFile(self, hp)
-            except FileNotFoundError:
-                if silent:
-                    return None
-                else:
-                    raise
-
-        return self._hp_lookup[hp]
 
     def get_sed(self, tri):
         '''
@@ -261,34 +240,6 @@ class TrilegalSedFactory():
         just as calculated by pystellib, except converted from Angstroms
         to nm. The other transformations are handled elsewhere
         '''
-        #
-        # PSEC_TO_CM = 3.085677581e16 * 100
-        # FOUR_PI = 4 * np.pi
-
-        if self.sed_dir:
-            id = tri.id
-            # extract hp from id
-            cmps = id.split('_')
-
-            # next to last component is of form "hpXX" where XX is hp id
-            # Last component is index of this object in the list of
-            # objects belonging to the hp
-            hp = int(cmps[-2][2:])
-
-            sedfile = self.get_hp_sedfile(hp)
-            if sedfile:
-                row = sedfile.get_sed_row(id)
-                if row is None:
-                    return None
-                if np.isnan(row[0]):
-                    return None
-
-                lut = galsim.LookupTable(x=sedfile.wl_axis, f=row,
-                                         interpolant='linear')
-                sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
-                return sed
-
-        # Otherwise have to calculate
         if not self._pystellib:
             from pystellibs import BTSettl
             self._pystellib = BTSettl(medres=False)
@@ -298,10 +249,18 @@ class TrilegalSedFactory():
         native = ['logT', 'logg', 'logL', 'Z']
         spec_inputs = [tri.get_native_attribute(x) for x in native]
 
-        # Convert spectrum units as well
-        spectrum = self._pystellib.generate_stellar_spectrum(*spec_inputs) * 10
+
+        # May generate a runtime error if parameters are outside
+        # interpolation range
+        try:
+            spectrum = self._pystellib.generate_stellar_spectrum(*spec_inputs)
+        except RuntimeError:
+            return None
+
         if np.isnan(spectrum[0]):
             return None
+        # Convert spectrum units as well
+        spectrum = spectrum * 10
         # mu0 = tri.get_native_attribute('mu0')
 
         # Convert spectrum from erg/s/A to erg/s/nm/cm**2;
@@ -348,116 +307,6 @@ class TrilegalSedFactory():
         del df
         del spectra
         return wl_axis, spectra_32
-
-
-class TrilegalSedFile():
-    '''
-    Represents SED file for a single healpixel
-    '''
-    def __init__(self, factory, hp):
-        fpath = os.path.join(
-            factory.sed_dir, factory.tmpl.replace('(?P<healpix>\\d+)',
-                                                  str(hp)))
-
-        # See if it's there.   Let it raise exception if it's not
-        with open(fpath) as f:
-            self._fpath = fpath
-
-        self._hp = hp
-
-        # init the batchs
-        self._batches = {}
-
-        with h5py.File(self._fpath) as f:
-            self._wl = np.array(f['wl_axis'])
-            for b in f['batches']:
-                self._batches[b] = _SEDBatch(b, self._fpath, f)
-
-    @property
-    def wl_axis(self):
-        return self._wl
-
-    def get_sed_row(self, id):
-        '''
-        Returns:  An arraoy of flambda values.  NOT a SED
-        '''
-        cmps = id.split('_')
-        if cmps[-2] != f'hp{self._hp}':
-            raise Exception(f'This source is not in hp {self._hp}')
-        for b in self._batches:
-            sed_row = self._batches[b].get_sed_row(id)
-            if sed_row is not None:
-                #  maybe should make a copy and return that
-                #  so file will close?
-                return np.array(sed_row)
-
-        # Should have warning log message here
-        print(f'No SED for id {id}')
-        return None
-
-    def get_sed_batch(self, batch_name):
-        '''
-        Return 2d array of all SEDs belonging to the batch
-        '''
-        return self._batches[batch_name].get_sed_batch()
-
-    @property
-    def batches(self):
-        # Dictionary of batches belonging to this hp
-        return self._batches
-
-
-class _SEDBatch:
-    def __init__(self, batch_name, fpath, f):
-        self._batch_name = batch_name
-        self._fpath = fpath
-
-        # self._batch = f['batches'][batch_name]
-        ids = f['batches'][batch_name]['id']
-        self._spectra = None
-
-        # Format for id is <truth_name>_hp<hp_id>_<count>
-        # where <count> is the index of this source within the healpixel
-        first_id = ids[0].decode()
-        cmps = first_id.split('_')
-        self._min_hp_ix = int(cmps[-1])
-        last_id = ids[-1].decode()
-        cmps = last_id.split('_')
-        self._max_hp_ix = int(cmps[-1])
-        self._n_ids = len(ids)
-
-    @property
-    def min_hp_ix(self):
-        return self._min_hp_ix
-
-    @property
-    def max_hp_ix(self):
-        return self._max_hp_ix
-
-    def get_sed_row(self, id):
-        '''
-        Returns:  An arraoy of flambda values.  NOT a SED
-        '''
-        cmps = id.split('_')
-        id_ix = int(cmps[-1])
-        if (id_ix < self._min_hp_ix) or (id_ix > self._max_hp_ix):
-            return None         # Not in this batch
-
-        # Don't cache all the spectra. Just return the one needed
-        # if not self._spectra:
-        with h5py.File(self._fpath) as f:
-            spectra = f['batches'][self._batch_name]['spectra']
-            return np.array(spectra[id_ix - self._min_hp_ix])
-
-    def get_sed_batch(self):
-        '''
-        Return all SEDs for the batch.  The file will stay open
-        until the caller does del on the returned value.
-        '''
-        with h5py.File(self._fpath) as f:
-            # Force a copy
-            spectra = np.array(f['batches'][self._batch_name]['spectra'])
-            return spectra
 
 
 class SsoSedFactory():
