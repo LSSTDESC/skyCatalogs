@@ -434,7 +434,6 @@ class FluxCatalogCreator:
 
             l_bnd = 0
             u_bnd = len(_star_collection)
-            out_dict = {}
 
             out_dict = {}
             for field in fields_needed:
