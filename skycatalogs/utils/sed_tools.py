@@ -4,6 +4,7 @@ from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
 import astropy.constants
 import h5py
+import pandas as pd
 
 import numpy as np
 from pathlib import PurePath
@@ -273,10 +274,10 @@ class TrilegalSedFactory():
 
         return sed
 
-    def get_spectra_batch(self, pq_main, batch):
+    def get_spectra_batch(self, pq_main, batch, l_bnd, u_bnd):
         '''
         Return spectra (still will need to be converted to observer SED)
-        as computed by pystellibs for a subset (row group
+        as computed by pystellibs for a subset (slice of a row group
         in the case of parquet input which for now is the only type
         supported).
 
@@ -285,6 +286,9 @@ class TrilegalSedFactory():
         pq_main     ParquetFile object for the "main" catalog for
                     healpixel of interest
         batch       row group for which spectra are to be returned
+        l_bnd
+        u_bnd
+
 
         Returns
         -------
@@ -297,7 +301,10 @@ class TrilegalSedFactory():
             self._pystellib = BTSettl(medres=False)
 
         columns = ['id', 'logT', 'logg', 'logL', 'Z', 'mu0']
-        df = pq_main.read_row_group(batch, columns=columns).to_pandas()
+        a_dict = pq_main.read_row_group(batch, columns=columns).to_pydict()
+        for k in a_dict.keys():
+            a_dict[k] = a_dict[k][l_bnd: u_bnd]
+        df = pd.DataFrame(a_dict)
         wl_axis, spectra = self._pystellib.generate_individual_spectra(df)
         #    self._logger.info('Computed spectra')
         # Convert wl_axis, spectra from A to nm.

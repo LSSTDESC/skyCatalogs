@@ -1,8 +1,7 @@
 import os
-# import sys                        May be needed later
-# from multiprocessing import Process, Pipe    May be needed later
+import sys
+from multiprocessing import Process, Pipe
 from datetime import datetime
-import logging
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -191,7 +190,7 @@ class TrilegalMainCatalogCreator:
 
 
 def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
-                            l_bnd, u_bnd,  main_path, row_group):
+                            l_bnd, u_bnd,  main_path, row_group, debug=False):
     '''
     send_conn         output connection.  If none return output
     collection       object collection we're processing
@@ -208,8 +207,9 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     '''
     global tri_lsst_bandpasses
     out_dict = {}
-    now = datetime.now().isoformat()[:19]
-    print(f'{now}  Entering _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}', flush=True)
+    if debug:
+        now = datetime.now().isoformat()[:19]
+        print(f'{now}  Entering _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}', flush=True)
 
     # hp = collection._partition_id
     skycat = collection._sky_catalog
@@ -219,14 +219,10 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
 
     pq_main = pq.ParquetFile(main_path)
 
-    # SEDs we need should be in group named "batch_XX" where XX is row
-    # group number
-
-    # ## spectra = sedfile.get_sed_batch(f"batch_{row_group}")
-    # ## wl = sedfile.wl_axis
-    wl, spectra = factory.get_spectra_batch(pq_main, row_group)
-    now = datetime.now().isoformat()[:19]
-    print(f'{now} Spectra computed', flush=True)
+    wl, spectra = factory.get_spectra_batch(pq_main, row_group, l_bnd, u_bnd)
+    if debug:
+        now = datetime.now().isoformat()[:19]
+        print(f'{now} Spectra computed', flush=True)
     av = collection.get_native_attribute('av')
     id = collection.get_native_attribute('id')
     imag = collection.get_native_attribute('imag')
@@ -234,7 +230,7 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     fluxes = []
     for ix in range(l_bnd, u_bnd):
         obj_fluxes = []
-        lut = galsim.LookupTable(wl, spectra[ix], interpolant='linear')
+        lut = galsim.LookupTable(wl, spectra[ix - l_bnd], interpolant='linear')
         sed = galsim.SED(lut, wave_type='nm', flux_type='flambda')
         sed = extinguisher.extinguish(sed, av[ix])
 
@@ -255,8 +251,9 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     out_dict.update(flux_dict)
     del fluxes_transpose
 
-    now = datetime.now().isoformat()[:19]
-    print(f'{now}  Leaving _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}', flush=True)
+    if debug:
+        now = datetime.now().isoformat()[:19]
+        print(f'{now}  Leaving _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}', flush=True)
 
     if send_conn:
         send_conn.send(out_dict)
@@ -276,7 +273,6 @@ class TrilegalFluxCatalogCreator:
         self._logger = catalog_creator._logger
         global tri_lsst_bandpasses
         tri_lsst_bandpasses = load_lsst_bandpasses()
-        # self._sed_factory = catalog_creator._trilegal_sed_factory
 
     def _create_flux_schema(self, metadata_input=None,
                             metadata_key='provenance'):
@@ -310,20 +306,24 @@ class TrilegalFluxCatalogCreator:
         n_parallel = self._catalog_creator._flux_parallel
 
         writer = pq.ParquetWriter(output_path, arrow_schema)
-        #  fields_needed = arrow_schema.names
+
         instrument_needed = ['lsst']
         rg_written = 0
         writer = None
+        fields_needed = arrow_schema.names
 
         # Get all the objects in the pixel
         # For test pixel there is only one row group so only one collection
         # In general may have to iterate over row groups
         obj_list = self._cat.get_object_type_by_hp(pixel, 'trilegal')
+        if len(obj_list) == 0:
+            self._logger.warning(f'Cannot create flux file for pixel {pixel} because main file does not exist or is empty')
+            return
 
-        for ix, c in enumerate(obj_list.get_collections()):
-            # av = c.get_native_attribute('av')
+        for rg, c in enumerate(obj_list.get_collections()):
             l_bnd = 0
             u_bnd = len(c)
+
             if (u_bnd - l_bnd) < 5 * n_parallel:
                 n_parallel = 1
             if n_parallel == 1:
@@ -332,45 +332,51 @@ class TrilegalFluxCatalogCreator:
                 n_per = int((u_bnd - l_bnd + n_parallel)/n_parallel)
 
             lb = l_bnd
-            #  u = min(l_bnd + n_per, u_bnd)
-            #  readers = []
+            u = min(l_bnd + n_per, u_bnd)
+
             if n_parallel == 1:
+                # For debugging call directly
                 out_dict = _do_trilegal_flux_chunk(None, c, instrument_needed,
-                                                   l_bnd, u_bnd, main_path, ix)
+                                                   l_bnd, u_bnd, main_path,
+                                                   rg, debug=True)
             else:
-                raise Exception('Parallel flux computation for trilegal NYI')
-                # out_dict = {}
-                # for field in fields_needed:
-                #     out_dict[field] = []
+                out_dict = {}
+                readers = []
+                for field in fields_needed:
+                    out_dict[field] = []
 
-                # tm = max(int((n_per*60)/500), 10)
-                # self._logger.info(f'Using timeout value {tm} for {n_per} sources')
-                # p_list = []
-                # for i in range(n_parallel):
-                #     conn_rd, conn_wrt = Pipe(duplex=False)
-                #     readers.append(conn_rd)
+                tm = max(int((n_per*60)/500), 10)
+                self._logger.info(f'Using timeout value {tm} for {n_per} sources')
+                p_list = []
+                for i in range(n_parallel):
+                    conn_rd, conn_wrt = Pipe(duplex=False)
+                    readers.append(conn_rd)
 
-                #     # For debugging call directly
-                #     proc = Process(target=_do_trilegal_flux_chunk,
-                #                    name=f'proc_{i}',
-                #                    args=(conn_wrt, _trilegal_collection,
-                #                          instrument_needed, lb, u,
-                #                          main_path, ix))
-                #     proc.start()
-                #     p_list.append(proc)
-                #     lb = u
-                #     u = min(lb + n_per, u_bnd)
-                # self._logger.debug('Processes started')
-                # for i in range(n_parallel):
-                #     ready = readers[i].poll(tm)
-                #     if not ready:
-                #         self._logger.error(f'Process {i} timed out after {tm} sec')
-                #         sys.exit(1)
-                #     dat = readers[i].recv()
-                #     for field in fields_needed:
-                #         out_dict[field] += dat[field]
-                # for p in p_list:
-                #     p.join()
+                    proc = Process(target=_do_trilegal_flux_chunk,
+                                   name=f'proc_{i}',
+                                   args=(conn_wrt, c,
+                                         instrument_needed, lb, u,
+                                         main_path, rg))
+                    proc.start()
+                    p_list.append(proc)
+                    lb = u
+                    u = min(lb + n_per, u_bnd)
+                self._logger.debug('Processes started')
+                for i in range(n_parallel):
+                    ready = readers[i].poll(tm)
+                    if not ready:
+                        self._logger.error(
+                            f'Process {i} timed out after {tm} sec')
+                        sys.exit(1)
+                    dat = readers[i].recv()
+                    for field in fields_needed:
+                        if len(out_dict[field]) == 0:
+                            out_dict[field] = dat[field]
+                        else:
+                            out_dict[field] = np.concatenate([out_dict[field],
+                                                              dat[field]])
+                for p in p_list:
+                    p.join()
 
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df,
@@ -398,7 +404,6 @@ class TrilegalFluxCatalogCreator:
         thru_v = {'lsst_throughputs_version': self._cat._lsst_thru_v}
         file_metadata = assemble_file_metadata(
             self._catalog_creator._pkg_root,
-            # inputs={'trilegal_sed_path': self._cat.??},
             run_options=self._catalog_creator._run_options,
             flux_file=True,
             throughputs_versions=thru_v)
