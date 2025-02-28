@@ -134,7 +134,8 @@ class TrilegalMainCatalogCreator:
 
         #   q += ' and label = 1'  # main sequence only
 
-        results = qc.query(adql=q, fmt='pandas')
+        # 600 seconds is max timeout allowed for synchronous query
+        results = qc.query(adql=q, fmt='pandas', timeout=600)
         n_row = len(results['ra'])
         if not n_row:
             return 0
@@ -209,12 +210,19 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
     out_dict = {}
     if debug:
         now = datetime.now().isoformat()[:19]
-        print(f'{now}  Entering _do_trilegal_flux_chunk, l_bnd={l_bnd}, row_group={row_group}', flush=True)
+        print(f'{now}  Entering _do_trilegal_flux_chunk, l_bnd={l_bnd}, u_bnd={u_bnd}, row_group={row_group}', flush=True)
 
-    # hp = collection._partition_id
+    if l_bnd >= u_bnd:
+        if debug:
+            print("_do_trilegal_flux_chunk: nothing to do", flush=True)
+        if send_conn:
+            send_conn.send(out_dict)
+            return
+        else:
+            return out_dict
+
     skycat = collection._sky_catalog
     factory = skycat._trilegal_sed_factory
-    #  ## sedfile = factory.get_hp_sedfile(hp, silent=False)  # should be there
     extinguisher = skycat._extinguisher
 
     pq_main = pq.ParquetFile(main_path)
@@ -238,7 +246,6 @@ def _do_trilegal_flux_chunk(send_conn, collection, instrument_needed,
             obj_fluxes = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         else:
             # Normalize; calculate fluxes
-            # sed = sed.thin()
             sed = sed.withMagnitude(imag[ix], tri_lsst_bandpasses['i'])
             for band in LSST_BANDS:
                 obj_fluxes.append(collection[ix].get_LSST_flux(
@@ -300,6 +307,7 @@ class TrilegalFluxCatalogCreator:
                                    output_filename)
 
         main_filename = f'trilegal_{pixel}.parquet'
+        self._logger.info(f'Main file (input) is {main_filename}')
         main_path = os.path.join(self._catalog_creator._output_dir,
                                  main_filename)
 
@@ -356,7 +364,7 @@ class TrilegalFluxCatalogCreator:
                                    name=f'proc_{i}',
                                    args=(conn_wrt, c,
                                          instrument_needed, lb, u,
-                                         main_path, rg))
+                                         main_path, rg, False))
                     proc.start()
                     p_list.append(proc)
                     lb = u
@@ -369,12 +377,13 @@ class TrilegalFluxCatalogCreator:
                             f'Process {i} timed out after {tm} sec')
                         sys.exit(1)
                     dat = readers[i].recv()
-                    for field in fields_needed:
-                        if len(out_dict[field]) == 0:
-                            out_dict[field] = dat[field]
-                        else:
-                            out_dict[field] = np.concatenate([out_dict[field],
-                                                              dat[field]])
+                    if len(dat.keys()) > 0:
+                        for field in fields_needed:
+                            if len(out_dict[field]) == 0:
+                                out_dict[field] = dat[field]
+                            else:
+                                out_dict[field] = np.concatenate([out_dict[field],
+                                                                  dat[field]])
                 for p in p_list:
                     p.join()
 
