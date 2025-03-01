@@ -220,8 +220,6 @@ class TrilegalSedFactory():
         ----------
         object_type_config  dict containing section of the sky catalog
                             config pertaining to object type 'trilegal'
-        sed_dir             directory containing SED files
-                            Use None if no SED files
         '''
         self._pystellib = None
 
@@ -250,7 +248,6 @@ class TrilegalSedFactory():
         native = ['logT', 'logg', 'logL', 'Z']
         spec_inputs = [tri.get_native_attribute(x) for x in native]
 
-
         # May generate a runtime error if parameters are outside
         # interpolation range
         try:
@@ -262,13 +259,7 @@ class TrilegalSedFactory():
             return None
         # Convert spectrum units as well
         spectrum = spectrum * 10
-        # mu0 = tri.get_native_attribute('mu0')
 
-        # Convert spectrum from erg/s/A to erg/s/nm/cm**2;
-        # take into account distance from sun
-        # dl = 10**(1 + mu0/5) * PSEC_TO_CM
-        # divisor = FOUR_PI * dl**2
-        # spectrum = spectrum/(FOUR_PI * dl**2)
         sed_table = galsim.LookupTable(self._wl, spectrum)
         sed = galsim.SED(sed_table, 'nm', 'flambda')
 
@@ -286,9 +277,8 @@ class TrilegalSedFactory():
         pq_main     ParquetFile object for the "main" catalog for
                     healpixel of interest
         batch       row group for which spectra are to be returned
-        l_bnd
-        u_bnd
-
+        l_bnd       Delimits slice
+        u_bnd       Delimits slics
 
         Returns
         -------
