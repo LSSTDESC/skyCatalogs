@@ -14,9 +14,9 @@ parser = argparse.ArgumentParser(
     description='''
     Create flux Sky Catalogs for specified object type''',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--object_type',
+parser.add_argument('--object-type',
                     choices=['star', 'cosmodc2_galaxy', 'diffsky_galaxy',
-                             'sso'],
+                             'sso', 'trilegal'],
                     help='Object type for which catalog is to be created')
 parser.add_argument('--pixels', type=int, nargs='*', default=[9556],
                     help='healpix pixels for which catalogs will be created')
