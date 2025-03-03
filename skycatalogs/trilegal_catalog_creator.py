@@ -26,10 +26,6 @@ _DEFAULT_START_EPOCH = 2000
 
 
 class TrilegalMainCatalogCreator:
-    # Note dl is not part of desc-python or LSST Pipelines; it must be
-    # separately installed
-    from dl import queryClient as qc
-
     def __init__(self, catalog_creator, truth_catalog,
                  start_epoch=_DEFAULT_START_EPOCH):
         '''
@@ -105,6 +101,9 @@ class TrilegalMainCatalogCreator:
         Number of files written (0 or 1)
 
         '''
+
+        # Note dl is not part of desc-python or LSST Pipelines; it must be
+        # separately installed
         from dl import queryClient as qc
         _NSIDE = 32
         _TRILEGAL_RING_NSIDE = 256
