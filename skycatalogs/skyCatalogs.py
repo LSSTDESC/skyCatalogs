@@ -285,6 +285,13 @@ class SkyCatalog(object):
                                                   object_class=SsoObject,
                                                   collection_class=SsoCollection)
 
+        # Register third-party object type classes
+        object_types = self._config['object_types']
+        for object_type, obj_config in object_types.items():
+            if 'module' in obj_config:
+                module = obj_config['module']
+                exec(f"import {module}; {module}.register_objects(self)")
+
     @property
     def observed_sed_factory(self):
         return self._observed_sed_factory

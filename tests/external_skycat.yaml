@@ -1,0 +1,10 @@
+catalog_dir: .
+catalog_name: external_catalog_test
+object_types:
+  external_objects:
+    area_partition: None
+    module: external_catalog
+skycatalog_root: .
+provenance:
+  versioning:
+    schema_version: 1.3.0
