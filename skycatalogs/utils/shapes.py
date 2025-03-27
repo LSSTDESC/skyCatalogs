@@ -211,7 +211,7 @@ class PolygonalRegion(Region):
         ixes = np.where(~mask)
 
         # Apply polygon region mask.
-        mask[ixes] |= polygon_mask
+        mask[ixes] |= ~polygon_mask
 
         return mask
 
