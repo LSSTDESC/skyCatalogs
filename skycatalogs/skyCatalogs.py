@@ -290,7 +290,7 @@ class SkyCatalog(object):
         for object_type, obj_config in object_types.items():
             if 'module' in obj_config:
                 module = obj_config['module']
-                exec(f"import {module}; {module}.register_objects(self)")
+                exec(f"import {module}; {module}.register_objects(self, '{object_type}')")
 
     @property
     def observed_sed_factory(self):
@@ -536,7 +536,8 @@ class SkyCatalog(object):
         if coll_type is not None:
             if self.cat_cxt.use_custom_load(object_type):
                 coll = coll_type.load_collection(region, self, mjd=mjd,
-                                                 exposure=EXPOSURE_DEFAULT)
+                                                 exposure=EXPOSURE_DEFAULT,
+                                                 object_type=object_type)
                 if isinstance(coll, ObjectCollection):
                     out_list.append_collection(coll)
                 else:  # ObjectList

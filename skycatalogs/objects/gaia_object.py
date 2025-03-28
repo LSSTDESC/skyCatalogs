@@ -220,7 +220,7 @@ class GaiaCollection(ObjectCollection):
 
     @ignore_erfa_warnings
     @staticmethod
-    def load_collection(region, skycatalog, mjd=None, exposure=None):
+    def load_collection(region, skycatalog, mjd=None, exposure=None, object_type='gaia_star'):
         '''
         region      One of Disk, PolygonalRegion from skyCatalogs.utils.shapes.
                     Box is not currently supported
@@ -228,6 +228,7 @@ class GaiaCollection(ObjectCollection):
         mjd         Time at which objects are to be assembled. Ignored for
                     Gaia stars
         exposure    exposure length.  Ignored for Gaia stars
+        object_type The object type. This is 'gaia_star' by convention.
         '''
         if not skycatalog:
             raise ValueError('GaiaCollection.load_collection: skycatalog cannot be None')
@@ -237,7 +238,6 @@ class GaiaCollection(ObjectCollection):
             GaiaCollection.set_config(gaia_section)
         gaia_section = GaiaCollection.get_config()
 
-        source_type = 'gaia_star'
         sed_method = GaiaCollection.get_config().get('sed_method', 'use_lut')
         use_lut = (sed_method.strip().lower() == 'use_lut')
         if gaia_section['data_file_type'] == 'butler_refcat':
@@ -315,14 +315,14 @@ class GaiaCollection(ObjectCollection):
         df['ra_deg'] = np.degrees(pm_outputs[0])
         df['dec_deg'] = np.degrees(pm_outputs[1])
 
-        return GaiaCollection(df, skycatalog, source_type, use_lut, mjd)
+        return GaiaCollection(df, skycatalog, object_type, use_lut, mjd)
 
-    def __init__(self, df, sky_catalog, source_type, use_lut, mjd):
+    def __init__(self, df, sky_catalog, object_type, use_lut, mjd):
         self.df = df
         self._sky_catalog = sky_catalog
         self._partition_id = None
         self._mask = None
-        self._object_type_unique = source_type
+        self._object_type_unique = object_type
         self._use_lut = use_lut
         self._rdrs = []
         self._object_class = GaiaObject

@@ -1,9 +1,14 @@
 catalog_dir: .
 catalog_name: external_catalog_test
 object_types:
-  external_objects:
+  object_type_1:
     area_partition: None
     module: external_catalog
+    object_param: 111.0
+  object_type_2:
+    area_partition: None
+    module: external_catalog
+    object_param: 2.1
 skycatalog_root: .
 provenance:
   versioning:
