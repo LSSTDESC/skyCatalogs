@@ -138,6 +138,7 @@ class SsoCollection(ObjectCollection):
         ----------
         ra, dec        array of float
         id             array of str
+        hp             healpixel
         sky_catalog    instance of SkyCatalog
         mjd_individual array of float. Array of mjd values belonging
                        to the objects which will be in the new collection
