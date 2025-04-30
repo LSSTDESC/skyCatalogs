@@ -173,7 +173,13 @@ class TrilegalMainCatalogCreator:
         return rg_written
 
     def create_catalog(self, hps):
-        schema = self._create_main_schema()
+        inputs = {'trilegal_truth': self._truth_catalog}
+        file_metadata = assemble_file_metadata(
+            self._catalog_creator._pkg_root,
+            inputs=inputs,
+            run_options=self._catalog_creator._run_options)
+        schema = self._create_main_schema(metadata_input=file_metadata,
+                                          metadata_key='provenance')
         written = 0
         for hp in hps:
             written += self._write_hp(hp, schema)
@@ -183,7 +189,7 @@ class TrilegalMainCatalogCreator:
         # Add config information for trilegal
         prov = assemble_provenance(
             self._catalog_creator._pkg_root,
-            inputs={'trilegal_truth': self._truth_catalog},
+            inputs=inputs,
             run_options=self._catalog_creator._run_options)
         trilegal_fragment = TrilegalConfigFragment(prov)
         self._catalog_creator._config_writer.write_configs(trilegal_fragment)
