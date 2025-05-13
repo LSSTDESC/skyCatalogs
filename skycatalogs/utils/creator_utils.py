@@ -1,5 +1,7 @@
 import numpy as np
-from dustmaps.sfd import SFDQuery
+import warnings
+with warnings.catch_warnings(action="ignore"):
+    from dustmaps.sfd import SFDQuery
 
 _Av_adjustment = 2.742
 _MW_rv_constant = 3.1
