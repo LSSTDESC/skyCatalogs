@@ -1,5 +1,6 @@
 from collections.abc import Sequence, Iterable
 from collections import namedtuple
+from packaging import version
 import os
 import logging
 import numpy as np
@@ -88,21 +89,24 @@ def load_lsst_bandpasses():
     '''
     return _load_lsst_bandpasses()[0]
 
-def _load_roman_bandpasses():
+def _load_roman_bandpasses(**kwargs):
     '''
     Read in Roman bandpasses from standard place, trim, and store in global dict
     Returns: The dict and version inforation
     '''
     global roman_bandpasses
-    roman_bandpasses = roman_getBandpasses()
+    if version.parse(galsim.version) < version.parse('2.6.0'):
+        kwargs.pop("include_all_bands", None)
+    roman_bandpasses = roman_getBandpasses(**kwargs)
     return roman_bandpasses, 'galsim_builtin'
 
-def load_roman_bandpasses():
+def load_roman_bandpasses(**kwargs):
     '''
     Read in Roman bandpasses from standard place, trim, and store in global dict
     Returns: The dict
     '''
-    return load_roman_bandpasses()[0]
+    return _load_roman_bandpasses(**kwargs)[0]
+
 
 class BaseObject(object):
     '''
