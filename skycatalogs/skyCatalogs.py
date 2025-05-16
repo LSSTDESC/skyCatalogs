@@ -732,5 +732,7 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, loglevel="INFO"):
 
     # Get bandpasses in case we need to compute fluxes
     _, cat._lsst_thru_v = _load_lsst_bandpasses()
-    _, cat._roman_thru_v = _load_roman_bandpasses()
+    _, cat._roman_thru_v = _load_roman_bandpasses(
+        include_all_bands=True,
+    )
     return cat

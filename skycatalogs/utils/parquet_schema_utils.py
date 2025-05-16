@@ -1,12 +1,14 @@
 import pyarrow as pa
 import json
 import logging
+from galsim import version as galsim_version
+from packaging import version
 
 __all__ = ['make_galaxy_schema', 'make_galaxy_flux_schema',
            'make_star_schema', 'make_star_flux_schema']
 
 
-def _add_roman_fluxes(fields):
+def _add_roman_fluxes(fields, include_all_bands=False):
     fields += [pa.field('roman_flux_W146', pa.float32(), True),
                pa.field('roman_flux_R062', pa.float32(), True),
                pa.field('roman_flux_Z087', pa.float32(), True),
@@ -15,6 +17,12 @@ def _add_roman_fluxes(fields):
                pa.field('roman_flux_H158', pa.float32(), True),
                pa.field('roman_flux_F184', pa.float32(), True),
                pa.field('roman_flux_K213', pa.float32(), True)]
+
+    if include_all_bands and (version.parse(galsim_version) >= version.parse("2.6.0")):
+        fields += [pa.field('roman_flux_SNPrism', pa.float32(), True),
+                   pa.field('roman_flux_Grism_0thOrder', pa.float32(), True),
+                   pa.field('roman_flux_Grism_1stOrder', pa.float32(), True)]
+
     return fields
 
 
@@ -104,7 +112,9 @@ def make_galaxy_schema(logname, knots=True,
 
 
 def make_galaxy_flux_schema(logname, galaxy_type='cosmodc2',
-                            include_roman_flux=False, metadata_input=None,
+                            include_roman_flux=False,
+                            include_nonimaging_roman_bands=False,
+                            metadata_input=None,
                             metadata_key='provenance'):
     '''
     Will make a separate parquet file with lsst flux for each band
@@ -121,7 +131,10 @@ def make_galaxy_flux_schema(logname, galaxy_type='cosmodc2',
               pa.field('lsst_flux_z', pa.float32(), True),
               pa.field('lsst_flux_y', pa.float32(), True)]
     if include_roman_flux:
-        fields = _add_roman_fluxes(fields)
+        fields = _add_roman_fluxes(
+            fields,
+            include_all_bands=include_nonimaging_roman_bands,
+        )
     if metadata_input:
         metadata_bytes = json.dumps(metadata_input).encode('utf8')
         final_metadata = {metadata_key: metadata_bytes}
@@ -132,6 +145,7 @@ def make_galaxy_flux_schema(logname, galaxy_type='cosmodc2',
 
 
 def make_star_flux_schema(logname, include_roman_flux=False,
+                          include_nonimaging_roman_bands=False,
                           metadata_input=None, metadata_key='provenance'):
     '''
     Will make a separate parquet file with lsst flux for each band
@@ -147,7 +161,10 @@ def make_star_flux_schema(logname, include_roman_flux=False,
               pa.field('lsst_flux_z', pa.float32(), True),
               pa.field('lsst_flux_y', pa.float32(), True)]
     if include_roman_flux:
-        fields = _add_roman_fluxes(fields)
+        fields = _add_roman_fluxes(
+            fields,
+            include_all_bands=include_nonimaging_roman_bands,
+        )
     if metadata_input:
         metadata_bytes = json.dumps(metadata_input).encode('utf8')
         final_metadata = {metadata_key: metadata_bytes}
