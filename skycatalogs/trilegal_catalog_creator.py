@@ -1,5 +1,6 @@
 import os
 import sys
+from time import sleep
 from multiprocessing import Process, Pipe
 from datetime import datetime
 import pandas as pd
@@ -13,6 +14,7 @@ from skycatalogs.objects.base_object import LSST_BANDS, load_lsst_bandpasses
 from skycatalogs.objects.trilegal_object import TrilegalConfigFragment
 from skycatalogs.utils.config_utils import assemble_provenance
 from skycatalogs.utils.config_utils import assemble_file_metadata
+from skycatalogs.utils.creator_utils import get_trilegal_hp_nrows
 
 """
 Code for creating sky catalogs for trilegal stars
@@ -20,7 +22,7 @@ Code for creating sky catalogs for trilegal stars
 
 __all__ = ['TrilegalMainCatalogCreator', 'TrilegalFluxCatalogCreator']
 
-_DEFAULT_ROW_GROUP_SIZE = 1000000
+_DEFAULT_ROW_GROUP_SIZE = 10_000_000  # since fewer columns than galaxies have
 _DEFAULT_TRUTH_CATALOG = 'lsst_sim.simdr2'
 _DEFAULT_START_EPOCH = 2000
 
@@ -102,12 +104,36 @@ class TrilegalMainCatalogCreator:
 
         '''
 
+        ## MAX_QUERY_ROWS = 10_000_000
+        MAX_QUERY_ROWS = 1_000_000
+        #   MAX_QUERY_ROWS = 100_000            # temp for testing
+
         # Note dl is not part of desc-python or LSST Pipelines; it must be
         # separately installed
         from dl import queryClient as qc
         _NSIDE = 32
         _TRILEGAL_RING_NSIDE = 256
+        _TRILEGAL_NEST_NSIDE = 4096
 
+        nrows = get_trilegal_hp_nrows(hp, nside=_NSIDE)
+        n_query = 1
+        if nrows > MAX_QUERY_ROWS:
+            # break up into several queries
+            if nrows > 50 * MAX_QUERY_ROWS:
+                n_query = 64
+            elif nrows > 16 * MAX_QUERY_ROWS:
+                n_query = 16
+            else:
+                n_query = 4
+
+        if hp == 9246:   # 64 is not fine enough.  Query times out
+            n_query = 256
+        elif hp == 9119:
+            n_query = 64
+
+        self._logger.debug(f'MAX_QUERY_ROWS: {MAX_QUERY_ROWS}')
+        self._logger.debug(f'Rows in healpix {hp}: {nrows}')
+        self._logger.debug(f'Queries to db: {n_query}')
         def _next_level(pixel):
             return [4 * pixel, 4 * pixel + 1, 4 * pixel + 2, 4 * pixel + 3]
 
@@ -116,57 +142,82 @@ class TrilegalMainCatalogCreator:
         current_nside = _NSIDE
         pixels = [healpy.ring2nest(_NSIDE, hp)]
 
-        while current_nside < _TRILEGAL_RING_NSIDE:
-            pixels = [pix for p in pixels for pix in _next_level(p)]
-            current_nside = current_nside * 2
+        use_ring = False
+        if n_query <= 64:
+            use_column = 'ring256'
+            while current_nside < _TRILEGAL_RING_NSIDE:
+                pixels = [pix for p in pixels for pix in _next_level(p)]
+                current_nside = current_nside * 2
 
-        ring_pixels = [healpy.nest2ring(_TRILEGAL_RING_NSIDE, p) for p in pixels]
-        in_pixels = ','.join(str(p) for p in ring_pixels)
+            query_pixels = [healpy.nest2ring(_TRILEGAL_RING_NSIDE, p) for p in pixels]
+        else:
+            use_column = 'nest4096'
+            while current_nside < _TRILEGAL_NEST_NSIDE:
+                pixels = [pix for p in pixels for pix in _next_level(p)]
+                current_nside = current_nside * 2
 
-        # Form query
+            query_pixels = pixels
+        # Form the queries and issue them
         to_select = ['ra', 'dec', 'av', 'pmracosd', 'pmdec', 'vrad', 'mu0',
                      'label as evol_label', 'logte as logT', 'logg',
                      'logl as logL', 'z as Z',
                      'umag', 'gmag', 'rmag', 'imag', 'zmag', 'ymag']
-        q = 'select ' + ','.join(to_select)
-        q += f' from {self._truth_catalog} where ring256 in ({in_pixels})'
-
-        #   q += ' and label = 1'  # main sequence only
-
-        # 600 seconds is max timeout allowed for synchronous query
-        results = qc.query(adql=q, fmt='pandas', timeout=600)
-        n_row = len(results['ra'])
-        if not n_row:
-            return 0
-
-        self._logger.info(f'rows returned: {n_row}')
-
-        # generate id
-        id_prefix = f'{self._truth_catalog}_hp{hp}_'
-        results['id'] = [f'{id_prefix}{n}' for n in range(n_row)]
-
-        l_bnd = 0
-        u_bnd = min(n_row, self._stride)
-        rg_written = 0
-        outpath = ''
-
+        # all_results = []
         writer = None
-        if not writer:
-            outpath = os.path.join(self._output_dir,
-                                   f'trilegal_{hp}.parquet')
-            writer = pq.ParquetWriter(outpath, arrow_schema)
+        rg_written = 0
+        per_query = int(len(query_pixels) / n_query)
+        so_far = 0
+        for iq in range(n_query):
+            in_pixels = ','.join(str(p) for p in query_pixels[iq*per_query:(iq+1)*per_query])
 
-        while u_bnd > l_bnd:
-            out_dict = {k: results[k][l_bnd: u_bnd] for k in results}
-            out_df = pd.DataFrame.from_dict(out_dict)
-            out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
-            writer.write_table(out_table)
-            l_bnd = u_bnd
-            u_bnd = min(l_bnd + self._stride, n_row)
-            rg_written += 1
-            del out_dict
-            del out_df
-            del out_table
+            q = 'select ' + ','.join(to_select)
+
+            q += f' from {self._truth_catalog} where {use_column} in ({in_pixels})'
+            self._logger.debug(f'column {use_column} pixels {in_pixels}')
+            # 600 seconds is max timeout allowed for synchronous query
+            # 300 is generous.  Returning 6 million rows took 80 sec.
+            # Hardly any of these queries return that many rows.
+            try:
+                results = qc.query(adql=q, fmt='pandas', timeout=300)
+            except dl.queryClient.queryClientError as e:
+                self._logger.debug(str(e))
+                self._logger.debug('Sleep and retry')
+                sleep(10)
+                results = qc.query(adql=q, fmt='pandas', timeout=600)
+
+            n_row = len(results['ra'])
+            if not n_row:
+                continue
+            self._logger.info(f'rows returned: {n_row}')
+
+            # generate id
+            id_prefix = f'{self._truth_catalog}_hp{hp}_'
+            results['id'] = [f'{id_prefix}{n}' for n in range(so_far, so_far + n_row)]
+            so_far += n_row
+            l_bnd = 0
+            u_bnd = min(n_row, self._stride)
+            outpath = ''
+
+            if not writer:
+                outpath = os.path.join(self._output_dir,
+                                       f'trilegal_{hp}.parquet')
+                writer = pq.ParquetWriter(outpath, arrow_schema)
+
+            while u_bnd > l_bnd:
+                out_dict = {k: results[k][l_bnd: u_bnd] for k in results}
+                out_df = pd.DataFrame.from_dict(out_dict)
+                out_table = pa.Table.from_pandas(out_df, schema=arrow_schema)
+
+                # Parquet default max rows in a row group is 1M. Since
+                # trilegal has a small number of columns, we can afford
+                # to have more rows.
+                writer.write_table(out_table, row_group_size=self._stride)
+                l_bnd = u_bnd
+                u_bnd = min(l_bnd + self._stride, n_row)
+                rg_written += 1
+                del out_dict
+                del out_df
+                del out_table
 
         writer.close()
         self._logger.debug(f'# row groups written to {outpath}: {rg_written}')
