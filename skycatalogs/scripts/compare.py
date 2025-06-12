@@ -18,7 +18,7 @@ parser.add_argument('file2',
 full path to the second file OR just containing directory (including final
 slash) if basename is the same as for file1''')
 parser.add_argument('--object-type', default=None,
-                    choices=['galaxy', 'star', 'sso', None],
+                    choices=['galaxy', 'star', 'sso', 'trilegal', None],
                     help='If None deduce from file name')
 parser.add_argument('--catalog-type', default=None,
                     choices=['main', 'flux', None],
@@ -72,6 +72,8 @@ if len(cols) == 0:
             cols.extend(['id', 'MW_av', 'magnorm'])
         elif obj == 'sso':
             cols.extend(['id', 'mjd', 'trailed_source_mag'])
+        elif obj == 'trilegal':
+            cols.extend(['id', 'logT', 'imag'])
 
 pq_file1 = pq.ParquetFile(file1)
 pq_file2 = pq.ParquetFile(file2)

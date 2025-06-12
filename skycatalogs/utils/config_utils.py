@@ -391,11 +391,13 @@ def assemble_provenance(pkg_root, inputs={}, run_options=None,
         code_version = 'unknown'
     version_d['code_version'] = code_version
 
-    repo = git.Repo(pkg_root)
-    has_uncommited = repo.is_dirty()
-    has_untracked = (len(repo.untracked_files) > 0)
+    to_return = dict()
 
     if have_git:
+        repo = git.Repo(pkg_root)
+        has_uncommited = repo.is_dirty()
+        has_untracked = (len(repo.untracked_files) > 0)
+
         git_d = {}
         git_d['git_hash'] = repo.commit().hexsha
         git_d['git_branch'] = repo.active_branch.name
@@ -408,7 +410,6 @@ def assemble_provenance(pkg_root, inputs={}, run_options=None,
             status.append('CLEAN')
         git_d['git_status'] = status
 
-        to_return = dict()
         to_return['versioning'] = version_d
         to_return['skyCatalogs_repo'] = git_d
 

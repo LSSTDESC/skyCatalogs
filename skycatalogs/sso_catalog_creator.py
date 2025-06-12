@@ -190,7 +190,6 @@ class SsoFluxCatalogCreator:
         Parameters
         ----------
         catalog_creator   instance of FluxCatalogCreator
-        sso_truth         path to input data directory
         '''
         self._catalog_creator = catalog_creator
         self._output_dir = catalog_creator._output_dir

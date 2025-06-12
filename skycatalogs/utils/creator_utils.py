@@ -1,4 +1,7 @@
+import os
+from pathlib import Path
 import numpy as np
+import pandas as pd
 from dustmaps.sfd import SFDQuery
 
 _Av_adjustment = 2.742
@@ -31,3 +34,14 @@ def make_MW_extinction_av(ra, dec):
 
 def make_MW_extinction_rv(ra, dec):
     return np.full_like(np.array(ra), _MW_rv_constant)
+
+
+PACKAGE_DIR = os.path.dirname(os.path.abspath(str(Path(__file__).parent.parent)))
+DATA_DIR = os.path.join(PACKAGE_DIR, "skycatalogs", "data")
+
+
+def get_trilegal_hp_nrows(hp, nside=32):
+    counts_path = os.path.join(DATA_DIR, "trilegal", "star_counts.parquet")
+    tbl = pd.read_parquet(counts_path)
+    nrows = (tbl.query("hp_ring_id == @hp")["hp_star_count"]).values[0]
+    return nrows

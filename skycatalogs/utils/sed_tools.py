@@ -4,6 +4,7 @@ from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
 import astropy.constants
 import h5py
+import pandas as pd
 
 import numpy as np
 from pathlib import PurePath
@@ -11,8 +12,8 @@ from dust_extinction.parameter_averages import F19
 import galsim
 
 __all__ = ['TophatSedFactory', 'DiffskySedFactory', 'SsoSedFactory',
-           'MilkyWayExtinction', 'get_star_sed_path', 'generate_sed_path',
-           'normalize_sed']
+           'MilkyWayExtinction', 'TrilegalSedFactory', 'get_star_sed_path',
+           'generate_sed_path', 'normalize_sed']
 
 _FILE_PATH = str(PurePath(__file__))
 _SKYCATALOGS_DIR = _FILE_PATH[:_FILE_PATH.rindex('/skycatalogs')]
@@ -211,12 +212,107 @@ class DiffskySedFactory:
         return seds
 
 
+class TrilegalSedFactory():
+
+    def __init__(self, object_type_config):
+        '''
+        Parameters
+        ----------
+        object_type_config  dict containing section of the sky catalog
+                            config pertaining to object type 'trilegal'
+        '''
+        self._pystellib = None
+
+    def get_sed(self, tri):
+        '''
+        Parameters
+        ----------
+        tri  a trilegal object
+
+        Returns
+        -------
+        galsim sed object.
+
+        If SED file present, find row and wave length values in sed file
+        Otherwise use quantities in main parquet file + pystellibs
+        In either case return unextincted, unnormalized, unthinned SED,
+        just as calculated by pystellib, except converted from Angstroms
+        to nm. The other transformations are handled elsewhere
+        '''
+        if not self._pystellib:
+            from pystellibs import BTSettl
+            self._pystellib = BTSettl(medres=False)
+            self._wl = self._pystellib.wavelength / 10 # convert to nm
+
+        # Get inputs from parquet file
+        native = ['logT', 'logg', 'logL', 'Z']
+        spec_inputs = [tri.get_native_attribute(x) for x in native]
+
+        # May generate a runtime error if parameters are outside
+        # interpolation range
+        try:
+            spectrum = self._pystellib.generate_stellar_spectrum(*spec_inputs)
+        except RuntimeError:
+            return None
+
+        if np.isnan(spectrum[0]):
+            return None
+        # Convert spectrum units as well
+        spectrum = spectrum * 10
+
+        sed_table = galsim.LookupTable(self._wl, spectrum)
+        sed = galsim.SED(sed_table, 'nm', 'flambda')
+
+        return sed
+
+    def get_spectra_batch(self, pq_main, batch, l_bnd, u_bnd):
+        '''
+        Return spectra (still will need to be converted to observer SED)
+        as computed by pystellibs for a subset (slice of a row group
+        in the case of parquet input which for now is the only type
+        supported).
+
+        Parameters
+        ----------
+        pq_main     ParquetFile object for the "main" catalog for
+                    healpixel of interest
+        batch       row group for which spectra are to be returned
+        l_bnd       Delimits slice
+        u_bnd       Delimits slics
+
+        Returns
+        -------
+        wavelength axis  numpy array of dimension n_wl
+        flux values      numpy array  with shape (n_obj, n_wl)
+
+        '''
+        if not self._pystellib:
+            from pystellibs import BTSettl
+            self._pystellib = BTSettl(medres=False)
+
+        columns = ['id', 'logT', 'logg', 'logL', 'Z', 'mu0']
+        a_dict = pq_main.read_row_group(batch, columns=columns).to_pydict()
+        for k in a_dict.keys():
+            a_dict[k] = a_dict[k][l_bnd: u_bnd]
+        df = pd.DataFrame(a_dict)
+        wl_axis, spectra = self._pystellib.generate_individual_spectra(df)
+        #    self._logger.info('Computed spectra')
+        # Convert wl_axis, spectra from A to nm.
+        wl_axis = wl_axis / 10
+        spectra = spectra * 10
+        spectra_32 = spectra.astype(np.float32)
+        del df
+        del spectra
+        return wl_axis, spectra_32
+
+
 class SsoSedFactory():
     '''
     Load the single SED used for SSO objects and make it available as galsim
     SED
     '''
     DEFAULT_SED_BNAME = 'solar_sed_thin.txt'
+
     def __init__(self, sed_path=None):
         '''
         Format of sed file is two-column text file, which galsim can
@@ -274,7 +370,7 @@ class MilkyWayExtinction:
     def extinguish(self, sed, mwAv):
         ext = self.extinction.extinguish(self.wls*u.nm, Av=mwAv)
         lut = galsim.LookupTable(self.wls, ext, interpolant='linear')
-        mw_ext = galsim.SED(lut, wave_type='nm', flux_type='1').thin()
+        mw_ext = galsim.SED(lut, wave_type='nm', flux_type='1')
         sed = sed*mw_ext
         return sed
 
