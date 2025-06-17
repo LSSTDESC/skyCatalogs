@@ -119,8 +119,10 @@ class TrilegalMainCatalogCreator:
         n_query = 1
         if nrows > MAX_QUERY_ROWS:
             # break up into several queries
-            if nrows > 50 * MAX_QUERY_ROWS:
+            if nrows > 60 * MAX_QUERY_ROWS:
                 n_query = 64
+            elif nrows > 30 * MAX_QUERY_ROWS:
+                n_query = 32
             elif nrows > 16 * MAX_QUERY_ROWS:
                 n_query = 16
             else:
@@ -142,7 +144,6 @@ class TrilegalMainCatalogCreator:
         current_nside = _NSIDE
         pixels = [healpy.ring2nest(_NSIDE, hp)]
 
-        use_ring = False
         if n_query <= 64:
             use_column = 'ring256'
             while current_nside < _TRILEGAL_RING_NSIDE:
@@ -178,12 +179,20 @@ class TrilegalMainCatalogCreator:
             # 300 is generous.  Returning 6 million rows took 80 sec.
             # Hardly any of these queries return that many rows.
             try:
-                results = qc.query(adql=q, fmt='pandas', timeout=300)
-            except dl.queryClient.queryClientError as e:
-                self._logger.debug(str(e))
-                self._logger.debug('Sleep and retry')
-                sleep(10)
+                # results = qc.query(adql=q, fmt='pandas', timeout=300)
+                now = datetime.now().isoformat()[:19]
+                self._logger.debug(f'About to issue query {str(now)}')
                 results = qc.query(adql=q, fmt='pandas', timeout=600)
+                # except qc.queryClientError as e:
+            except Exception as e:
+                now = datetime.now().isoformat()[:19]
+                self._logger.debug(f'Exception at time {str(now)}')
+                self._logger.debug(str(e))
+                raise
+
+                # self._logger.debug('Sleep and retry')
+                # sleep(10)
+                # results = qc.query(adql=q, fmt='pandas', timeout=600)
 
             n_row = len(results['ra'])
             if not n_row:
