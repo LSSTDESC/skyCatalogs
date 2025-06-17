@@ -720,6 +720,8 @@ class SkyCatalog(object):
             subpixels = False
             active_nsub = [hp]    # only used for trilegal
             if object_type == "trilegal" and rdr.n_row_groups > 1:
+                # Row groups form a spatial partition.  May not need to
+                # search them all
                 n_gps = rdr.n_row_groups
                 #  Get sub hps
                 subpixels = True
@@ -734,8 +736,7 @@ class SkyCatalog(object):
             for rg in range(rdr.n_row_groups):
                 if subpixels:
                     # need to find out whether the region intersects
-                    # the row group at all.   Get subpixels assoc. with
-                    # this row group.  See if they intersect active_nsub.
+                    # the row group at all.
                     rg_subs = set(subs[rg])
                     if not active_nsub.intersection(rg_subs):
                         continue

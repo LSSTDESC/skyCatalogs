@@ -1,12 +1,10 @@
 import os
 import sys
-from time import sleep
 from multiprocessing import Process, Pipe
 from datetime import datetime
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import healpy
 import numpy as np
 import json
 import galsim
@@ -15,6 +13,7 @@ from skycatalogs.objects.trilegal_object import TrilegalConfigFragment
 from skycatalogs.utils.config_utils import assemble_provenance
 from skycatalogs.utils.config_utils import assemble_file_metadata
 from skycatalogs.utils.creator_utils import get_trilegal_hp_nrows
+from skycatalogs.utils.creator_utils import find_trilegal_subpixels
 
 """
 Code for creating sky catalogs for trilegal stars
@@ -104,7 +103,6 @@ class TrilegalMainCatalogCreator:
 
         '''
 
-        ## MAX_QUERY_ROWS = 10_000_000
         MAX_QUERY_ROWS = 1_000_000
         #   MAX_QUERY_ROWS = 100_000            # temp for testing
 
@@ -112,53 +110,11 @@ class TrilegalMainCatalogCreator:
         # separately installed
         from dl import queryClient as qc
         _NSIDE = 32
-        _TRILEGAL_RING_NSIDE = 256
-        _TRILEGAL_NEST_NSIDE = 4096
 
+        # Form queries and issue
         nrows = get_trilegal_hp_nrows(hp, nside=_NSIDE)
-        n_query = 1
-        if nrows > MAX_QUERY_ROWS:
-            # break up into several queries
-            if nrows > 60 * MAX_QUERY_ROWS:
-                n_query = 64
-            elif nrows > 30 * MAX_QUERY_ROWS:
-                n_query = 32
-            elif nrows > 16 * MAX_QUERY_ROWS:
-                n_query = 16
-            else:
-                n_query = 4
-
-        if hp == 9246:   # 64 is not fine enough.  Query times out
-            n_query = 256
-        elif hp == 9119:
-            n_query = 64
-
-        self._logger.debug(f'MAX_QUERY_ROWS: {MAX_QUERY_ROWS}')
-        self._logger.debug(f'Rows in healpix {hp}: {nrows}')
-        self._logger.debug(f'Queries to db: {n_query}')
-        def _next_level(pixel):
-            return [4 * pixel, 4 * pixel + 1, 4 * pixel + 2, 4 * pixel + 3]
-
-        # Find all subpixels contained in our pixel with nside 256,
-        # which is what the Trilegal catalog uses
-        current_nside = _NSIDE
-        pixels = [healpy.ring2nest(_NSIDE, hp)]
-
-        if n_query <= 64:
-            use_column = 'ring256'
-            while current_nside < _TRILEGAL_RING_NSIDE:
-                pixels = [pix for p in pixels for pix in _next_level(p)]
-                current_nside = current_nside * 2
-
-            query_pixels = [healpy.nest2ring(_TRILEGAL_RING_NSIDE, p) for p in pixels]
-        else:
-            use_column = 'nest4096'
-            while current_nside < _TRILEGAL_NEST_NSIDE:
-                pixels = [pix for p in pixels for pix in _next_level(p)]
-                current_nside = current_nside * 2
-
-            query_pixels = pixels
-        # Form the queries and issue them
+        out_nside, out_ring, query_pixels = find_trilegal_subpixels(hp, nrows)
+        n_query = len(query_pixels)
         to_select = ['ra', 'dec', 'av', 'pmracosd', 'pmdec', 'vrad', 'mu0',
                      'label as evol_label', 'logte as logT', 'logg',
                      'logl as logL', 'z as Z',
@@ -166,10 +122,14 @@ class TrilegalMainCatalogCreator:
         # all_results = []
         writer = None
         rg_written = 0
-        per_query = int(len(query_pixels) / n_query)
+        if out_ring:
+            use_column = 'ring256'
+        else:
+            use_column = 'nest4096'
+        # per_query = int(len(query_pixels) / n_query)
         so_far = 0
         for iq in range(n_query):
-            in_pixels = ','.join(str(p) for p in query_pixels[iq*per_query:(iq+1)*per_query])
+            in_pixels = ','.join(str(p) for p in query_pixels[iq])
 
             q = 'select ' + ','.join(to_select)
 
@@ -179,20 +139,14 @@ class TrilegalMainCatalogCreator:
             # 300 is generous.  Returning 6 million rows took 80 sec.
             # Hardly any of these queries return that many rows.
             try:
-                # results = qc.query(adql=q, fmt='pandas', timeout=300)
                 now = datetime.now().isoformat()[:19]
                 self._logger.debug(f'About to issue query {str(now)}')
                 results = qc.query(adql=q, fmt='pandas', timeout=600)
-                # except qc.queryClientError as e:
             except Exception as e:
                 now = datetime.now().isoformat()[:19]
                 self._logger.debug(f'Exception at time {str(now)}')
                 self._logger.debug(str(e))
                 raise
-
-                # self._logger.debug('Sleep and retry')
-                # sleep(10)
-                # results = qc.query(adql=q, fmt='pandas', timeout=600)
 
             n_row = len(results['ra'])
             if not n_row:
