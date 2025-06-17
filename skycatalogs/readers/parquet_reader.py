@@ -46,6 +46,10 @@ class ParquetReader:
     def n_row_groups(self):
         return self._meta.num_row_groups
 
+    @property
+    def n_rows(self):
+        return self._meta.num_rows
+
     def read_columns(self, cols, mask, row_group=-1, no_np=False):
         '''
         Parameters
