@@ -725,16 +725,20 @@ class SkyCatalog(object):
                 n_gps = rdr.n_row_groups
                 #  Get sub hps
                 subpixels = True
+                use_all = False
                 n_rows = the_reader.n_rows
                 sub_nside, out_ring, subs = find_trilegal_subpixels(hp, n_rows,
                                                                     n_gps=n_gps)
 
                 # Now find subpixels intersecting the regions
-                active_nsub = set(_get_intersecting_hps(out_ring, sub_nside,
-                                                        region))
+                if region:
+                    active_nsub = set(_get_intersecting_hps(out_ring, sub_nside,
+                                                            region))
+                else:  # region == None means use full pixel
+                    use_all = True
 
             for rg in range(rdr.n_row_groups):
-                if subpixels:
+                if subpixels and not use_all:
                     # need to find out whether the region intersects
                     # the row group at all.
                     rg_subs = set(subs[rg])
