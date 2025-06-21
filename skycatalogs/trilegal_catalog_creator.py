@@ -388,7 +388,7 @@ class TrilegalFluxCatalogCreator:
                     p_list.append(proc)
                     lb = u
                     u = min(lb + n_per, u_bnd)
-                self._logger.debug('Processes started')
+                self._logger.debug('Proceses started')
                 for i in range(n_parallel):
                     ready = readers[i].poll(tm)
                     if not ready:
@@ -409,10 +409,11 @@ class TrilegalFluxCatalogCreator:
             out_df = pd.DataFrame.from_dict(out_dict)
             out_table = pa.Table.from_pandas(out_df,
                                              schema=arrow_schema)
+            n_row = len(out_table['id'])
 
             if not writer:
                 writer = pq.ParquetWriter(output_path, arrow_schema)
-            writer.write_table(out_table)
+            writer.write_table(out_table, row_group_size=n_row)
 
             rg_written += 1
 
