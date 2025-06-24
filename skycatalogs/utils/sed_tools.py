@@ -260,7 +260,7 @@ class TrilegalSedFactory():
         # Convert spectrum units as well
         spectrum = spectrum * 10
 
-        sed_table = galsim.LookupTable(self._wl, spectrum)
+        sed_table = galsim.LookupTable(self._wl, spectrum, interpolant='linear')
         sed = galsim.SED(sed_table, 'nm', 'flambda')
 
         return sed
