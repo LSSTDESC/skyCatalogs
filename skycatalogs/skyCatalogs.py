@@ -208,6 +208,7 @@ class SkyCatalog(object):
         self._schema_version = self._config.schema_version
         if not self._schema_version:
             self._cat_dir = config['root_directory']
+            self._schema_version = '0.0.0'
         else:
             sky_root = config['skycatalog_root']        # default
             if skycatalog_root:
@@ -218,6 +219,13 @@ class SkyCatalog(object):
                     sky_root = sky_root_env
 
             self._cat_dir = os.path.join(sky_root, config['catalog_dir'])
+
+        # looking ahead to when schema version might affect code behavior
+        try:
+            self._schema_cmp = [int(c) for c in self._schema_version.split('.')]
+        except ValueError:
+            print('Components of config schema version must be int')
+            raise
 
         self._sky_root = os.path.abspath(sky_root)
 
@@ -497,6 +505,8 @@ class SkyCatalog(object):
         else:
             obj_types = set(self.get_object_type_names()).intersection(obj_type_set)
         obj_types = self.toplevel_only(obj_types)
+        if 'galaxy' in obj_types and 'diffsky_galaxy' in obj_types:
+            raise ValueError('Only one of galaxy, diffsky_galaxy allowed')
 
         # Ensure they're always ordered the same way
         obj_types = list(obj_types)
