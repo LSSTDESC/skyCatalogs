@@ -177,7 +177,7 @@ def _read_fits(htm_id, gaia_config, sky_root, out_dict, logger, region=None):
     ra_full_deg = np.degrees(ra_full)
     dec_full_deg = np.degrees(dec_full)
 
-    mask = region.get_mask(ra_full_deg, dec_full_deg)
+    mask = region.compute_mask(ra_full_deg, dec_full_deg)
 
     if all(mask):
         return
