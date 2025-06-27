@@ -76,13 +76,13 @@ def find_trilegal_subpixels(hp, n_rows, in_nside=32, n_gps=None,
     be   [ [hp] ]
 
     '''
-    if n_rows <= max_query_rows:
-        return in_nside, True, [[hp]]
-
+    # For almost all cases
     out_nside = _TRILEGAL_RING_NSIDE
     out_ring = True
 
-    if n_rows > max_query_rows:
+    if n_rows <= max_query_rows:
+        n_group = 1
+    else:
         # break up into several queries
         if n_rows > 60 * max_query_rows:
             n_group = 64
