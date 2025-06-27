@@ -128,7 +128,7 @@ class Disk(Region):
         ra = lsst.geom.Angle(self.ra, lsst.geom.degrees)
         dec = lsst.geom.Angle(self.dec, lsst.geom.degrees)
         center = lsst.geom.SpherePoint(ra, dec)
-        radius = lsst.geom.Angle(self.radius.to_value("degree"))
+        radius = lsst.geom.Angle(self.radius.to_value("degree"), lsst.geom.degrees)
         return Circle(center.getVector(), radius)
 
 
