@@ -1,3 +1,6 @@
+![CI](https://github.com/LSSTDESC/skyCatalogs/actions/workflows/ci.yml/badge.svg?branch=main)
+
+
 # The skyCatalogs package
 
 This package contains
