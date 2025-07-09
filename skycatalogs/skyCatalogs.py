@@ -10,7 +10,6 @@ from skycatalogs.objects.base_object import _load_lsst_bandpasses
 from skycatalogs.objects.base_object import _load_roman_bandpasses
 from skycatalogs.utils.catalog_utils import CatalogContext
 from skycatalogs.objects.base_object import ObjectList, ObjectCollection
-from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
 from skycatalogs.objects.sso_object import SsoObject, SsoCollection
 from skycatalogs.objects.sso_object import EXPOSURE_DEFAULT
 from skycatalogs.readers import ParquetReader
@@ -262,6 +261,7 @@ class SkyCatalog(object):
 
         # register object types which are in the config
         if 'gaia_star' in config['object_types']:
+            from skycatalogs.objects.gaia_object import GaiaObject, GaiaCollection
             self.cat_cxt.register_source_type('gaia_star',
                                               object_class=GaiaObject,
                                               collection_class=GaiaCollection,
