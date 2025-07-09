@@ -14,11 +14,16 @@ classifiers = [
 ]
 keywords = ["desc", "python", "catalog", "simulation"]
 dependencies = [
-    'numpy',
-    'healpy',
     'astropy',
-    'pyarrow',
+    'dust_extinction',
+    'dustmaps',
+    'galsim',
+    'lsst-sphgeom',
+    'h5py',
+    'healpy',
+    'numpy',
     'pandas',
+    'pyarrow',
 ]
 requires-python = ">=3.7" # For setuptools >= 61.0 support
 
