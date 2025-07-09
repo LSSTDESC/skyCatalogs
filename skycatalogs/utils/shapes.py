@@ -219,5 +219,6 @@ class PolygonalRegion(Region):
         return healpy.query_polygon(nside, self.get_vertices(),
                                     inclusive=True, nest=nest)
 
-    def refcat_region(self):
+    def sphgeom_region(self):
+        """Enclosing region expressed as lsst.sphgeom.ConvexPolygon."""
         return self._convex_polygon
