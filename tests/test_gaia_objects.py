@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import lsst.daf.butler as daf_butler
 from skycatalogs import skyCatalogs
-from skycatalogs.objects import GaiaCollection
+from skycatalogs.objects.gaia_object import GaiaCollection
 from skycatalogs.utils import Disk
 
 
