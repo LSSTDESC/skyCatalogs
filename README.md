@@ -19,7 +19,7 @@ $ nosetests <skyCatalogs install directory>
 ## Demo
 
 ## People
-* [Joanne Bogart](https://github.com/DarkEnergyScienceCollaboration/skyCatalogs/issues/new?body=@JoanneBogart) (SLAC)
+* [Joanne Bogart](https://github.com/LSSTDESC/skyCatalogs/issues/new?body=@JoanneBogart) (SLAC)
 
 ## License, etc.
 
