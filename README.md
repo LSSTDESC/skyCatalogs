@@ -1,6 +1,6 @@
 # The skyCatalogs package
 
-This package contains 
+This package contains
 * code to create sky catalogs from input like cosmoDC2 (for galaxies) and similar catalogs for other source types
 * an API to access information in the catalogs and products, such as flux calculations, derived from the catalogs
 
@@ -23,4 +23,4 @@ $ nosetests <skyCatalogs install directory>
 
 ## License, etc.
 
-This is open source software, available under the BSD license. If you are interested in this project, please do drop us a line via the hyperlinked contact names above, or by [writing us an issue](https://github.com/DarkEnergyScienceCollaboration/skyCatalogs/issues/new).
+This is open source software, available under the BSD license. If you are interested in this project, please do drop us a line via the hyperlinked contact names above, or by [writing us an issue](https://github.com/LSSTDESC/skyCatalogs/issues/new).
