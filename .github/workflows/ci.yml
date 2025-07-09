@@ -15,13 +15,13 @@ on:
       - cron: 0 23 * * 4
 
 jobs:
-    build:
+    rubin_sim_data:
         runs-on: ${{ matrix.os }}
 
         strategy:
             matrix:
                 os: [ ubuntu-latest ]
-                py: [ "3.11" ]
+                py: [ "3.12" ]
                 CC: [ gcc ]
                 CXX: [ g++ ]
 
@@ -33,28 +33,57 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Setup conda
-              uses: conda-incubator/setup-miniconda@v3
+            - name: Cache files
+              uses: actions/cache@v4
+              id: cache-rubin-sim-data
+              env:
+                cache-name: cache-rubin-sim-data
               with:
-                  activate-environment: stack
-                  python-version: ${{ matrix.py }}
-                  condarc-file: etc/.condarc
+                path: rubin_sim_data/
+                key: rubin_sim_data_files
 
-            - name: Install conda deps
+            - name: Install rubin_sim_data (if not cached)
+              if: ${{ steps.cache-rubin-sim-data.outputs.cache-hit != 'true' }}
               run: |
-                conda update -n base conda
-                conda info
-                conda list
-                conda install -y --file etc/conda_requirements.txt
-                conda info
+                echo ${{ steps.cache-rubin-sim-data.outputs.cache-hit }}
+                mkdir rubin_sim_data
+                mkdir rubin_sim_data/sims_sed_library
+                # Just get the throughputs and SED data for now.
+                curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/rubin_sim_data/throughputs_2023_09_07.tgz | tar -C rubin_sim_data -xz
+                curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/sed_library/seds_170124.tar.gz  | tar -C rubin_sim_data/sims_sed_library -xz
 
-            - name: Install dust_extinction
-              run: |
-                conda install -y dust_extinction
-                conda info
+    no-stack-build:
+        needs: [rubin_sim_data]
+        runs-on: ${{ matrix.os }}
 
-            - name: Install rubin_sim_data
+        strategy:
+            matrix:
+                os: [ ubuntu-latest ]
+                py: [ "3.12" ]
+                CC: [ gcc ]
+                CXX: [ g++ ]
+
+        defaults:
+            run:
+                # cf. https://github.com/conda-incubator/setup-miniconda#important
+                shell: bash -l {0}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Cache files
+              uses: actions/cache@v4
+              id: cache-rubin-sim-data
+              env:
+                cache-name: cache-rubin-sim-data
+              with:
+                path: rubin_sim_data/
+                key: rubin_sim_data_files
+
+            - name: Install rubin_sim_data (if not cached)
+              if: ${{ steps.cache-rubin-sim-data.outputs.cache-hit != 'true' }}
               run: |
+                echo ${{ steps.cache-rubin-sim-data.outputs.cache-hit }}
                 mkdir rubin_sim_data
                 mkdir rubin_sim_data/sims_sed_library
                 # Just get the throughputs and SED data for now.
@@ -62,16 +91,75 @@ jobs:
                 curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/sed_library/seds_170124.tar.gz  | tar -C rubin_sim_data/sims_sed_library -xz
 
             - name: Install skyCatalogs
-              run:
+              run: |
+                pip install pytest
                 pip install .
 
-            - name: Install test deps
-              run:
-                conda install -y pytest nose
+            - name: Run tests without the LSST Stack
+              run: |
+                export RUBIN_SIM_DATA_DIR=`pwd`/rubin_sim_data
+                export SIMS_SED_LIBRARY_DIR=${RUBIN_SIM_DATA_DIR}/sims_sed_library
+                pytest --ignore-glob=tests/test_gaia*.py
 
-            - name: Run tests
+    full-stack-build:
+        needs: [rubin_sim_data]
+        runs-on: ${{ matrix.os }}
+
+        strategy:
+            matrix:
+                os: [ ubuntu-latest ]
+                py: [ "3.12" ]
+                CC: [ gcc ]
+                CXX: [ g++ ]
+
+        defaults:
+            run:
+                # cf. https://github.com/conda-incubator/setup-miniconda#important
+                shell: bash -l {0}
+
+        steps:
+            - uses: actions/checkout@v4
+            - name: Setup conda
+              uses: conda-incubator/setup-miniconda@v3
+              with:
+                  activate-environment: stack
+                  python-version: ${{ matrix.py }}
+                  condarc-file: etc/.condarc
+
+            - name: Load cached files
+              uses: actions/cache@v4
+              id: cache-rubin-sim-data
+              env:
+                cache-name: cache-rubin-sim-data
+              with:
+                path: rubin_sim_data/
+                key: rubin_sim_data_files
+
+            - name: Install rubin_sim_data (if not cached)
+              if: ${{ steps.cache-rubin-sim-data.outputs.cache-hit != 'true' }}
+              run: |
+                mkdir rubin_sim_data
+                mkdir rubin_sim_data/sims_sed_library
+                # Just get the throughputs and SED data for now.
+                curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/rubin_sim_data/throughputs_2023_09_07.tgz | tar -C rubin_sim_data -xz
+                curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/sed_library/seds_170124.tar.gz  | tar -C rubin_sim_data/sims_sed_library -xz
+
+            - name: Install conda test deps
+              run: |
+                conda update -n base conda
+                conda info
+                conda list
+                conda install -y --file etc/conda_test_requirements.txt
+                conda info
+
+            - name: Install dependencies via conda
+              run: |
+                conda install -y --file etc/conda_requirements.txt
+                pip install --no-deps .
+
+            - name: Run tests with the LSST Stack
               run: |
                 export RUBIN_SIM_DATA_DIR=`pwd`/rubin_sim_data
                 export SIMS_SED_LIBRARY_DIR=${RUBIN_SIM_DATA_DIR}/sims_sed_library
                 eups list lsst_distrib
-                pytest
+                pytest --cov=skyCatalogs --cov-report=xml --cov-report=term-missing
