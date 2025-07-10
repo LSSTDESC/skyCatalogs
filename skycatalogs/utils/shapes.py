@@ -3,8 +3,7 @@ import numpy as np
 import healpy
 from astropy import units as u
 import healpy
-import lsst.geom
-from lsst.sphgeom import ConvexPolygon, UnitVector3d, LonLat, Circle
+from lsst.sphgeom import Angle, ConvexPolygon, UnitVector3d, LonLat, Circle
 
 __all__ = ['Box', 'Disk', 'PolygonalRegion']
 
@@ -125,11 +124,9 @@ class Disk(Region):
 
     def sphgeom_region(self):
         """Enclosing region expressed as lsst.sphgeom.Circle."""
-        ra = lsst.geom.Angle(self.ra, lsst.geom.degrees)
-        dec = lsst.geom.Angle(self.dec, lsst.geom.degrees)
-        center = lsst.geom.SpherePoint(ra, dec)
-        radius = lsst.geom.Angle(self.radius.to_value("degree"), lsst.geom.degrees)
-        return Circle(center.getVector(), radius)
+        center = LonLat.fromDegrees(self.ra, self.dec)
+        radius = Angle(self.radius.to_value("radian"))
+        return Circle(UnitVector3d(center), radius)
 
 
 class PolygonalRegion(Region):
@@ -219,5 +216,6 @@ class PolygonalRegion(Region):
         return healpy.query_polygon(nside, self.get_vertices(),
                                     inclusive=True, nest=nest)
 
-    def refcat_region(self):
+    def sphgeom_region(self):
+        """Enclosing region expressed as lsst.sphgeom.ConvexPolygon."""
         return self._convex_polygon
