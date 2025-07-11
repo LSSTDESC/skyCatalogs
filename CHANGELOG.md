@@ -1,3 +1,23 @@
+## Version 2.1.0
+- Allow for non-imaging Roman bandpasses (i.e., grism and prism)
+- Bugfix for PolygonalRegion.compute_mask
+- Minimize LSST stack dependencies
+
+## Version 2.0.1
+- Bugfix for PolygonalRegion.compute_mask
+- Pass object type for external catalog registration and loading
+
+## Version 2.0.0
+
+- Bugfix for get_config_value
+- Bugfix for units
+- Treat SSOs with zero length streaks as point sources
+- Use thinned solar SEDs for SSOs.
+- Refactor region handling
+- Including provenance information when creating parquet catalog files
+- Refactor of config file creation. Use internal code for yaml !INCLUDE directive handling
+- Publishing documentation to https://lsstdesc.org/skyCatalogs/
+
 ## Version 1.7.0rc4
 
 - Support for OR4 fields
