@@ -18,12 +18,17 @@ dependencies = [
     'dust_extinction',
     'dustmaps',
     'galsim',
-    'lsst-sphgeom',
+    'gitpython',
     'h5py',
     'healpy',
+    'lsst-sphgeom',
+    'lsstdesc_diffsky',
+    'lsstdesc-gcr-catalogs[full]',
     'numpy',
     'pandas',
     'pyarrow',
+    'pyerfa',
+    'pyyaml',
 ]
 requires-python = ">=3.7" # For setuptools >= 61.0 support
 
