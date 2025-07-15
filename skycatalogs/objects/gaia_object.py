@@ -10,7 +10,6 @@ import erfa
 import astropy.modeling
 from astropy import units as u
 import galsim
-import lsst.geom
 
 # ## Need these for direct access and processing of fits files
 import lsst.afw.table as afwtable
