@@ -11,9 +11,6 @@ import astropy.modeling
 from astropy import units as u
 import galsim
 import lsst.geom
-# ## Next two lines needed only for butler access
-import lsst.daf.butler as daf_butler
-from lsst.meas.algorithms import ReferenceObjectLoader
 
 # ## Need these for direct access and processing of fits files
 import lsst.afw.table as afwtable
@@ -241,6 +238,9 @@ class GaiaCollection(ObjectCollection):
         sed_method = GaiaCollection.get_config().get('sed_method', 'use_lut')
         use_lut = (sed_method.strip().lower() == 'use_lut')
         if gaia_section['data_file_type'] == 'butler_refcat':
+            # ## Next two lines needed only for butler access
+            import lsst.daf.butler as daf_butler
+            from lsst.meas.algorithms import ReferenceObjectLoader
 
             butler_params = gaia_section['butler_parameters']
             butler = daf_butler.Butler(butler_params['repo'],
