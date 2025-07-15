@@ -13,7 +13,7 @@ import galsim
 
 # ## Need these for direct access and processing of fits files
 import lsst.afw.table as afwtable
-from lsst.sphgeom import HtmPixelization, Circle, LonLat
+from lsst.sphgeom import HtmPixelization
 
 from .base_object import BaseObject, ObjectCollection
 from .base_config_fragment import BaseConfigFragment
