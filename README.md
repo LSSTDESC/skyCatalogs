@@ -1,4 +1,5 @@
 ![CI](https://github.com/LSSTDESC/skyCatalogs/actions/workflows/ci.yml/badge.svg?branch=main)
+[![codecov](https://codecov.io/gh/LSSTDESC/skyCatalogs/branch/main/graph/badge.svg?branch=main)](https://codecov.io/gh/LSSTDESC/skyCatalogs)
 
 
 # The skyCatalogs package
