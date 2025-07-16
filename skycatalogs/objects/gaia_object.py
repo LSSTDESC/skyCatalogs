@@ -8,11 +8,10 @@ import numpy.ma as ma
 import pandas as pd
 import erfa
 import astropy.modeling
+from astropy.io import fits
 from astropy import units as u
 import galsim
 
-# ## Need these for direct access and processing of fits files
-import lsst.afw.table as afwtable
 from lsst.sphgeom import HtmPixelization
 
 from .base_object import BaseObject, ObjectCollection
@@ -160,15 +159,15 @@ def _read_fits(htm_id, gaia_config, sky_root, out_dict, logger, region=None):
         logger.info(f'No file for requested htm id {htm_id}: {f_path}')
         return
 
-    tbl = afwtable.SimpleCatalog.readFits(f_path)
+    tbl = fits.open(f_path)[1].data
     if region is None:
         for k in out_dict.keys():
-            out_dict[k] += list(tbl.get(k))
+            out_dict[k] += list(tbl[k])
         return
 
     # Otherwise start with ra, dec and create mask
-    ra_full = tbl.get('coord_ra')
-    dec_full = tbl.get('coord_dec')
+    ra_full = tbl['coord_ra']
+    dec_full = tbl['coord_dec']
 
     ra_full_deg = np.degrees(ra_full)
     dec_full_deg = np.degrees(dec_full)
@@ -191,7 +190,7 @@ def _read_fits(htm_id, gaia_config, sky_root, out_dict, logger, region=None):
     for k in out_dict.keys():
         if k in ('coord_ra', 'coord_dec'):
             continue
-        full = tbl.get(k)
+        full = tbl[k]
         if any(mask):
             out_dict[k] += list(ma.array(full, mask=mask).compressed())
         else:
