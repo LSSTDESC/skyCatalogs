@@ -17,6 +17,7 @@ dependencies = [
     'astropy',
     'dust_extinction',
     'dustmaps',
+    'esutil',
     'galsim',
     'gitpython',
     'h5py',
