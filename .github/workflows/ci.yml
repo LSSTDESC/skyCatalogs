@@ -155,13 +155,13 @@ jobs:
             - name: Install dependencies via conda
               run: |
                 conda install -y --file etc/conda_requirements.txt
-                pip install --no-deps .
 
             - name: Run tests with the LSST Stack
               run: |
                 export RUBIN_SIM_DATA_DIR=`pwd`/rubin_sim_data
                 export SIMS_SED_LIBRARY_DIR=${RUBIN_SIM_DATA_DIR}/sims_sed_library
                 eups list lsst_distrib
+                setup -k -r .
                 pytest --cov=skycatalogs --cov-report=xml --cov-report=term-missing tests/
 
             - name: Upload coverage to Codecov
