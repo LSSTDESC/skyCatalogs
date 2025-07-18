@@ -1,3 +1,8 @@
+## Version 2.1.1
+- Minimize LSST stack dependency further to simulate Gaia objects without it
+- Switch to `uv pip install` in CI
+- Correct python requirement to be `>=3.9`
+
 ## Version 2.1.0
 - Allow for non-imaging Roman bandpasses (i.e., grism and prism)
 - Bugfix for PolygonalRegion.compute_mask
