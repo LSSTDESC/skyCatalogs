@@ -161,7 +161,7 @@ def _read_fits(htm_id, gaia_config, sky_root, out_dict, logger, region=None):
     else:
         f_path = os.path.join(sky_root, f_dir, f_name)
     if not os.path.isfile(f_path):
-        logger.info(f'No file for requested htm id {htm_id}')
+        logger.info(f'No file for requested htm id {htm_id}: {f_path}')
         return
 
     tbl = afwtable.SimpleCatalog.readFits(f_path)
