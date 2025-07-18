@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import numpy.ma as ma
 import healpy
-from lsst.meas.algorithms.htmIndexer import HtmIndexer
+from esutil.htm import HTM
 
 
 class UWStarFiles:
@@ -13,7 +13,7 @@ class UWStarFiles:
 
     def __init__(self, input_dir):
         self._index_files(input_dir)
-        self.htm_indexer = HtmIndexer(depth=20)
+        self.htm_indexer = HTM(depth=20)
 
     def _index_files(self, input_dir):
         if self._files:
@@ -55,7 +55,7 @@ class UWStarFiles:
             ra.append(coord[0])
             dec.append(coord[1])
         files = set()
-        indices = set(self.htm_indexer.indexPoints(ra, dec))
+        indices = set(self.htm_indexer.lookup_id(ra, dec))
         for index in indices:
             for (imin, imax), item in self._files.items():
                 if imin <= index <= imax:

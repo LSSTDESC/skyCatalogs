@@ -17,6 +17,7 @@ dependencies = [
     'astropy',
     'dust_extinction',
     'dustmaps',
+    'esutil',
     'galsim',
     'gitpython',
     'h5py',
@@ -30,7 +31,7 @@ dependencies = [
     'pyerfa',
     'pyyaml',
 ]
-requires-python = ">=3.7" # For setuptools >= 61.0 support
+requires-python = ">=3.9" # For setuptools >= 61.0 support
 
 [tool.setuptools.dynamic]
 version = {attr = "skycatalogs._version.__version__"}

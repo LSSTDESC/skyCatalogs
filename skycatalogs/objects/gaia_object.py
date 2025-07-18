@@ -8,16 +8,11 @@ import numpy.ma as ma
 import pandas as pd
 import erfa
 import astropy.modeling
+from astropy.io import fits
 from astropy import units as u
 import galsim
-import lsst.geom
-# ## Next two lines needed only for butler access
-import lsst.daf.butler as daf_butler
-from lsst.meas.algorithms import ReferenceObjectLoader
 
-# ## Need these for direct access and processing of fits files
-import lsst.afw.table as afwtable
-from lsst.sphgeom import HtmPixelization, Circle, LonLat
+from lsst.sphgeom import HtmPixelization
 
 from .base_object import BaseObject, ObjectCollection
 from .base_config_fragment import BaseConfigFragment
@@ -161,18 +156,18 @@ def _read_fits(htm_id, gaia_config, sky_root, out_dict, logger, region=None):
     else:
         f_path = os.path.join(sky_root, f_dir, f_name)
     if not os.path.isfile(f_path):
-        logger.info(f'No file for requested htm id {htm_id}')
+        logger.info(f'No file for requested htm id {htm_id}: {f_path}')
         return
 
-    tbl = afwtable.SimpleCatalog.readFits(f_path)
+    tbl = fits.open(f_path)[1].data
     if region is None:
         for k in out_dict.keys():
-            out_dict[k] += list(tbl.get(k))
+            out_dict[k] += list(tbl[k])
         return
 
     # Otherwise start with ra, dec and create mask
-    ra_full = tbl.get('coord_ra')
-    dec_full = tbl.get('coord_dec')
+    ra_full = tbl['coord_ra']
+    dec_full = tbl['coord_dec']
 
     ra_full_deg = np.degrees(ra_full)
     dec_full_deg = np.degrees(dec_full)
@@ -195,7 +190,7 @@ def _read_fits(htm_id, gaia_config, sky_root, out_dict, logger, region=None):
     for k in out_dict.keys():
         if k in ('coord_ra', 'coord_dec'):
             continue
-        full = tbl.get(k)
+        full = tbl[k]
         if any(mask):
             out_dict[k] += list(ma.array(full, mask=mask).compressed())
         else:
@@ -241,6 +236,9 @@ class GaiaCollection(ObjectCollection):
         sed_method = GaiaCollection.get_config().get('sed_method', 'use_lut')
         use_lut = (sed_method.strip().lower() == 'use_lut')
         if gaia_section['data_file_type'] == 'butler_refcat':
+            # ## Next two lines needed only for butler access
+            import lsst.daf.butler as daf_butler
+            from lsst.meas.algorithms import ReferenceObjectLoader
 
             butler_params = gaia_section['butler_parameters']
             butler = daf_butler.Butler(butler_params['repo'],
