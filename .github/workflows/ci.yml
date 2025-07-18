@@ -68,6 +68,9 @@ jobs:
                 # cf. https://github.com/conda-incubator/setup-miniconda#important
                 shell: bash -l {0}
 
+        env:
+          VIRTUAL_ENV: .venv
+
         steps:
             - uses: actions/checkout@v4
 
@@ -90,16 +93,23 @@ jobs:
                 curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/rubin_sim_data/throughputs_2023_09_07.tgz | tar -C rubin_sim_data -xz
                 curl https://s3df.slac.stanford.edu/groups/rubin/static/sim-data/sed_library/seds_170124.tar.gz  | tar -C rubin_sim_data/sims_sed_library -xz
 
+            - name: Install uv
+              uses: astral-sh/setup-uv@v6
+              with:
+                python-version: ${{ matrix.python-version }}
+
+
             - name: Install skyCatalogs
               run: |
-                pip install pytest
-                pip install .
+                uv venv
+                uv pip install pytest
+                uv pip install .
 
             - name: Run tests without the LSST Stack
               run: |
                 export RUBIN_SIM_DATA_DIR=`pwd`/rubin_sim_data
                 export SIMS_SED_LIBRARY_DIR=${RUBIN_SIM_DATA_DIR}/sims_sed_library
-                pytest --ignore-glob=tests/test_gaia*.py
+                uv run pytest --ignore-glob=tests/test_gaia*.py
 
     full-stack-build:
         needs: [rubin_sim_data]
