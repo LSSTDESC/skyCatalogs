@@ -1,0 +1,573 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The skyCatalogs package &mdash; skyCatalogs 2.3.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=c3c8ae58"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Contact" href="contact.html" />
+    <link rel="prev" title="Quantities for TRILEGAL stars version lsst_sim.simdr2" href="trilegal/lsst_sim.simdr2.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            skyCatalogs
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation Instructions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage_read.html">Reading Catalogs with skyCatalogs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage_read.html#structure-of-skycatalogs-configs">Structure of skyCatalogs Configs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage_read.html#adding-supported-object-types-to-a-catalog">Adding Supported Object Types to a Catalog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ops-rehearsals-3-4/galaxies.html">Galaxy quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ops-rehearsals-3-4/UW_stars.html">Star quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ops-rehearsals-3-4/SSO.html">Solar System Object (SSO) quantities for ops-rehearsals 3 and 4</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roman-rubin-1.1.2/diffsky_galaxy.html">Galaxy quantities for Roman-Rubin joint simulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roman-rubin-1.1.2/UW_stars.html">Star quantities for Roman-Rubin sims</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roman-rubin-1.1.2/snana.html">SNANA quantities for Roman-Rubin sims</a></li>
+<li class="toctree-l1"><a class="reference internal" href="trilegal/lsst_sim.simdr2.html">Quantities for TRILEGAL stars version lsst_sim.simdr2</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">The <code class="docutils literal notranslate"><span class="pre">skyCatalogs</span></code> package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-skycatalog-class">The skyCatalog class</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog"><code class="docutils literal notranslate"><span class="pre">SkyCatalog</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.SkyCatalog.skyCatalogs.open_catalog"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.skyCatalogs.open_catalog()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog.get_objects_by_region"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.get_objects_by_region()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog.get_object_type_by_region"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.get_object_type_by_region()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog.get_object_type_names"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.get_object_type_names()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog.get_object_type_by_hp"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.get_object_type_by_hp()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog.get_hps_by_region"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.get_hps_by_region()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id0"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.get_hps_by_region()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog.get_object_iterator_by_hp"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.get_object_iterator_by_hp()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id1"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.get_object_type_by_region()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id2"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.get_object_type_names()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id3"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.get_objects_by_region()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog.hps_by_type"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.hps_by_type()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog.ignore_files"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.ignore_files()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog.raw_config"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.raw_config</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog.toplevel_only"><code class="docutils literal notranslate"><span class="pre">SkyCatalog.toplevel_only()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject"><code class="docutils literal notranslate"><span class="pre">BaseObject</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.id"><code class="docutils literal notranslate"><span class="pre">BaseObject.id()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.ra"><code class="docutils literal notranslate"><span class="pre">BaseObject.ra()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.dec"><code class="docutils literal notranslate"><span class="pre">BaseObject.dec()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.object_type"><code class="docutils literal notranslate"><span class="pre">BaseObject.object_type()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.get_native_attribute"><code class="docutils literal notranslate"><span class="pre">BaseObject.get_native_attribute()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.get_LSST_fluxes"><code class="docutils literal notranslate"><span class="pre">BaseObject.get_LSST_fluxes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.get_flux"><code class="docutils literal notranslate"><span class="pre">BaseObject.get_flux()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.get_gsobject_components"><code class="docutils literal notranslate"><span class="pre">BaseObject.get_gsobject_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.get_instcat_entry"><code class="docutils literal notranslate"><span class="pre">BaseObject.get_instcat_entry()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.get_observer_sed_component"><code class="docutils literal notranslate"><span class="pre">BaseObject.get_observer_sed_component()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.get_observer_sed_components"><code class="docutils literal notranslate"><span class="pre">BaseObject.get_observer_sed_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.get_roman_fluxes"><code class="docutils literal notranslate"><span class="pre">BaseObject.get_roman_fluxes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.get_sed_metadata"><code class="docutils literal notranslate"><span class="pre">BaseObject.get_sed_metadata()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.get_total_observer_sed"><code class="docutils literal notranslate"><span class="pre">BaseObject.get_total_observer_sed()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.native_columns"><code class="docutils literal notranslate"><span class="pre">BaseObject.native_columns</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#skycatalogs.objects.base_object.BaseObject.subcomponents"><code class="docutils literal notranslate"><span class="pre">BaseObject.subcomponents</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#skycatalogs.objects.base_object.ObjectList"><code class="docutils literal notranslate"><span class="pre">ObjectList</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contact:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">skyCatalogs</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">The <code class="docutils literal notranslate"><span class="pre">skyCatalogs</span></code> package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/reference_python.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <style>
+.wy-table-responsive table td,.wy-table-responsive table th{white-space:normal}
+</style><section id="the-skycatalogs-package">
+<h1>The <code class="docutils literal notranslate"><span class="pre">skyCatalogs</span></code> package<a class="headerlink" href="#the-skycatalogs-package" title="Link to this heading"></a></h1>
+<p>Reference documentation for core objects with the <code class="docutils literal notranslate"><span class="pre">skyCatalogs</span></code> package</p>
+<section id="the-skycatalog-class">
+<span id="skycatalog-class"></span><h2>The skyCatalog class<a class="headerlink" href="#the-skycatalog-class" title="Link to this heading"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">skyCatalog</span></code> class represents a catalog. Users gain access
+to a catalog by calling its static method <code class="docutils literal notranslate"><span class="pre">open_catalog</span></code>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">skycatalogs.skyCatalogs.</span></span><span class="sig-name descname"><span class="pre">SkyCatalog</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skycatalog_root</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loglevel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'INFO'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog" title="Link to this definition"></a></dt>
+<dd><p>A base class with derived classes for galaxies, static (w.r.t. coordinates)
+point sources, SSOs</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.SkyCatalog.skyCatalogs.open_catalog">
+<span class="sig-prename descclassname"><span class="pre">skyCatalogs.</span></span><span class="sig-name descname"><span class="pre">open_catalog</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skycatalog_root</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loglevel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'INFO'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.SkyCatalog.skyCatalogs.open_catalog" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>config</strong> (<em>config_file   yaml file containing</em>)</p></li>
+<li><p><strong>also</strong> (<em>skycatalog_root optional override</em><em> of </em><em>skycatalog_root. This value may</em>) – be supplied by setting the environment variable
+SKYCATALOG_ROOT.  Precedence is 1) argument
+2) environment variable 3) value in config file for
+key skycatalog_root.  However set, this value
+joined to value of the key catalog_dir will be used
+to find the catalog data.</p></li>
+<li><p><strong>level</strong> (<em>loglevel logging</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#skycatalogs.skyCatalogs.SkyCatalog" title="skycatalogs.skyCatalogs.SkyCatalog">SkyCatalog</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog.get_objects_by_region">
+<span class="sig-name descname"><span class="pre">get_objects_by_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obj_type_set</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exposure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog.get_objects_by_region" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>circle</strong><strong>)</strong> (<em>region         region is a named tuple</em><em>(</em><em>may be box or</em>) – or object of type PolygonalRegion</p></li>
+<li><p><strong>if</strong> (<em>obj_type_set   Return only these objects. Defaults to value in config</em>) – specified; else default to all defined in config</p></li>
+<li><p><strong>epoch.</strong> (<em>mjd            MJD</em><em> of </em><em>observation</em>)</p></li>
+<li><p><strong>(</strong><strong>seconds</strong><strong>)</strong> (<em>exposure       exposure length</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>ObjectList containing sky objects visible in the region</em></p></li>
+<li><p><em>[at the specified time]</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog.get_object_type_by_region">
+<span class="sig-name descname"><span class="pre">get_object_type_by_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">object_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exposure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog.get_object_type_by_region" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>box</strong> (<em>region</em>) – types made depend on object_type</p></li>
+<li><p><strong>region</strong> (<em>circle</em><em> or </em><em>PolygonalRegion. Supported</em>) – types made depend on object_type</p></li>
+<li><p><strong>parent</strong> (<em>object_type   known object type without</em>)</p></li>
+<li><p><strong>epoch.</strong> (<em>mjd           MJD</em><em> of </em><em>observation</em>)</p></li>
+<li><p><strong>(</strong><strong>seconds</strong><strong>)</strong> (<em>exposure      exposure</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>an ObjectList containing all objects found.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog.get_object_type_names">
+<span class="sig-name descname"><span class="pre">get_object_type_names</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog.get_object_type_names" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>All object type names in the catalog’s config</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog.get_object_type_by_hp">
+<span class="sig-name descname"><span class="pre">get_object_type_by_hp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">object_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exposure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog.get_object_type_by_hp" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog.get_hps_by_region">
+<span class="sig-name descname"><span class="pre">get_hps_by_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">object_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'galaxy'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog.get_hps_by_region" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>(</strong><strong>min-ra</strong> (<em>Region can be a box</em><em> (</em><em>named 4-tuple</em>)</p></li>
+<li><p><strong>max-ra</strong></p></li>
+<li><p><strong>min-dec</strong></p></li>
+<li><p><strong>max-dec</strong><strong>)</strong><strong>)</strong></p></li>
+</ul>
+</dd>
+</dl>
+<p>:param :
+:param a circle (named 3-tuple (ra:
+:param dec:
+:param radius)) or of type:
+:param PolygonalRegion.:
+:param Catalog area partition must be by healpix:</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Set of healpixels intersecting the region</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">get_hps_by_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">object_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'galaxy'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>(</strong><strong>min-ra</strong> (<em>Region can be a box</em><em> (</em><em>named 4-tuple</em>)</p></li>
+<li><p><strong>max-ra</strong></p></li>
+<li><p><strong>min-dec</strong></p></li>
+<li><p><strong>max-dec</strong><strong>)</strong><strong>)</strong></p></li>
+</ul>
+</dd>
+</dl>
+<p>:param :
+:param a circle (named 3-tuple (ra:
+:param dec:
+:param radius)) or of type:
+:param PolygonalRegion.:
+:param Catalog area partition must be by healpix:</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Set of healpixels intersecting the region</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog.get_object_iterator_by_hp">
+<span class="sig-name descname"><span class="pre">get_object_iterator_by_hp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obj_type_set</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_chunk</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog.get_object_iterator_by_hp" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>epoch</strong> (<em>mjd            MJD</em><em> of </em><em>observation</em>)</p></li>
+<li><p><strong>id</strong> (<em>hp             A healpix</em>)</p></li>
+<li><p><strong>available</strong> (<em>obj_type_set   Return only these objects. Defaults to all</em>)</p></li>
+<li><p><strong>specified</strong> (<em>max_chunk      If</em>) – number of objections per iteration</p></li>
+<li><p><strong>this</strong> (<em>iterator will return no more than</em>) – number of objections per iteration</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>An iterator</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="id1">
+<span class="sig-name descname"><span class="pre">get_object_type_by_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">object_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exposure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id1" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>box</strong> (<em>region</em>) – types made depend on object_type</p></li>
+<li><p><strong>region</strong> (<em>circle</em><em> or </em><em>PolygonalRegion. Supported</em>) – types made depend on object_type</p></li>
+<li><p><strong>parent</strong> (<em>object_type   known object type without</em>)</p></li>
+<li><p><strong>epoch.</strong> (<em>mjd           MJD</em><em> of </em><em>observation</em>)</p></li>
+<li><p><strong>(</strong><strong>seconds</strong><strong>)</strong> (<em>exposure      exposure</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>an ObjectList containing all objects found.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="id2">
+<span class="sig-name descname"><span class="pre">get_object_type_names</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#id2" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>All object type names in the catalog’s config</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="id3">
+<span class="sig-name descname"><span class="pre">get_objects_by_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obj_type_set</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exposure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id3" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>circle</strong><strong>)</strong> (<em>region         region is a named tuple</em><em>(</em><em>may be box or</em>) – or object of type PolygonalRegion</p></li>
+<li><p><strong>if</strong> (<em>obj_type_set   Return only these objects. Defaults to value in config</em>) – specified; else default to all defined in config</p></li>
+<li><p><strong>epoch.</strong> (<em>mjd            MJD</em><em> of </em><em>observation</em>)</p></li>
+<li><p><strong>(</strong><strong>seconds</strong><strong>)</strong> (<em>exposure       exposure length</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>ObjectList containing sky objects visible in the region</em></p></li>
+<li><p><em>[at the specified time]</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog.hps_by_type">
+<span class="sig-name descname"><span class="pre">hps_by_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">object_type</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog.hps_by_type" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>string</strong> (<em>object_type</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>list of healpixels (int) having data for object type object_type</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog.ignore_files">
+<span class="sig-name descname"><span class="pre">ignore_files</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">object_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hps</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flux</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog.ignore_files" title="Link to this definition"></a></dt>
+<dd><p>Remove specified files from internal data structure _hp_info so
+they will be ignored.  In particular, this functions is needed
+by skyCatalogs_creator when creating flux files.  It needs a
+SkyCatalogs object in order to read main files, but existing
+flux files can cause problems if not ignored.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>object_type    string        object type</em>)</p></li>
+<li><p><strong>ids</strong> (<em>hps            list</em><em> of </em><em>int   healpix</em>)</p></li>
+<li><p><strong>files</strong> (<em>flux           boolean       ignore flux files</em><em> or </em><em>main</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog.raw_config">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">raw_config</span></span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog.raw_config" title="Link to this definition"></a></dt>
+<dd><p>Return config, typically uploaded from yaml.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.skyCatalogs.SkyCatalog.toplevel_only">
+<span class="sig-name descname"><span class="pre">toplevel_only</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">object_types</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.skyCatalogs.SkyCatalog.toplevel_only" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>names</strong> (<em>object_types     Set</em><em> of </em><em>object type</em>)</p></li>
+<li><p><strong>parent.</strong> (<em>Remove object types with a parent.  Add in the</em>)</p></li>
+<li><p><strong>values</strong> (<em>Return the resulting types</em><em> (</em><em>as list</em><em>) </em><em>and their</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<p id="baseobject-class">There are several classes (one per supported object type) representing
+individual objects as observed at a particular time, all subclassing
+<code class="docutils literal notranslate"><span class="pre">BaseObject</span></code>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">skycatalogs.objects.base_object.</span></span><span class="sig-name descname"><span class="pre">BaseObject</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ra</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">object_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">belongs_to</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">belongs_index</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject" title="Link to this definition"></a></dt>
+<dd><p>Abstract base class for static (in position coordinates) objects.
+Likely need a variant for SSO.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.id">
+<span class="sig-name descname"><span class="pre">id</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.id" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.ra">
+<span class="sig-name descname"><span class="pre">ra</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.ra" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.dec">
+<span class="sig-name descname"><span class="pre">dec</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.dec" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.object_type">
+<span class="sig-name descname"><span class="pre">object_type</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.object_type" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.get_native_attribute">
+<span class="sig-name descname"><span class="pre">get_native_attribute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">attribute_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.get_native_attribute" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.get_LSST_fluxes">
+<span class="sig-name descname"><span class="pre">get_LSST_fluxes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">as_dict</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.get_LSST_fluxes" title="Link to this definition"></a></dt>
+<dd><p>Return a dict of fluxes for LSST bandpasses or, if as_dict is False,
+just a list in the same order as LSST_BANDS</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.get_flux">
+<span class="sig-name descname"><span class="pre">get_flux</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bandpass</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.get_flux" title="Link to this definition"></a></dt>
+<dd><p>Return the total object flux integrated over the bandpass
+in photons/sec/cm^2
+Use supplied sed if there is one</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.get_gsobject_components">
+<span class="sig-name descname"><span class="pre">get_gsobject_components</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gsparams</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exposure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.get_gsobject_components" title="Link to this definition"></a></dt>
+<dd><p>Return a dictionary of the GSObject components for the
+sky catalogs object, keyed by component name.
+Must be implemented by subclass</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.get_instcat_entry">
+<span class="sig-name descname"><span class="pre">get_instcat_entry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">band</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'r'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">component</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.get_instcat_entry" title="Link to this definition"></a></dt>
+<dd><p>Return the string corresponding to instance catalog line
+:param band       One of [‘u’:
+:param ‘g’:
+:param ‘r’:
+:param ‘i’:
+:param ‘z’:
+:param ‘y’]:
+:param component  Required iff the object has subcomponents (i.e.: object type is ‘galaxy’)
+:param : object type is ‘galaxy’)</p>
+<p>Returns: A string formatted like a line in an instance catalog</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.get_observer_sed_component">
+<span class="sig-name descname"><span class="pre">get_observer_sed_component</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">component</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.get_observer_sed_component" title="Link to this definition"></a></dt>
+<dd><p>Return the SED for the specified subcomponent of the SkyCatalog
+object, applying internal extinction, redshift, and Milky Way
+extinction.</p>
+<p>For Milky Way extinction, the Fitzpatrick, et al. (2019) (F19)
+model, as implemented in the dust_extinction package, is used.</p>
+<p>The SEDs are computed assuming exposure times of 1 second.</p>
+<p>Must be implemented by subclass</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.get_observer_sed_components">
+<span class="sig-name descname"><span class="pre">get_observer_sed_components</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.get_observer_sed_components" title="Link to this definition"></a></dt>
+<dd><p>Return a dictionary of the SEDs, keyed by component name.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.get_roman_fluxes">
+<span class="sig-name descname"><span class="pre">get_roman_fluxes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">as_dict</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.get_roman_fluxes" title="Link to this definition"></a></dt>
+<dd><p>Return a dict of fluxes for Roman bandpasses or, if as_dict is False,
+just a list in the same order as ROMAN_BANDS</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.get_sed_metadata">
+<span class="sig-name descname"><span class="pre">get_sed_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.get_sed_metadata" title="Link to this definition"></a></dt>
+<dd><p>E.g. list of wavelength or frequency intervals associated with sed values</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.get_total_observer_sed">
+<span class="sig-name descname"><span class="pre">get_total_observer_sed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mjd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.get_total_observer_sed" title="Link to this definition"></a></dt>
+<dd><p>Return the SED summed over SEDs for the individual SkyCatalog
+components.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.native_columns">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">native_columns</span></span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.native_columns" title="Link to this definition"></a></dt>
+<dd><p>Return set of all columns stored in parquet file for this object.
+May not include quantities which are constant for all objects
+of this type</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.BaseObject.subcomponents">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">subcomponents</span></span><a class="headerlink" href="#skycatalogs.objects.base_object.BaseObject.subcomponents" title="Link to this definition"></a></dt>
+<dd><p>Return list of all subcomponents (or None)</p>
+</dd></dl>
+
+</dd></dl>
+
+<p id="objectlist-class">The <code class="docutils literal notranslate"><span class="pre">ObjectList</span></code> class is a container for instances of <code class="docutils literal notranslate"><span class="pre">BaseObject</span></code>.
+It subclasses <code class="docutils literal notranslate"><span class="pre">Sequence</span></code>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="skycatalogs.objects.base_object.ObjectList">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">skycatalogs.objects.base_object.</span></span><span class="sig-name descname"><span class="pre">ObjectList</span></span><a class="headerlink" href="#skycatalogs.objects.base_object.ObjectList" title="Link to this definition"></a></dt>
+<dd><p>Keep track of a list of ObjectCollection objects, but from user
+perspective appears to be a list of objects.  Make use of ObjectCollection
+implementation of Sequence until it’s time to move to the next
+ObjectCollection</p>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="trilegal/lsst_sim.simdr2.html" class="btn btn-neutral float-left" title="Quantities for TRILEGAL stars version lsst_sim.simdr2" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="contact.html" class="btn btn-neutral float-right" title="Contact" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2020-2024, LSSTDESC.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
