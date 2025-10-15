@@ -65,13 +65,13 @@ your installation directory SKYCATALOGS_HOME as described in the section :ref:`p
 
 at this point if you would only like to use *skyCatalogs* you can  ``pip install skyCatalog/`` however we instead suggest using the *eups* tool to simply setup the package for use without installing it. This will allow you to edit the package in place, use multiple versions, change branches etc. You should definitely do this if you plan to do any *skyCatalogs* development.
 
-If you do not intend to do any development you may choose instead to clone the most recent release tag.  As of Aug., 2025, this is v.2.1.1
+If you do not intend to do any development you may choose instead to clone the most recent release tag.  As of Oct., 2025, this is v.2.3.0
 
 .. code-block:: sh
 
-   git clone https://github.com/LSSTDESC/skyCatalogs.git --branch v.2.1.1
+   git clone https://github.com/LSSTDESC/skyCatalogs.git --branch v.2.3.0
 
-.. _trilegal
+.. _trilegal:
 
 Accessing trilegal objects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -80,10 +80,9 @@ In order to access the trilegal objects you need to install the pystellibs packa
 
 .. code-block :: sh
 
-   git clone https://github.com/JoanneBogart/pystellibs.git
+   git clone https://github.com/mfouesneau/pystellibs.git
    cd pystellibs
-   git checkout v1.0.0
-   pip install  --user --no-deps --nobuild-isolation -e .
+   pip install  --user --no-deps --nobuild-isolation .
    cd ..
 
 .. _per-session:
@@ -127,11 +126,14 @@ All you need to do is pip install:
                 
    pip install skyCatalogs
 
+If you expect to access trilegal stars you will also need to install pystellibs.  See section :ref: `trilegal` above.
+
+
 Per-session setup
 ~~~~~~~~~~~~~~~~~
 
 Every session you will also need to define a ``SKYCATALOGS_HOME`` directory
-where other needed files (see section :ref:`install-data-files` below) will go:
+where other needed files (see section :ref:`install-data-files` below) go:
 
 .. code-block:: sh
                 
