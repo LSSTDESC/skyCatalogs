@@ -108,7 +108,7 @@ If you are using trilegal objects you also need to make sure your installation o
 
 .. code-block:: sh
 
-   export PYTHONPATH=${SKYCATALOGS_HOME/pystellibs}:${PYTHONPATH}
+   export PYTHONPATH=${SKYCATALOGS_HOME}/pystellibs/src:${PYTHONPATH}
    
 Now go to section :ref:`install-data-files` below.
 
