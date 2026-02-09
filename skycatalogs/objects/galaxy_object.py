@@ -73,8 +73,8 @@ class GalaxyObject(BaseObject):
 
     def get_total_observer_sed(self, mjd=None):
         """
-        Return the SED summed over SEDs for the individual SkyCatalog
-        components.
+        Return the lensing-magnified total-SED (summed over SEDs for the individual SkyCatalog
+        components).
         """
         sed = super().get_total_observer_sed()
 
