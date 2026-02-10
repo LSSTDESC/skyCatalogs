@@ -90,8 +90,8 @@ class DiffskyObject(BaseObject):
 
     def get_total_observer_sed(self, mjd=None):
         """
-        Return the SED summed over SEDs for the individual SkyCatalog
-        components.
+        Return the total SED (sum over all SkyCatalog components) with lensing
+        magnification.
         """
         sed = super().get_total_observer_sed()
 
