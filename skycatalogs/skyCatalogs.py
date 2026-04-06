@@ -543,6 +543,7 @@ class SkyCatalog(object):
                 raise ValueError(f"Requested object types not found in catalog config: "
                                  f"{sorted(missing)}. "
                                  f"Available object types: {sorted(available)}")
+            obj_types = available.intersection(obj_type_set)
         obj_types = self.toplevel_only(obj_types)
 
         # Ensure they're always ordered the same way
