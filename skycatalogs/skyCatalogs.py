@@ -537,7 +537,12 @@ class SkyCatalog(object):
         if obj_type_set is None:
             obj_types = self.default_object_type_set()
         else:
-            obj_types = set(self.get_object_type_names()).intersection(obj_type_set)
+            available = set(self.get_object_type_names())
+            missing = set(obj_type_set) - available
+            if missing:
+                raise ValueError(f"Requested object types not found in catalog config: "
+                                 f"{sorted(missing)}. "
+                                 f"Available object types: {sorted(available)}")
         obj_types = self.toplevel_only(obj_types)
 
         # Ensure they're always ordered the same way
