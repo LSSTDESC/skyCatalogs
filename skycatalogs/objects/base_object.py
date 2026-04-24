@@ -338,10 +338,12 @@ class BaseObject(object):
 
         return [sed.calculateFlux(b) for b in bandpasses]
 
-    def get_LSST_flux(self, band, sed=None, cache=True, mjd=None):
+    def get_LSST_flux(self, band, sed=None, cache=True, mjd=None, rough=False):
         if band not in LSST_BANDS:
             return None
         att = f'lsst_flux_{band}'
+        att_rough = f'lsst_rough_flux_{band}'
+
 
         # Check if it's already an attribute
         val = getattr(self, att, None)
@@ -350,6 +352,13 @@ class BaseObject(object):
 
         if att in self.native_columns:
             return self.get_native_attribute(att)
+
+        if rough:  # rough flux is acceptable
+            val = getattr(self, att_rough, None)
+            if val is not None:
+                return val
+            if att_rough in self.native_columns:
+                return self.get_native_attribute(att_rough)
 
         val = self.get_flux(lsst_bandpasses[band], sed=sed, mjd=mjd)
 
@@ -513,6 +522,8 @@ class ObjectCollection(Sequence):
                     subs.append(s)
         elif self._object_type_unique == 'diffsky_galaxy':
             subs = ['bulge', 'disk', 'knots']
+        elif self._object_type_unique == 'skysim5000':
+            subs = ['bulge', 'disk']
         else:
             return ['this_object']
         return subs
