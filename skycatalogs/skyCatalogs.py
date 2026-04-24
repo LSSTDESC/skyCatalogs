@@ -16,7 +16,7 @@ from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.trilegal_utils import get_trilegal_active
 from skycatalogs.objects.star_object import StarObject
-from skycatalogs.objects.galaxy_object import GalaxyObject
+from skycatalogs.objects.galaxy_object import GalaxyObject, Skysim5000Object
 from skycatalogs.objects.diffsky_object import DiffskyObject
 from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
 from skycatalogs.objects.trilegal_object import TrilegalObject, TrilegalCollection
@@ -55,7 +55,8 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
         tbl[id_column] = [str(an_id) for an_id in tbl[id_column]]
 
     no_obj_type_return = (source_type in {'galaxy', 'diffsky_galaxy',
-                                          'snana', 'sso', 'trilegal'})
+                                          'skysim5000', 'snana', 'sso',
+                                          'trilegal'})
     no_mjd_return = (source_type != 'sso')   # for now
     transient_filter = ('start_mjd' in tbl) and ('end_mjd' in tbl) and mjd is not None
     variable_filter = ('mjd' in tbl)
@@ -236,18 +237,28 @@ class SkyCatalog(object):
         # input galaxy catalog with format like cosmoDC2, which includes
         # definitions of tophat SEDs.
         # In other cases th_parameters below will be None
-        th_parameters = self._config.get_tophat_parameters()
         available_types = self._config.list_object_types()
-        if ('galaxy' in available_types) or ('diffsky_galaxy') in available_types:
-            cosmology = self._config.get_cosmology()
-            if th_parameters:
-                self._observed_sed_factory =\
-                    TophatSedFactory(th_parameters, cosmology)
-            elif 'diffsky_galaxy' in config['object_types']:
-                self._observed_sed_factory =\
-                    DiffskySedFactory(self._cat_dir,
-                                      config['object_types']['diffsky_galaxy']
-                                      ['sed_file_template'], cosmology)
+        gal_types = {'galaxy', 'diffsky_galaxy', 'skysim5000'}
+        gal_types = gal_types.intersection(set(available_types))
+        self._observed_sed_factory = None
+        if gal_types:
+            cosmology = dict()
+            for g in gal_types:
+                th_parameters = self._config.get_tophat_parameters(object_type=g)
+                cosmology[g] = self._config.get_cosmology(g)
+                if th_parameters:
+                    # In the unlikely case that object types galaxy and
+                    # skysim5000 are both represented, make do with one
+                    # TophatSedFactory. Top hat definitions are the same.
+                    # I believe cosmology is also.
+                    if not self._observed_sed_factory:
+                        self._observed_sed_factory =\
+                            TophatSedFactory(th_parameters, cosmology[g])
+                elif 'diffsky_galaxy' in config['object_types']:
+                    self._observed_sed_factory =\
+                        DiffskySedFactory(self._cat_dir,
+                                          config['object_types']['diffsky_galaxy']
+                                          ['sed_file_template'], cosmology[g])
         if 'sso' in config['object_types']:
             self._sso_sed_factory = SsoSedFactory()
             if not self._sso_sed_factory:
@@ -272,6 +283,9 @@ class SkyCatalog(object):
         if 'galaxy' in config['object_types']:
             self.cat_cxt.register_source_type('galaxy',
                                               object_class=GalaxyObject)
+        if 'skysim5000' in config['object_types']:
+            self.cat_cxt.register_source_type('skysim5000',
+                                              object_class=Skysim5000Object)
         if 'snana' in config['object_types']:
             self.cat_cxt.register_source_type('snana',
                                               object_class=SnanaObject,
@@ -616,7 +630,7 @@ class SkyCatalog(object):
             self._logger.warning(msg)
             return object_list
 
-        if object_type in ['galaxy', 'diffsky_galaxy']:
+        if object_type in ['galaxy', 'diffsky_galaxy', 'skysim5000']:
             columns = ['galaxy_id', 'ra', 'dec']
             id_name = 'galaxy_id'
         elif object_type in ['snana']:
@@ -681,8 +695,8 @@ class SkyCatalog(object):
                         continue
 
                 arrow_t = rdr.read_columns(columns, None, rg)
-                if object_type in {'galaxy', 'diffsky_galaxy', 'snana',
-                                   'trilegal'}:
+                if object_type in {'galaxy', 'diffsky_galaxy', 'skysim5000',
+                                   'snana', 'trilegal'}:
                     ra_c, dec_c, id_c, mask =\
                         _compress_via_mask(arrow_t,
                                            id_name,

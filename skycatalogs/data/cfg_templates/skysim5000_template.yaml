@@ -1,0 +1,28 @@
+file_template: 'skysim5000_(?P<healpix>\d+).parquet'
+flux_file_template: 'skysim5000_flux_(?P<healpix>\d+).parquet'
+data_file_type: parquet
+area_partition:
+    { type: healpix, ordering: ring, nside: 32}
+composite:
+    bulge: required
+    disk:  required
+components:
+    bulge_basic:
+        subtype: bulge
+        parent: galaxy
+        sed_model: tophat
+        internal_extinction: CCM
+        MW_extinction: F19
+        spatial_model: sersic2D
+    disk_basic:
+        subtype: disk
+        parent: galaxy
+        sed_model: tophat
+        internal_extinction: CCM
+        MW_extinction: F19
+        spatial_model:  sersic2D
+tophat:
+    bin_parameters:
+        - start
+        - width
+    units: angstrom
