@@ -164,10 +164,19 @@ class GalaxyObject(BaseObject):
         return form_object_string(self, band, component)
 
 
+class Skysim5000Object(GalaxyObject):
+    '''
+    Skysim5000Object is nearly identical to GalaxyObject; just needs to
+    be a separate class for bookkeeping
+    '''
+    _type_name = 'skysim5000'
+
+
 class GalaxyConfigFragment(BaseConfigFragment):
     def __init__(self, prov, cosmology, tophat_bins,
-                 area_partition=None, data_file_type=None):
-        super().__init__(prov, object_type_name='galaxy',
+                 area_partition=None, data_file_type=None, skysim=False):
+        type_name = 'skysim5000' if skysim else 'galaxy'
+        super().__init__(prov, object_type_name=type_name,
                          area_partition=area_partition,
                          data_file_type=data_file_type)
         self._opt_dict['Cosmology'] = cosmology
