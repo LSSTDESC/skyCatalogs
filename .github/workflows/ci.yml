@@ -158,7 +158,8 @@ jobs:
               uses: conda-incubator/setup-miniconda@v3
               with:
                   # Temporary to address conda issue
-                  auto-update-conda: false
+                  # auto-update-conda: false
+                  # June 2026 Try auto-update to address plugin conflict
                   conda-version: "25.11.1"
                   activate-environment: stack
                   python-version: ${{ matrix.py }}
