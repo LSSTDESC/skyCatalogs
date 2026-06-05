@@ -159,8 +159,9 @@ jobs:
               with:
                   # Temporary to address conda issue
                   # auto-update-conda: false
-                  # June 2026 Try auto-update to address plugin conflict
-                  conda-version: "25.11.1"
+                  # June 2026 Try not specifying conda version to address
+                  # plugin conflict
+                  # conda-version: "25.11.1"
                   activate-environment: stack
                   python-version: ${{ matrix.py }}
                   condarc-file: etc/.condarc
