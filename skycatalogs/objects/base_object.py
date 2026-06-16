@@ -89,6 +89,9 @@ def load_lsst_bandpasses():
     '''
     return _load_lsst_bandpasses()[0]
 
+def load_lsst_bandpasses_version():
+    return _load_lsst_bandpasses()[1]
+
 def _load_roman_bandpasses(**kwargs):
     '''
     Read in Roman bandpasses from standard place, trim, and store in global dict
