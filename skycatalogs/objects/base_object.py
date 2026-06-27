@@ -20,7 +20,8 @@ form of their associated SEDs
 
 __all__ = ['BaseObject', 'ObjectCollection', 'ObjectList',
            'LSST_BANDS', 'ROMAN_BANDS',
-           'load_lsst_bandpasses', 'load_roman_bandpasses']
+           'load_lsst_bandpasses', 'load_lsst_bandpasses_version',
+           'load_roman_bandpasses']
 
 LSST_BANDS = ('ugrizy')
 ROMAN_BANDS = roman_shortwave_bands+roman_longwave_bands
