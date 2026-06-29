@@ -352,6 +352,8 @@ class BaseObject(object):
         cache   if True save result as an attribute of the object
         mjd     used if object is variable
         rough   controls whether a "rough flux" will be used if available.
+                It's available if and only if it was computed and stored
+                in the sky catalog at catalog creation time.
 
         Returns
         -------
@@ -371,7 +373,7 @@ class BaseObject(object):
         if att in self.native_columns:
             return self.get_native_attribute(att)
 
-        if rough:  # rough flux is acceptable
+        if rough:  # caller is ok with rough flux.  Use if available
             val = getattr(self, att_rough, None)
             if val is not None:
                 return val
