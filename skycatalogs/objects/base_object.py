@@ -343,6 +343,20 @@ class BaseObject(object):
         return [sed.calculateFlux(b) for b in bandpasses]
 
     def get_LSST_flux(self, band, sed=None, cache=True, mjd=None, rough=False):
+        '''
+        Parameters
+        ----------
+        band    one of 'u', 'g', 'i', 'r', 'z', 'y'
+        sed     if SED has already been looked up, e.g. to calculate flux for
+                a different band, putting it here will save time
+        cache   if True save result as an attribute of the object
+        mjd     used if object is variable
+        rough   controls whether a "rough flux" will be used if available.
+
+        Returns
+        -------
+        Flux for specified band (at time mjd if applicable)
+        '''
         if band not in LSST_BANDS:
             return None
         att = f'lsst_flux_{band}'
