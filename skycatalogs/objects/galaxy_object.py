@@ -38,9 +38,8 @@ class GalaxyObject(BaseObject):
         z_h = self.get_native_attribute('redshift_hubble')
         z = self.get_native_attribute('redshift')
 
-        sky_cat = self._belongs_to._sky_catalog
-        sed = sky_cat.observed_sed_factory.create(th_val, z_h, z,
-                                                  resolution=resolution)
+        factory = self._belongs_to._sky_catalog.observed_sed_factory(self._type_name)
+        sed = factory.create(th_val, z_h, z, resolution=resolution)
         return sed
 
     def get_knot_size(self, z):

@@ -37,8 +37,9 @@ class DiffskyObject(BaseObject):
             pixel = self.partition_id
 
             sky_cat = self._belongs_to._sky_catalog
-            self._seds = sky_cat.observed_sed_factory.create(pixel, self.id,
-                                                             z_h, z)
+            self._seds = sky_cat.observed_sed_factory(self._type_name).create(pixel,
+                                                                              self.id,
+                                                                              z_h, z)
         return self._seds[component]
 
     def get_knot_size(self, z):

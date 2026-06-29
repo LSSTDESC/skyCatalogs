@@ -240,28 +240,22 @@ class SkyCatalog(object):
         available_types = self._config.list_object_types()
         gal_types = {'galaxy', 'diffsky_galaxy', 'skysim5000'}
         gal_types = gal_types.intersection(set(available_types))
-        self._observed_sed_factory = None
+        self._sed_factory = dict()
         if gal_types:
-            cosmology = dict()
             for g in gal_types:
                 th_parameters = self._config.get_tophat_parameters(object_type=g)
-                cosmology[g] = self._config.get_cosmology(g)
-                if th_parameters:
-                    # In the unlikely case that object types galaxy and
-                    # skysim5000 are both represented, make do with one
-                    # TophatSedFactory. Top hat definitions are the same.
-                    # I believe cosmology is also.
-                    if not self._observed_sed_factory:
-                        self._observed_sed_factory =\
-                            TophatSedFactory(th_parameters, cosmology[g])
-                elif 'diffsky_galaxy' in config['object_types']:
-                    self._observed_sed_factory =\
+                cosmology = self._config.get_cosmology(g)
+                if g == 'diffsky_galaxy':
+                    self._sed_factory['diffsky_galaxy'] =\
                         DiffskySedFactory(self._cat_dir,
                                           config['object_types']['diffsky_galaxy']
-                                          ['sed_file_template'], cosmology[g])
+                                          ['sed_file_template'], cosmology)
+                elif th_parameters:
+                    self._sed_factory[g] =\
+                        TophatSedFactory(th_parameters, cosmology)
         if 'sso' in config['object_types']:
-            self._sso_sed_factory = SsoSedFactory()
-            if not self._sso_sed_factory:
+            self._sed_factory['sso'] = SsoSedFactory()
+            if not self._sed_factory['sso']:
                 self._logger.warning('SSO appear in the list of available object types but supporting files do not exist')
                 self._logger.warning('SSOs will not be simulated')
 
@@ -304,8 +298,8 @@ class SkyCatalog(object):
                 'trilegal',
                 object_class=TrilegalObject,
                 collection_class=TrilegalCollection)
-            self._trilegal_sed_factory = TrilegalSedFactory(trilegal_config,
-                                                            self._logger)
+            self._sed_factory['trilegal'] = TrilegalSedFactory(trilegal_config,
+                                                               self._logger)
 
         # Register third-party object type classes
         object_types = self._config['object_types']
@@ -314,9 +308,8 @@ class SkyCatalog(object):
                 module = obj_config['module']
                 exec(f"import {module}; {module}.register_objects(self, '{object_type}')")
 
-    @property
-    def observed_sed_factory(self):
-        return self._observed_sed_factory
+    def observed_sed_factory(self, object_type):
+        return self._sed_factory[object_type]
 
     @property
     def extinguisher(self):
@@ -772,14 +765,15 @@ class SkyCatalog(object):
 
     @property
     def trilegal_error_count(self):
-        if not hasattr(self,'_trilegal_sed_factory'):
+        if 'trilegal' not in self._sed_factory:
             return 0
-        return self._trilegal_sed_factory.error_count
+        return self._sed_factory['trilegal'].error_count
 
     def clear_trilegal_error_count(self):
-        if not hasattr(self,'_trilegal_sed_factory'):
+        if 'trilegal' not in self._sed_factory:
             return
-        self._trilegal_sed_factory.clear_errors()
+        self._sed_factory['trilegal'].clear_errors()
+
 
 def open_catalog(config_file, mp=False, skycatalog_root=None, loglevel="INFO"):
     '''
