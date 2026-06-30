@@ -16,7 +16,7 @@ from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.trilegal_utils import get_trilegal_active
 from skycatalogs.objects.star_object import StarObject
-from skycatalogs.objects.galaxy_object import GalaxyObject
+from skycatalogs.objects.galaxy_object import GalaxyObject, Skysim5000Object
 from skycatalogs.objects.diffsky_object import DiffskyObject
 from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
 from skycatalogs.objects.trilegal_object import TrilegalObject, TrilegalCollection
@@ -55,7 +55,8 @@ def _compress_via_mask(tbl, id_column, region, source_type='galaxy',
         tbl[id_column] = [str(an_id) for an_id in tbl[id_column]]
 
     no_obj_type_return = (source_type in {'galaxy', 'diffsky_galaxy',
-                                          'snana', 'sso', 'trilegal'})
+                                          'skysim5000', 'snana', 'sso',
+                                          'trilegal'})
     no_mjd_return = (source_type != 'sso')   # for now
     transient_filter = ('start_mjd' in tbl) and ('end_mjd' in tbl) and mjd is not None
     variable_filter = ('mjd' in tbl)
@@ -236,21 +237,25 @@ class SkyCatalog(object):
         # input galaxy catalog with format like cosmoDC2, which includes
         # definitions of tophat SEDs.
         # In other cases th_parameters below will be None
-        th_parameters = self._config.get_tophat_parameters()
         available_types = self._config.list_object_types()
-        if ('galaxy' in available_types) or ('diffsky_galaxy') in available_types:
-            cosmology = self._config.get_cosmology()
-            if th_parameters:
-                self._observed_sed_factory =\
-                    TophatSedFactory(th_parameters, cosmology)
-            elif 'diffsky_galaxy' in config['object_types']:
-                self._observed_sed_factory =\
-                    DiffskySedFactory(self._cat_dir,
-                                      config['object_types']['diffsky_galaxy']
-                                      ['sed_file_template'], cosmology)
+        gal_types = {'galaxy', 'diffsky_galaxy', 'skysim5000'}
+        gal_types = gal_types.intersection(set(available_types))
+        self._sed_factory = dict()
+        if gal_types:
+            for g in gal_types:
+                th_parameters = self._config.get_tophat_parameters(object_type=g)
+                cosmology = self._config.get_cosmology(g)
+                if g == 'diffsky_galaxy':
+                    self._sed_factory['diffsky_galaxy'] =\
+                        DiffskySedFactory(self._cat_dir,
+                                          config['object_types']['diffsky_galaxy']
+                                          ['sed_file_template'], cosmology)
+                elif th_parameters:
+                    self._sed_factory[g] =\
+                        TophatSedFactory(th_parameters, cosmology)
         if 'sso' in config['object_types']:
-            self._sso_sed_factory = SsoSedFactory()
-            if not self._sso_sed_factory:
+            self._sed_factory['sso'] = SsoSedFactory()
+            if not self._sed_factory['sso']:
                 self._logger.warning('SSO appear in the list of available object types but supporting files do not exist')
                 self._logger.warning('SSOs will not be simulated')
 
@@ -272,6 +277,9 @@ class SkyCatalog(object):
         if 'galaxy' in config['object_types']:
             self.cat_cxt.register_source_type('galaxy',
                                               object_class=GalaxyObject)
+        if 'skysim5000' in config['object_types']:
+            self.cat_cxt.register_source_type('skysim5000',
+                                              object_class=Skysim5000Object)
         if 'snana' in config['object_types']:
             self.cat_cxt.register_source_type('snana',
                                               object_class=SnanaObject,
@@ -290,8 +298,8 @@ class SkyCatalog(object):
                 'trilegal',
                 object_class=TrilegalObject,
                 collection_class=TrilegalCollection)
-            self._trilegal_sed_factory = TrilegalSedFactory(trilegal_config,
-                                                            self._logger)
+            self._sed_factory['trilegal'] = TrilegalSedFactory(trilegal_config,
+                                                               self._logger)
 
         # Register third-party object type classes
         object_types = self._config['object_types']
@@ -300,9 +308,8 @@ class SkyCatalog(object):
                 module = obj_config['module']
                 exec(f"import {module}; {module}.register_objects(self, '{object_type}')")
 
-    @property
-    def observed_sed_factory(self):
-        return self._observed_sed_factory
+    def observed_sed_factory(self, object_type):
+        return self._sed_factory[object_type]
 
     @property
     def extinguisher(self):
@@ -616,7 +623,7 @@ class SkyCatalog(object):
             self._logger.warning(msg)
             return object_list
 
-        if object_type in ['galaxy', 'diffsky_galaxy']:
+        if object_type in ['galaxy', 'diffsky_galaxy', 'skysim5000']:
             columns = ['galaxy_id', 'ra', 'dec']
             id_name = 'galaxy_id'
         elif object_type in ['snana']:
@@ -681,8 +688,8 @@ class SkyCatalog(object):
                         continue
 
                 arrow_t = rdr.read_columns(columns, None, rg)
-                if object_type in {'galaxy', 'diffsky_galaxy', 'snana',
-                                   'trilegal'}:
+                if object_type in {'galaxy', 'diffsky_galaxy', 'skysim5000',
+                                   'snana', 'trilegal'}:
                     ra_c, dec_c, id_c, mask =\
                         _compress_via_mask(arrow_t,
                                            id_name,
@@ -758,14 +765,15 @@ class SkyCatalog(object):
 
     @property
     def trilegal_error_count(self):
-        if not hasattr(self,'_trilegal_sed_factory'):
+        if 'trilegal' not in self._sed_factory:
             return 0
-        return self._trilegal_sed_factory.error_count
+        return self._sed_factory['trilegal'].error_count
 
     def clear_trilegal_error_count(self):
-        if not hasattr(self,'_trilegal_sed_factory'):
+        if 'trilegal' not in self._sed_factory:
             return
-        self._trilegal_sed_factory.clear_errors()
+        self._sed_factory['trilegal'].clear_errors()
+
 
 def open_catalog(config_file, mp=False, skycatalog_root=None, loglevel="INFO"):
     '''
