@@ -10,14 +10,13 @@ from skycatalogs.objects.base_object import ObjectList, ObjectCollection
 from skycatalogs.objects.sso_object import SsoObject, SsoCollection
 from skycatalogs.objects.sso_object import EXPOSURE_DEFAULT
 from skycatalogs.readers import ParquetReader
-from skycatalogs.utils.sed_tools import TophatSedFactory, DiffskySedFactory
+from skycatalogs.utils.sed_tools import TophatSedFactory
 from skycatalogs.utils.sed_tools import TrilegalSedFactory, SsoSedFactory
 from skycatalogs.utils.sed_tools import MilkyWayExtinction
 from skycatalogs.utils.config_utils import Config
 from skycatalogs.utils.trilegal_utils import get_trilegal_active
 from skycatalogs.objects.star_object import StarObject
 from skycatalogs.objects.galaxy_object import GalaxyObject
-from skycatalogs.objects.diffsky_object import DiffskyObject
 from skycatalogs.objects.snana_object import SnanaObject, SnanaCollection
 from skycatalogs.objects.trilegal_object import TrilegalObject, TrilegalCollection
 
@@ -244,10 +243,26 @@ class SkyCatalog(object):
                 self._observed_sed_factory =\
                     TophatSedFactory(th_parameters, cosmology)
             elif 'diffsky_galaxy' in config['object_types']:
-                self._observed_sed_factory =\
-                    DiffskySedFactory(self._cat_dir,
-                                      config['object_types']['diffsky_galaxy']
-                                      ['sed_file_template'], cosmology)
+                from skycatalogs.utils.sed_tools import DiffskySedFactory
+
+                diffsky_config = config['object_types']['diffsky_galaxy']
+                state_dir = diffsky_config.get(
+                    'sed_state_dir', 'diffsky_runtime')
+                if not os.path.isabs(state_dir):
+                    state_dir = os.path.join(self._cat_dir, state_dir)
+                self._observed_sed_factory = DiffskySedFactory(
+                    state_dir, cosmology,
+                    object_batch_size=diffsky_config.get(
+                        'sed_object_batch_size', 256),
+                    diffsky_batch_size=diffsky_config.get(
+                        'sed_diffsky_batch_size', 25),
+                    cache_size=diffsky_config.get('sed_cache_size', 8),
+                    rel_err=diffsky_config.get('sed_rel_err', 0.03),
+                    wave_ang_min=diffsky_config.get('sed_wave_ang_min', 500),
+                    wave_ang_max=diffsky_config.get(
+                        'sed_wave_ang_max', 100000),
+                    pixel_cache_size=diffsky_config.get(
+                        'sed_pixel_cache_size', 4))
         if 'sso' in config['object_types']:
             self._sso_sed_factory = SsoSedFactory()
             if not self._sso_sed_factory:
@@ -277,6 +292,8 @@ class SkyCatalog(object):
                                               object_class=SnanaObject,
                                               collection_class=SnanaCollection)
         if 'diffsky_galaxy' in config['object_types']:
+            from skycatalogs.objects.diffsky_object import DiffskyObject
+
             self.cat_cxt.register_source_type('diffsky_galaxy',
                                               object_class=DiffskyObject)
         if 'sso' in config['object_types']:

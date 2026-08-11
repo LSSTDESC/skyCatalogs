@@ -34,12 +34,24 @@ class DiffskyObject(BaseObject):
         if not hasattr(self, '_seds'):
             z_h = self.get_native_attribute('redshiftHubble')
             z = self.get_native_attribute('redshift')
-            pixel = self.partition_id
-
             sky_cat = self._belongs_to._sky_catalog
-            self._seds = sky_cat.observed_sed_factory.create(pixel, self.id,
-                                                             z_h, z)
+            self._seds = sky_cat.observed_sed_factory.create(
+                self.id, self.partition_id, z_h, z)
         return self._seds[component]
+
+    def prefetch_seds(self, objects):
+        """Prefetch runtime SED arrays for a collection of Diffsky objects."""
+        if not objects:
+            return
+        factory = self._belongs_to._sky_catalog.observed_sed_factory
+        factory.prefetch(
+            [obj.id for obj in objects],
+            [obj.partition_id for obj in objects])
+
+    @property
+    def sed_prefetch_batch_size(self):
+        factory = self._belongs_to._sky_catalog.observed_sed_factory
+        return factory.prefetch_batch_size
 
     def get_knot_size(self, z):
         """
@@ -116,8 +128,6 @@ class DiffskyObject(BaseObject):
             my_cmp = 'disk' if component != 'bulge' else 'spheroid'
             hlr = self.get_native_attribute(f'{my_cmp}HalfLightRadiusArcsec')
 
-            # Get ellipticities saved in catalog. Not sure they're what
-            # we need
             e1 = self.get_native_attribute(f'{my_cmp}Ellipticity1')
             e2 = self.get_native_attribute(f'{my_cmp}Ellipticity2')
             shear = galsim.Shear(g1=e1, g2=e2)

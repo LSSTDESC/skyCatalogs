@@ -1,10 +1,10 @@
 import os
 import re
+from collections import OrderedDict
 from astropy import units as u
 from astropy.coordinates import Distance
 from astropy.cosmology import FlatLambdaCDM
 import astropy.constants
-import h5py
 import pandas as pd
 
 import numpy as np
@@ -149,15 +149,27 @@ class TophatSedFactory:
 
 
 class DiffskySedFactory:
-    '''
-    Used for collecting diffsky galaxy SEDs
-    '''
+    """Compute current Diffsky component SEDs from packaged runtime state."""
 
-    def __init__(self, catalog_dir, file_template, cosmology):
+    _flux_factor = 4.0204145742268754e-16
 
-        self._files = {}
-        self._catalog_dir = catalog_dir
-        self._file_template = file_template
+    def __init__(self, runtime_state_dir, cosmology, object_batch_size=256,
+                 diffsky_batch_size=25, cache_size=8, rel_err=0.03,
+                 wave_ang_min=500, wave_ang_max=100000,
+                 pixel_cache_size=4):
+        if object_batch_size < 1 or cache_size < 1 or pixel_cache_size < 1:
+            raise ValueError(
+                'Diffsky object and cache sizes must be positive integers')
+        self._runtime_state_dir = os.path.abspath(runtime_state_dir)
+        self._object_batch_size = object_batch_size
+        self._diffsky_batch_size = diffsky_batch_size
+        self._cache_size = cache_size
+        self._sed_cache = OrderedDict()
+        self._sed_cache_capacity = cache_size * object_batch_size
+        self._pixel_cache = OrderedDict()
+        self._pixel_cache_size = pixel_cache_size
+        self._aux_data = None
+        self._thinning_options = (rel_err, wave_ang_min, wave_ang_max)
 
         # Create a FlatLambdaCDM cosmology from a dictionary of input
         # parameters.  This code is based on/borrowed from
@@ -167,38 +179,186 @@ class DiffskySedFactory:
                          if k in cosmo_astropy_allowed}
         self.cosmology = FlatLambdaCDM(**cosmo_astropy)
 
-    def _load_file(self, pixel):
+    def _ensure_aux_loaded(self, state_file):
+        if self._aux_data is not None:
+            return
+        import h5py
+        try:
+            from diffsky.data_loaders.hacc_utils.lc_mock import (
+                load_diffsky_param_collection_merging,
+                load_diffsky_ssp_data,
+                load_diffsky_t_table,
+                load_diffsky_tcurves,
+            )
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                'Diffsky galaxy SED support requires the optional '
+                'dependencies installed by `pip install skyCatalogs[diffsky]`'
+            ) from exc
 
-        if pixel not in self._files:
-            # sed_filename = self._file_template.format(pixel)
-            sed_filename = f'galaxy_sed_{pixel}.hdf5'
-            sed_path = os.path.join(self._catalog_dir, sed_filename)
-            self._files[pixel] = h5py.File(sed_path, 'r')
+        with h5py.File(state_file) as handle:
+            mock_name = handle['header']['catalog_info'].attrs[
+                'mock_version_name']
+        root = self._runtime_state_dir
+        self._aux_data = {
+            'ssp_data': load_diffsky_ssp_data(root, mock_name),
+            'param_collection': load_diffsky_param_collection_merging(
+                root, mock_name),
+            'tcurves': load_diffsky_tcurves(root, mock_name),
+            't_table': load_diffsky_t_table(root, mock_name),
+        }
+        self._set_thinned_wavelengths(*self._thinning_options)
 
-        if not hasattr(self, '_wave_list'):
-            self._wave_list = self._files[pixel]['meta/wave_list'][:]
+    def _set_thinned_wavelengths(self, rel_err, wave_min, wave_max):
+        ssp_data = self._aux_data['ssp_data']
+        wave = np.asarray(ssp_data.ssp_wave)
+        use = (wave > wave_min) & (wave < wave_max)
+        ssp_flux = np.asarray(ssp_data.ssp_flux)
+        representative = np.sum(
+            ssp_flux, axis=tuple(range(ssp_flux.ndim - 1)))
+        wave_nm = wave[use] / 10.0
+        sed = galsim.SED(
+            galsim.LookupTable(wave_nm, representative[use]),
+            wave_type='nm', flux_type='flambda')
+        thinned = sed.thin(rel_err=rel_err, fast_search=False)
+        candidates = np.flatnonzero(use)
+        self._wave_indices = candidates[np.isin(wave_nm, thinned.wave_list)]
+        self._wave_list = wave[self._wave_indices]
 
-        return self._files[pixel]
+    @property
+    def prefetch_batch_size(self):
+        """Maximum requested-object batch recommended to callers."""
+        return self._object_batch_size
+
+    def _get_runtime_pixel(self, pixel):
+        if pixel not in self._pixel_cache:
+            from pathlib import Path
+            try:
+                import opencosmo as oc
+            except ModuleNotFoundError as exc:
+                raise ModuleNotFoundError(
+                    'Diffsky galaxy SED support requires the optional '
+                    'dependencies installed by '
+                    '`pip install skyCatalogs[diffsky]`') from exc
+
+            pixel_dir = Path(self._runtime_state_dir) / f'pixel_{pixel}'
+            state_files = sorted(pixel_dir.glob('*.diffsky_gals.hdf5'))
+            if not state_files:
+                raise FileNotFoundError(
+                    f'No packaged Diffsky state found for pixel {pixel} in '
+                    f'{pixel_dir}')
+            self._ensure_aux_loaded(state_files[0])
+            # keep_top_host is required by OpenCosmo >=1.3 for the linked
+            # host rows used in Diffsky SED calculations.
+            catalog = oc.open(state_files, keep_top_host=True)
+            galaxy_ids = np.atleast_1d(
+                catalog.select('gal_id').get_data('numpy'))
+            id_to_index = {int(galaxy_id): index
+                           for index, galaxy_id in enumerate(galaxy_ids)}
+            self._pixel_cache[pixel] = (catalog, id_to_index)
+            while len(self._pixel_cache) > self._pixel_cache_size:
+                self._pixel_cache.popitem(last=False)
+        else:
+            self._pixel_cache.move_to_end(pixel)
+        return self._pixel_cache[pixel]
+
+    def _cache_sed_info(self, batch_catalog, sed_info):
+        """Thin and cache computed rest-frame component SED arrays."""
+        batch_ids = np.atleast_1d(
+            batch_catalog.select('gal_id').get_data('numpy'))
+        component_arrays = (
+            np.asarray(sed_info['rest_sed_bulge'])[:, self._wave_indices],
+            np.asarray(sed_info['rest_sed_disk'])[:, self._wave_indices],
+            np.asarray(sed_info['rest_sed_knots'])[:, self._wave_indices],
+        )
+        for row, batch_id in enumerate(batch_ids):
+            galaxy_id = int(batch_id)
+            self._sed_cache[galaxy_id] = tuple(
+                component[row] for component in component_arrays)
+            self._sed_cache.move_to_end(galaxy_id)
+        while len(self._sed_cache) > self._sed_cache_capacity:
+            self._sed_cache.popitem(last=False)
+
+    def prefetch(self, galaxy_ids, partition_ids):
+        """Compute and cache SEDs for the explicitly requested galaxies.
+
+        Requests are grouped by their SkyCatalog output pixel and selected
+        with ``take_rows`` from the packaged native-state sidecar.
+        """
+        try:
+            from diffsky.data_loaders.opencosmo_utils import (
+                compute_dbk_seds_from_diffsky_mock,
+            )
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                'Diffsky galaxy SED support requires the optional '
+                'dependencies installed by `pip install skyCatalogs[diffsky]`'
+            ) from exc
+
+        galaxy_ids = np.atleast_1d(galaxy_ids).astype(np.int64)
+        partition_ids = np.atleast_1d(partition_ids).astype(np.int64)
+        if len(galaxy_ids) != len(partition_ids):
+            raise ValueError('galaxy_ids and partition_ids must align')
+
+        missing = np.array(
+            [int(galaxy_id) not in self._sed_cache
+             for galaxy_id in galaxy_ids], dtype=bool)
+        if not np.any(missing):
+            for galaxy_id in galaxy_ids:
+                self._sed_cache.move_to_end(int(galaxy_id))
+            return
+
+        galaxy_ids = galaxy_ids[missing]
+        partition_ids = partition_ids[missing]
+        for pixel in np.unique(partition_ids):
+            pixel_catalog, id_to_index = self._get_runtime_pixel(int(pixel))
+            pixel_ids = galaxy_ids[partition_ids == pixel]
+            try:
+                rows = np.array(
+                    [id_to_index[int(galaxy_id)] for galaxy_id in pixel_ids],
+                    dtype=np.int64)
+            except KeyError as exc:
+                raise KeyError(
+                    f'Galaxy {exc.args[0]} not found in packaged Diffsky '
+                    f'state for pixel {pixel}') from exc
+
+            # OpenCosmo expects sorted row indices. Its structure handler
+            # retains the top-host dependencies needed by Diffsky.
+            rows.sort()
+            for start in range(0, len(rows), self._object_batch_size):
+                batch_catalog = pixel_catalog.take_rows(
+                    rows[start:start + self._object_batch_size])
+                sed_info = compute_dbk_seds_from_diffsky_mock(
+                    batch_catalog, self._aux_data, insert=False,
+                    batch_size=self._diffsky_batch_size)
+                self._cache_sed_info(batch_catalog, sed_info)
 
     @property
     def wave_list(self):
+        if self._aux_data is None:
+            raise RuntimeError(
+                'Diffsky wavelengths are unavailable until a pixel is loaded')
         return self._wave_list
 
     def dl(self, z):
         """
-        Return the luminosity distance in units of meters.
+        Return the luminosity distance in Mpc.
         """
         return self.cosmology.luminosity_distance(z).value
 
-    def create(self, pixel, galaxy_id, redshift_hubble, redshift):
-        '''
-        Get stored diffsky SED from disk.
-        Does not apply extinction.
-        '''
-
-        f = self._load_file(pixel)
-
-        sed_array = f['galaxy/'+str(int(galaxy_id)//100000)+'/'+str(galaxy_id)][:].astype('float')
+    def create(self, galaxy_id, partition_id, redshift_hubble, redshift):
+        """Return lazily computed, unextincted component SEDs."""
+        galaxy_id = int(galaxy_id)
+        if galaxy_id not in self._sed_cache:
+            self.prefetch([galaxy_id], [partition_id])
+        try:
+            sed_array = np.asarray(self._sed_cache[galaxy_id], dtype=float)
+        except KeyError as exc:
+            raise KeyError(
+                f'Galaxy {galaxy_id} missing after Diffsky SED computation') \
+                    from exc
+        self._sed_cache.move_to_end(galaxy_id)
+        sed_array *= self._flux_factor
         sed_array /= (4.0*np.pi*(self.dl(redshift_hubble))**2)
 
         seds = {}

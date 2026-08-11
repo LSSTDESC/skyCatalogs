@@ -9,26 +9,34 @@ composite:
 data_file_type: parquet
 file_template: galaxy_(?P<healpix>\d+).parquet
 flux_file_template: galaxy_flux_(?P<healpix>\d+).parquet
-sed_file_template: galaxy_sed_(?P<healpix>\d+).hdf5
+sed_model: diffsky_runtime
+sed_state_dir: diffsky_runtime
+sed_object_batch_size: 256
+sed_diffsky_batch_size: 25
+sed_cache_size: 8
+sed_pixel_cache_size: 4
+sed_rel_err: 0.03
+sed_wave_ang_min: 500
+sed_wave_ang_max: 100000
 components:
     diffsky_bulge:
         MW_extinction: F19
         internal_extinction: CCM
         parent: diffsky_galaxy
-        sed_model: TBD
+        sed_model: diffsky_runtime
         spatial_model: sersic2D
         subtype: bulge
     diffsky_disk:
         MW_extinction: F19
         internal_extinction: CCM
         parent: diffsky_galaxy
-        sed_model: TBD
+        sed_model: diffsky_runtime
         spatial_model: sersic2D
         subtype: disk
     diffsky_knots:
         MW_extinction: F19
         internal_extinction: CCM
         parent: diffsky_galaxy
-        sed_model: TBD
+        sed_model: diffsky_runtime
         spatial_model: knots
         subtype: knots

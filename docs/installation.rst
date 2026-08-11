@@ -127,6 +127,14 @@ All you need to do is pip install:
                 
    pip install skyCatalogs
 
+Diffsky support is optional. To read ``diffsky_galaxy`` catalogs and compute
+their runtime SEDs, install the Diffsky extra instead::
+
+   pip install "skyCatalogs[diffsky]"
+
+Neither ``diffsky`` nor ``opencosmo`` is imported or installed for other
+SkyCatalog object types.
+
 Per-session setup
 ~~~~~~~~~~~~~~~~~
 

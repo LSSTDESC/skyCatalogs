@@ -37,7 +37,11 @@ object_types :
   diffsky_galaxy:
       file_template: 'galaxy_(?P<healpix>\d+).parquet'
       flux_file_template: 'galaxy_flux_(?P<healpix>\d+).parquet'
-      sed_file_template: 'galaxy_sed_(?P<healpix>\d+).hdf5'
+      sed_model: diffsky_runtime
+      sed_object_batch_size: 256
+      sed_diffsky_batch_size: 25
+      sed_cache_size: 8
+      sed_pixel_cache_size: 4
       data_file_type: parquet
       area_partition:
         { type: healpix, ordering: ring, nside: 32}
@@ -48,21 +52,21 @@ object_types :
   diffsky_bulge:
       subtype: bulge
       parent: diffsky_galaxy
-      sed_model: TBD
+      sed_model: diffsky_runtime
       internal_extinction: CCM
       MW_extinction: F19
       spatial_model: sersic2D
   diffsky_disk:
       subtype: disk
       parent: diffsky_galaxy
-      sed_model: TBD
+      sed_model: diffsky_runtime
       internal_extinction: CCM
       MW_extinction: F19
       spatial_model:  sersic2D
   diffsky_knots:
       subtype: knots
       parent: diffsky_galaxy
-      sed_model: TBD
+      sed_model: diffsky_runtime
       internal_extinction: CCM
       MW_extinction: F19
       spatial_model:  knots
