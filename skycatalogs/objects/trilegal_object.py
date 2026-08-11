@@ -14,7 +14,7 @@ class TrilegalObject(BaseObject):
                          belongs_index)
 
     def _get_sed(self, mjd=None, redshift=0):
-        factory = self._belongs_to._sky_catalog._trilegal_sed_factory
+        factory = self._belongs_to._sky_catalog.observed_sed_factory(self._type_name)
         return factory.get_sed(self)    # unextincted
 
     def get_gsobject_components(self, gsparams=None, rng=None):

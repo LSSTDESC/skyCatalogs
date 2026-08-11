@@ -239,7 +239,7 @@ class Config(DelegatorBase):
     def object_is_composite(self, objectname):
         return 'composite' in self._cfg['object_types'][objectname]
 
-    def get_tophat_parameters(self):
+    def get_tophat_parameters(self, object_type='galaxy'):
         '''
         Return list of named tuples
         Should maybe be part of Sky Catalogs API
@@ -247,9 +247,10 @@ class Config(DelegatorBase):
         if self._schema_pre_130:
             tophat_path = 'SED_models/tophat'
         else:
-            tophat_path = 'object_types/galaxy/tophat'
+            tophat_path = f'object_types/{object_type}/tophat'
 
         tophat = self.get_config_value(tophat_path, silent=True)
+
         if not tophat:
             return None
         raw_bins = tophat['bins']
@@ -277,6 +278,8 @@ class Config(DelegatorBase):
                 object_type = 'galaxy'
             elif 'diffsky_galaxy' in self._cfg['object_types']:
                 object_type = 'diffsky_galaxy'
+            elif 'skysim5000' in self._cfg['object_types']:
+                object_type = 'skysim5000'
             else:
                 return None
         return self._cfg['object_types'][object_type]['Cosmology']

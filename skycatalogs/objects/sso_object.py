@@ -36,7 +36,7 @@ class SsoObject(BaseObject):
         '''
         if SsoObject._solar_sed is None:
             SsoObject._solar_sed =\
-                self._belongs_to._sky_catalog._sso_sed_factory.create()
+                self._belongs_to._sky_catalog.observed_sed_factory(self._type_name).create()
             # For magnorm use the magnitude from Sorcha.  Can it be used
             # directly or are there other effects to be applied?
             # Have to find it by looking for entry for this id, this mjd
@@ -181,12 +181,12 @@ class SsoCollection(ObjectCollection):
                                       self._id[key], object_type, self, key,
                                       self._mjds[key])
 
-        elif type(key) == slice:
+        elif isinstance(key, slice):
             if key.start is None:
                 key.start = 0
             return [self.__getitem__(i) for i in range(self.__len__())[key]]
 
-        elif type(key) == tuple and isinstance(key[0], Iterable):
+        elif isinstance(key, tuple) and isinstance(key[0], Iterable):
             return [self.__getitem__(i) for i in key[0]]
 
 

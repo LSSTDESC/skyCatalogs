@@ -37,6 +37,7 @@ class DiffskyObject(BaseObject):
             sky_cat = self._belongs_to._sky_catalog
             self._seds = sky_cat.observed_sed_factory.create(
                 self.id, self.partition_id, z_h, z)
+
         return self._seds[component]
 
     def prefetch_seds(self, objects):
