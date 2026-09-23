@@ -1,16 +1,14 @@
 from collections.abc import Sequence, Iterable
 from collections import namedtuple
-from packaging import version
 import os
 import logging
 import numpy as np
 import galsim
-from galsim.roman import longwave_bands as roman_longwave_bands
-from galsim.roman import shortwave_bands as roman_shortwave_bands
-from galsim.roman import getBandpasses as roman_getBandpasses
 
 from skycatalogs.utils.translate_utils import form_object_string
 from skycatalogs.utils.config_utils import Config
+from skycatalogs.utils.roman_bandpasses import (
+    ROMAN_BANDS, load_roman_bandpasses, load_roman_bandpasses_version)
 
 '''
 Main object types.   There are also may be subtypes. For example,
@@ -21,10 +19,9 @@ form of their associated SEDs
 __all__ = ['BaseObject', 'ObjectCollection', 'ObjectList',
            'LSST_BANDS', 'ROMAN_BANDS',
            'load_lsst_bandpasses', 'load_lsst_bandpasses_version',
-           'load_roman_bandpasses']
+           'load_roman_bandpasses', 'load_roman_bandpasses_version']
 
 LSST_BANDS = ('ugrizy')
-ROMAN_BANDS = roman_shortwave_bands+roman_longwave_bands
 
 # global for easy access for code run within mp
 
@@ -92,25 +89,6 @@ def load_lsst_bandpasses():
 
 def load_lsst_bandpasses_version():
     return _load_lsst_bandpasses()[1]
-
-def _load_roman_bandpasses(**kwargs):
-    '''
-    Read in Roman bandpasses from standard place, trim, and store in global dict
-    Returns: The dict and version inforation
-    '''
-    global roman_bandpasses
-    if version.parse(galsim.version) < version.parse('2.6.0'):
-        kwargs.pop("include_all_bands", None)
-    roman_bandpasses = roman_getBandpasses(**kwargs)
-    return roman_bandpasses, 'galsim_builtin'
-
-def load_roman_bandpasses(**kwargs):
-    '''
-    Read in Roman bandpasses from standard place, trim, and store in global dict
-    Returns: The dict
-    '''
-    return _load_roman_bandpasses(**kwargs)[0]
-
 
 class BaseObject(object):
     '''
@@ -232,7 +210,8 @@ class BaseObject(object):
 
     def write_sed(self, sed_file_path, component=None, resolution=None,
                   mjd=None):
-        sed = self._get_sed(component=component, resolution=None, mjd=None)
+        sed = self._get_sed(
+            component=component, resolution=resolution, mjd=mjd)
 
         wl = sed.wave_list
         flambda = [sed(w) for w in wl]
@@ -418,7 +397,7 @@ class BaseObject(object):
         if att in self.native_columns:
             return self.get_native_attribute(att)
 
-        val = self.get_flux(roman_bandpasses[band], sed=sed, mjd=mjd)
+        val = self.get_flux(load_roman_bandpasses()[band], sed=sed, mjd=mjd)
 
         if cache:
             setattr(self, att, val)

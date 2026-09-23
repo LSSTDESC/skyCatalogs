@@ -40,8 +40,14 @@ object_types :
       sed_model: diffsky_runtime
       sed_object_batch_size: 256
       sed_diffsky_batch_size: 25
+      sed_engine: fast
+      sed_precision: float32
       sed_cache_size: 8
       sed_pixel_cache_size: 4
+      sed_thinning_mode: galsim
+      sed_emission_line_half_width_angstrom: 20.0
+      sed_ssp_wave_min_micron: 0.06
+      sed_ssp_wave_max_micron: 2.34
       data_file_type: parquet
       area_partition:
         { type: healpix, ordering: ring, nside: 32}

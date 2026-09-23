@@ -135,6 +135,15 @@ their runtime SEDs, install the Diffsky extra instead::
 Neither ``diffsky`` nor ``opencosmo`` is imported or installed for other
 SkyCatalog object types.
 
+Current Roman effective-area curves are also optional. To calculate Roman
+fluxes using the SCA-averaged curves from the Roman technical-information
+repository, install the Roman extra::
+
+   pip install "skyCatalogs[roman]"
+
+The ``roman_technical_information`` package is imported lazily; it is not
+needed to open catalogs or calculate Rubin-only fluxes.
+
 Per-session setup
 ~~~~~~~~~~~~~~~~~
 

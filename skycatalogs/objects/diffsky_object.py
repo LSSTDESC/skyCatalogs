@@ -1,5 +1,6 @@
 import galsim
 import numpy as np
+import time
 from .base_object import BaseObject
 from .base_config_fragment import BaseConfigFragment
 
@@ -13,15 +14,16 @@ class DiffskyObject(BaseObject):
     _sersic_disk = 1
     _sersic_bulge = 4
 
-    def _get_sed(self, component=None, resolution=None):
+    def _get_sed(self, component=None, resolution=None, mjd=None):
         '''
         Return sed and mag_norm for a galaxy component or for a star
         Parameters
         ----------
         component    one of 'bulge', 'disk', 'knots' for now. Other components
                      may be supported.  Ignored for stars
-        resolution   desired resolution of lambda in nanometers. Ignored
-                     for stars.
+        resolution   retained for API compatibility; Diffsky sampling is
+                     configured on the catalog SED factory.
+        mjd          ignored for static objects
 
         Returns
         -------
@@ -35,7 +37,8 @@ class DiffskyObject(BaseObject):
             z_h = self.get_native_attribute('redshiftHubble')
             z = self.get_native_attribute('redshift')
             sky_cat = self._belongs_to._sky_catalog
-            self._seds = sky_cat.observed_sed_factory.create(
+            factory = sky_cat.observed_sed_factory(self._type_name)
+            self._seds = factory.create(
                 self.id, self.partition_id, z_h, z)
 
         return self._seds[component]
@@ -44,14 +47,23 @@ class DiffskyObject(BaseObject):
         """Prefetch runtime SED arrays for a collection of Diffsky objects."""
         if not objects:
             return
-        factory = self._belongs_to._sky_catalog.observed_sed_factory
+        factory = self._belongs_to._sky_catalog.observed_sed_factory(
+            self._type_name)
         factory.prefetch(
             [obj.id for obj in objects],
-            [obj.partition_id for obj in objects])
+            [obj.partition_id for obj in objects],
+            [obj.get_native_attribute('redshiftHubble') for obj in objects])
+
+    def clear_prefetched_seds(self):
+        """Release factory arrays after a one-pass batch consumer finishes."""
+        factory = self._belongs_to._sky_catalog.observed_sed_factory(
+            self._type_name)
+        factory.clear_sed_cache()
 
     @property
     def sed_prefetch_batch_size(self):
-        factory = self._belongs_to._sky_catalog.observed_sed_factory
+        factory = self._belongs_to._sky_catalog.observed_sed_factory(
+            self._type_name)
         return factory.prefetch_batch_size
 
     def get_knot_size(self, z):
@@ -163,7 +175,11 @@ class DiffskyObject(BaseObject):
     def get_observer_sed_component(self, component, mjd=None, resolution=None):
         sed = self._get_sed(component)
         if sed is not None:
+            started = time.perf_counter()
             sed = self._apply_component_extinction(sed)
+            factory = self._belongs_to._sky_catalog.observed_sed_factory(
+                self._type_name)
+            factory.profile('extinction', time.perf_counter() - started)
         return sed
 
 

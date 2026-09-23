@@ -4,7 +4,6 @@ import logging
 import numpy as np
 import numpy.ma as ma
 from skycatalogs.objects.base_object import _load_lsst_bandpasses
-from skycatalogs.objects.base_object import _load_roman_bandpasses
 from skycatalogs.utils.catalog_utils import CatalogContext
 from skycatalogs.objects.base_object import ObjectList, ObjectCollection
 from skycatalogs.objects.sso_object import SsoObject, SsoCollection
@@ -253,27 +252,10 @@ class SkyCatalog(object):
                 th_parameters = self._config.get_tophat_parameters(object_type=g)
                 cosmology = self._config.get_cosmology(g)
                 if g == 'diffsky_galaxy':
-                    from skycatalogs.utils.sed_tools import DiffskySedFactory
-
-                    diffsky_config = config['object_types'][g]
-                    state_dir = diffsky_config.get(
-                        'sed_state_dir', 'diffsky_runtime')
-                    if not os.path.isabs(state_dir):
-                        state_dir = os.path.join(self._cat_dir, state_dir)
-                    self._sed_factory[g] = DiffskySedFactory(
-                        state_dir, cosmology,
-                        object_batch_size=diffsky_config.get(
-                            'sed_object_batch_size', 256),
-                        diffsky_batch_size=diffsky_config.get(
-                            'sed_diffsky_batch_size', 25),
-                        cache_size=diffsky_config.get('sed_cache_size', 8),
-                        rel_err=diffsky_config.get('sed_rel_err', 0.03),
-                        wave_ang_min=diffsky_config.get(
-                            'sed_wave_ang_min', 500),
-                        wave_ang_max=diffsky_config.get(
-                            'sed_wave_ang_max', 100000),
-                        pixel_cache_size=diffsky_config.get(
-                            'sed_pixel_cache_size', 4))
+                    from skycatalogs.utils.diffsky_sed import \
+                        create_diffsky_sed_factory
+                    self._sed_factory[g] = create_diffsky_sed_factory(
+                        config['object_types'][g], self._cat_dir, cosmology)
                 elif th_parameters:
                     self._sed_factory[g] =\
                         TophatSedFactory(th_parameters, cosmology)
@@ -830,7 +812,7 @@ def open_catalog(config_file, mp=False, skycatalog_root=None, loglevel="INFO"):
 
     # Get bandpasses in case we need to compute fluxes
     _, cat._lsst_thru_v = _load_lsst_bandpasses()
-    _, cat._roman_thru_v = _load_roman_bandpasses(
-        include_all_bands=True,
-    )
+    # Roman throughput data are optional and loaded only when Roman fluxes
+    # are requested.
+    cat._roman_thru_v = None
     return cat
