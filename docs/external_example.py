@@ -32,7 +32,7 @@ class ExternalObject(BaseObject):
         '''
         Objects may have multiple components (e.g. "disk", "bulge" for
         a galaxy-like type) or only one. If only one, which is what we're
-        assuming here, by default that componend will be called "this_object".
+        assuming here, by default that component will be called "this_object".
         mjd would be needed to construct a SED for time-varying object types
 
         Returns
