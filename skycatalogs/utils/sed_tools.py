@@ -12,8 +12,10 @@ import numpy as np
 from pathlib import PurePath
 from dust_extinction.parameter_averages import F19
 import galsim
+import h5py
 
-__all__ = ['TophatSedFactory', 'DiffskySedFactory', 'SsoSedFactory',
+__all__ = ['TophatSedFactory', 'DiffskySedFactory', 'Diffsky26SedFactory',
+           'SsoSedFactory',
            'MilkyWayExtinction', 'TrilegalSedFactory', 'get_star_sed_path',
            'generate_sed_path', 'normalize_sed']
 
@@ -150,6 +152,51 @@ class TophatSedFactory:
 
 
 class DiffskySedFactory:
+    """Read component SEDs from legacy Diffsky HDF5 files."""
+
+    def __init__(self, catalog_dir, file_template, cosmology):
+        self._files = {}
+        self._catalog_dir = catalog_dir
+        self._file_template = file_template
+        cosmo_args = FlatLambdaCDM.__init__.__code__.co_varnames[1:]
+        self.cosmology = FlatLambdaCDM(**{
+            key: value for key, value in cosmology.items()
+            if key in cosmo_args
+        })
+
+    def _load_file(self, pixel):
+        if pixel not in self._files:
+            filename = self._file_template.replace(
+                '(?P<healpix>\\d+)', str(pixel))
+            self._files[pixel] = h5py.File(
+                os.path.join(self._catalog_dir, filename), 'r')
+        if not hasattr(self, '_wave_list'):
+            self._wave_list = self._files[pixel]['meta/wave_list'][:]
+        return self._files[pixel]
+
+    @property
+    def wave_list(self):
+        return self._wave_list
+
+    def dl(self, redshift):
+        return self.cosmology.luminosity_distance(redshift).value
+
+    def create(self, pixel, galaxy_id, redshift_hubble, redshift):
+        handle = self._load_file(pixel)
+        path = f'galaxy/{int(galaxy_id)//100000}/{galaxy_id}'
+        sed_array = handle[path][:].astype(float)
+        sed_array /= 4.0*np.pi*self.dl(redshift_hubble)**2
+        seds = {}
+        for index, component in enumerate(('bulge', 'disk', 'knots')):
+            table = galsim.LookupTable(
+                x=self._wave_list, f=sed_array[index], interpolant='linear')
+            seds[component] = galsim.SED(
+                table, wave_type='angstrom', flux_type='fnu').atRedshift(
+                    redshift)
+        return seds
+
+
+class Diffsky26SedFactory:
     """Compute current Diffsky component SEDs from packaged runtime state."""
 
     _flux_factor = 4.0204145742268754e-16

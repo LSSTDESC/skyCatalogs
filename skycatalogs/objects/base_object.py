@@ -519,7 +519,8 @@ class ObjectCollection(Sequence):
             for s in ['bulge', 'disk', 'knots']:
                 if f'sed_val_{s}' in self.native_columns:
                     subs.append(s)
-        elif self._object_type_unique == 'diffsky_galaxy':
+        elif self._object_type_unique in ('diffsky_galaxy',
+                                          'diffsky26_galaxy'):
             subs = ['bulge', 'disk', 'knots']
         elif self._object_type_unique == 'skysim5000':
             subs = ['bulge', 'disk']

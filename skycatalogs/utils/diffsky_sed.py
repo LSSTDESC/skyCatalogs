@@ -18,14 +18,14 @@ import os
 import numpy as np
 
 
-def create_diffsky_sed_factory(config, catalog_dir, cosmology):
-    """Construct the runtime factory from one Diffsky config section."""
-    from skycatalogs.utils.sed_tools import DiffskySedFactory
+def create_diffsky26_sed_factory(config, catalog_dir, cosmology):
+    """Construct the runtime factory from one Diffsky 2026 config section."""
+    from skycatalogs.utils.sed_tools import Diffsky26SedFactory
 
-    state_dir = config.get('sed_state_dir', 'diffsky_runtime')
+    state_dir = config.get('sed_state_dir', 'diffsky26_runtime')
     if not os.path.isabs(state_dir):
         state_dir = os.path.join(catalog_dir, state_dir)
-    return DiffskySedFactory(
+    return Diffsky26SedFactory(
         state_dir, cosmology,
         object_batch_size=config.get('sed_object_batch_size', 256),
         diffsky_batch_size=config.get('sed_diffsky_batch_size', 25),

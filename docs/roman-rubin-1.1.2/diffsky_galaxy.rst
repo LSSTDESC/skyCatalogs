@@ -3,35 +3,22 @@ Galaxy quantities for Roman-Rubin joint simulation
 ++++++++++++++++++++++++++++++++++++++++++++++++++
 Data are partitioned by (nside=32, ring ordering) healpixel. For each pixel
 there is a so-called "main file" (with information largely coming from the
-diffsky galaxy catalog) and a flux file. The flux file contains for
+diffsky galaxy catalog), a flux file and a SED file. The flux file contains for
 each object only fluxes for lsst and Roman bands and the object id so it can be
 joined with the main file. Both it and the main file are parquet files. The
-file names take the form diffsky_galaxy_<hp>.parquet (main file) and
-diffsky_galaxy_flux_<hp>.parquet (flux file). In both cases <hp> is the id of
-the healpixel covered by the file. Component SEDs are computed lazily from compact
-native Diffsky state packaged with the SkyCatalog and cached in host-safe
-batches at runtime. The original OpenCosmo mock is not needed by readers.
+SED file is in hdf5 format. The file names take the form galaxy_<hp>.parquet
+(main file), galaxy_flux_<hp>.parquet (flux file) and galaxy_sed_<hp>.hdf5 for
+SED files.  In all cases <hp> is the id of the healpixel covered by the file.
 
 Galaxy main file
 ----------------
-
-Current Diffsky mocks are read through OpenCosmo.  The creator translates
-their native fields to the stable names below and materializes observed
-redshift, angular half-light radii, and intrinsic ellipticity components so
-that per-object access does not repeat these calculations.  Native ``r50``
-values are currently interpreted as proper physical kpc when converting to
-arcseconds. Observed Diffsky coordinates are stored as ``ra`` and ``dec``;
-the corresponding intrinsic coordinates are retained as ``ra_true`` and
-``dec_true``.
 
 =============================  ========  ==========  ==========================
 Name                           Datatype  Units       Description
 =============================  ========  ==========  ==========================
 galaxy_id                      int64     N/A         Unique object identifier
-ra                             double    degrees     Observed right ascension
-dec                            double    degrees     Observed declination
-ra_true                        double    degrees     Intrinsic right ascension
-dec_true                       double    degrees     Intrinsic declination
+ra                             double    degrees     Object right ascension
+dec                            double    degrees     Object declination
 redshift                       double    N/A         Cosmological redshift
                                                      with line-of-sight motion
 redshiftHubble                 double    N/A         Cosmological redshift
@@ -85,52 +72,11 @@ roman_flux_F184  float      photons/sec/cm^2  Flux integrated over roman F184-ba
 roman_flux_K213  float      photons/sec/cm^2  Flux integrated over roman K213-band
 ===============  ========   ================  ====================================
 
-Runtime SED calculation
------------------------
+Galaxy SED file
+---------------
 
-The ``diffsky_runtime`` directory contains shared Diffsky model inputs plus a
-compact native-state subdirectory for each output HEALPix pixel. These state
-files retain the top hosts required for Diffsky merger contributions but omit
-the high-resolution spatial indexes and unrelated native columns.
-
-Bulk requests group galaxies by output pixel and select only the requested
-OpenCosmo rows. Computed bulge, disk, and knot SED arrays are cached by
-``galaxy_id`` in a bounded least-recently-used cache. A single-object request
-uses the same path with a one-object batch. ``sed_state_dir`` and the runtime
-batch and cache sizes are configurable in the ``diffsky_galaxy`` fragment.
-The optimized minimal component kernel is selected with ``sed_engine: fast``
-(the default). Set ``sed_engine: reference`` to use Diffsky's public reference
-calculation for comparisons. ``sed_precision`` defaults to ``float32`` for the
-optimized engine; ``float64`` remains available. The reference engine always
-uses ``float64``.
-
-SED wavelength sampling
------------------------
-
-``sed_thinning_mode`` selects one immutable wavelength sampling policy for a
-catalog instance. This ensures prefetched and individually requested SEDs use
-the same cache representation. The available modes are:
-
-``galsim``
-    The default imaging-optimized behavior. A representative summed SSP is
-    thinned with GalSim using ``sed_rel_err``.
-``none``
-    Retain every native SSP wavelength sample inside the configured
-    ``sed_ssp_wave_min_micron``--``sed_ssp_wave_max_micron`` interval. This is
-    the safest option for prism or grism simulations.
-``emission_lines``
-    Use the GalSim-thinned continuum grid, but union it with native samples
-    surrounding important emission lines. The rest-frame protection
-    half-width is configured by
-    ``sed_emission_line_half_width_angstrom`` and defaults to 20 Angstrom.
-
-The protected default line list includes [O II] 3726/3729, H-delta, H-gamma,
-H-beta, [O III] 4959/5007, [N II] 6548/6583, H-alpha, and [S II] 6716/6731.
-Set ``sed_emission_lines_angstrom`` to a YAML list to replace this list.
-
-For Python applications requiring a different sparse policy,
-``DiffskySedFactory`` also accepts ``thinning_mode='custom'`` and a
-``thinning_selector`` callable. The callable receives the sliced rest-frame
-SSP wavelength and flux arrays and returns either integer wavelength indices
-or a Boolean mask. Custom callables cannot be represented in catalog YAML;
-construct the factory directly for this advanced use case.
+This file has two sections. One (**meta**) has an array **wave_list**, shape(312),
+of wavelengths (angstroms), which is used for SEDs of all galaxies in the file's healpixel.
+The other section, **galaxy**, contains groups of galaxies.  Each group has entries
+for individual galaxies, keyed by galaxy id. Such an entry is an array, shape(3, 312),
+consisting of SEDs for the three galaxy components (disk, bulge, knot). Units are fnu.

@@ -1,12 +1,18 @@
 import unittest
+import logging
 from collections import namedtuple
 import astropy.units as u
 import astropy.constants
 import numpy as np
 import galsim
 from skycatalogs.utils import normalize_sed
-from skycatalogs.utils.diffsky_sed import create_diffsky_sed_factory
-from skycatalogs.utils.sed_tools import DiffskySedFactory
+from skycatalogs.utils.diffsky_sed import create_diffsky26_sed_factory
+from skycatalogs.utils.sed_tools import Diffsky26SedFactory
+from skycatalogs.objects.diffsky_object import (
+    Diffsky26ConfigFragment, Diffsky26Object, DiffskyConfigFragment,
+    DiffskyObject)
+from skycatalogs.objects.base_object import ObjectList
+from skycatalogs.skyCatalogs import SkyCatalog
 
 
 class NormalizeSedTestCase(unittest.TestCase):
@@ -48,7 +54,7 @@ class DiffskySspSliceTestCase(unittest.TestCase):
 
     @staticmethod
     def make_factory(lower=0.755, upper=1.855):
-        return DiffskySedFactory(
+        return Diffsky26SedFactory(
             '.', {'H0': 70, 'Om0': 0.3},
             ssp_wave_min_micron=lower,
             ssp_wave_max_micron=upper)
@@ -77,7 +83,7 @@ class DiffskySspSliceTestCase(unittest.TestCase):
             self.make_factory(lower=1.855, upper=0.755)
 
     def test_default_bounds_cover_rubin_and_roman_through_z4(self):
-        factory = DiffskySedFactory('.', {'H0': 70, 'Om0': 0.3})
+        factory = Diffsky26SedFactory('.', {'H0': 70, 'Om0': 0.3})
         self.assertEqual(factory._ssp_wave_bounds_micron, (0.06, 2.34))
 
     @staticmethod
@@ -88,7 +94,7 @@ class DiffskySspSliceTestCase(unittest.TestCase):
 
     def test_no_thinning_retains_full_sliced_ssp_grid(self):
         wave = np.array([3600., 3700., 3726., 3729., 3800., 5000.])
-        factory = DiffskySedFactory(
+        factory = Diffsky26SedFactory(
             '.', {'H0': 70, 'Om0': 0.3}, thinning_mode='none')
         factory._aux_data = {'ssp_data': self.make_ssp_data(wave)}
 
@@ -102,7 +108,7 @@ class DiffskySspSliceTestCase(unittest.TestCase):
             4800., 4900., 4950., 4958.91, 4970., 4990.,
             5000., 5006.84, 5020., 5100.,
         ])
-        factory = DiffskySedFactory(
+        factory = Diffsky26SedFactory(
             '.', {'H0': 70, 'Om0': 0.3},
             thinning_mode='emission_lines',
             emission_lines_angstrom=[4958.91, 5006.84],
@@ -123,7 +129,7 @@ class DiffskySspSliceTestCase(unittest.TestCase):
                 (lambda w, f: [0, 2, 3], [0, 2, 3]),
                 (lambda w, f: np.array([True, False, True, True]),
                  [0, 2, 3])):
-            factory = DiffskySedFactory(
+            factory = Diffsky26SedFactory(
                 '.', {'H0': 70, 'Om0': 0.3},
                 thinning_mode='custom', thinning_selector=selector)
             factory._aux_data = {'ssp_data': self.make_ssp_data(wave)}
@@ -132,9 +138,9 @@ class DiffskySspSliceTestCase(unittest.TestCase):
 
     def test_custom_thinning_requires_valid_callable_output(self):
         with self.assertRaises(ValueError):
-            DiffskySedFactory(
+            Diffsky26SedFactory(
                 '.', {'H0': 70, 'Om0': 0.3}, thinning_mode='custom')
-        factory = DiffskySedFactory(
+        factory = Diffsky26SedFactory(
             '.', {'H0': 70, 'Om0': 0.3}, thinning_mode='custom',
             thinning_selector=lambda wave, flux: [0])
         factory._aux_data = {
@@ -143,23 +149,23 @@ class DiffskySspSliceTestCase(unittest.TestCase):
             factory._set_wavelengths()
 
     def test_catalog_config_selects_unthinned_factory(self):
-        factory = create_diffsky_sed_factory(
+        factory = create_diffsky26_sed_factory(
             {'sed_thinning_mode': 'none'}, '.',
             {'H0': 70, 'Om0': 0.3})
         self.assertEqual(factory.thinning_mode, 'none')
 
     def test_sed_engine_and_precision_are_validated(self):
         with self.assertRaises(ValueError):
-            DiffskySedFactory(
+            Diffsky26SedFactory(
                 '.', {'H0': 70, 'Om0': 0.3}, sed_engine='unknown')
         with self.assertRaises(ValueError):
-            DiffskySedFactory(
+            Diffsky26SedFactory(
                 '.', {'H0': 70, 'Om0': 0.3}, sed_precision='float16')
         with self.assertRaises(ValueError):
-            DiffskySedFactory(
+            Diffsky26SedFactory(
                 '.', {'H0': 70, 'Om0': 0.3}, sed_engine='reference',
                 sed_precision='float32')
-        factory = DiffskySedFactory('.', {'H0': 70, 'Om0': 0.3})
+        factory = Diffsky26SedFactory('.', {'H0': 70, 'Om0': 0.3})
         self.assertEqual(factory.sed_engine, 'fast')
         self.assertEqual(factory.sed_precision, 'float32')
         factory.set_compute_options('reference')
@@ -178,7 +184,7 @@ class DiffskySspSliceTestCase(unittest.TestCase):
             def get_data(self, format):
                 return np.array([17], dtype=np.int64)
 
-        factory = DiffskySedFactory('.', {'H0': 70, 'Om0': 0.3})
+        factory = Diffsky26SedFactory('.', {'H0': 70, 'Om0': 0.3})
         factory._wave_indices = np.array([0, 2])
         factory._wave_list = np.array([1000.0, 3000.0])
         sed_info = {
@@ -204,7 +210,7 @@ class DiffskySspSliceTestCase(unittest.TestCase):
             def get_data(self, format):
                 return np.array([101, 202, 303], dtype=np.int64)
 
-        factory = DiffskySedFactory('.', {'H0': 70, 'Om0': 0.3})
+        factory = Diffsky26SedFactory('.', {'H0': 70, 'Om0': 0.3})
         factory._wave_indices = np.array([0, 1])
         factory._wave_list = np.array([1000.0, 2000.0])
         sed_info = {
@@ -224,7 +230,7 @@ class DiffskySspSliceTestCase(unittest.TestCase):
             factory._sed_cache[101][1][0], [0.0, 0.0])
 
     def test_runtime_cache_cleanup_releases_seds_and_pixels(self):
-        factory = DiffskySedFactory('.', {'H0': 70, 'Om0': 0.3})
+        factory = Diffsky26SedFactory('.', {'H0': 70, 'Om0': 0.3})
         factory._sed_cache[1] = object()
         factory._pixel_cache[0] = object()
 
@@ -232,6 +238,60 @@ class DiffskySspSliceTestCase(unittest.TestCase):
 
         self.assertEqual(len(factory._sed_cache), 0)
         self.assertEqual(len(factory._pixel_cache), 0)
+
+
+class DiffskyGenerationCompatibilityTestCase(unittest.TestCase):
+    def test_object_generations_share_only_the_common_base(self):
+        self.assertEqual(DiffskyObject._type_name, 'diffsky_galaxy')
+        self.assertEqual(Diffsky26Object._type_name, 'diffsky26_galaxy')
+        self.assertIs(DiffskyObject.__bases__[0], Diffsky26Object.__bases__[0])
+
+    def test_generation_templates_use_distinct_storage(self):
+        legacy = DiffskyConfigFragment({}, {}).make_fragment()
+        current = Diffsky26ConfigFragment({}, {}).make_fragment()
+
+        self.assertEqual(
+            legacy['file_template'],
+            r'galaxy_(?P<healpix>\d+).parquet')
+        self.assertEqual(
+            legacy['sed_file_template'],
+            r'galaxy_sed_(?P<healpix>\d+).hdf5')
+        self.assertEqual(
+            current['file_template'],
+            r'diffsky26_galaxy_(?P<healpix>\d+).parquet')
+        self.assertEqual(
+            current['flux_file_template'],
+            r'diffsky26_galaxy_flux_(?P<healpix>\d+).parquet')
+        self.assertEqual(current['sed_state_dir'], 'diffsky26_runtime')
+        self.assertEqual(current['sed_model'], 'diffsky_runtime')
+        self.assertEqual(
+            current['components']['diffsky_disk']['parent'],
+            'diffsky26_galaxy')
+        self.assertTrue(all(
+            component['sed_model'] == 'diffsky_runtime'
+            for component in current['components'].values()))
+
+    @staticmethod
+    def make_catalog_stub():
+        catalog = SkyCatalog.__new__(SkyCatalog)
+        catalog._logger = logging.getLogger('diffsky-generation-test')
+        catalog.get_object_type_names = lambda: (
+            'galaxy', 'diffsky_galaxy', 'diffsky26_galaxy')
+        catalog.toplevel_only = lambda object_types: set(object_types)
+        catalog.get_object_type_by_region = lambda *args, **kwargs: ObjectList()
+        return catalog
+
+    def test_legacy_and_current_diffsky_cannot_be_selected_together(self):
+        catalog = self.make_catalog_stub()
+        with self.assertRaisesRegex(ValueError, 'Only one of diffsky'):
+            catalog.get_objects_by_region(
+                None, {'diffsky_galaxy', 'diffsky26_galaxy'})
+
+    def test_standard_and_diffsky26_galaxies_can_be_selected_together(self):
+        catalog = self.make_catalog_stub()
+        result = catalog.get_objects_by_region(
+            None, {'galaxy', 'diffsky26_galaxy'})
+        self.assertEqual(len(result), 0)
 
 
 if __name__ == "__main__":

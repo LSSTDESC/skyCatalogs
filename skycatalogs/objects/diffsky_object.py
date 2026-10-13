@@ -4,67 +4,16 @@ import time
 from .base_object import BaseObject
 from .base_config_fragment import BaseConfigFragment
 
-__all__ = ['DiffskyObject', 'DiffskyConfigFragment']
+__all__ = ['DiffskyObject', 'Diffsky26Object', 'DiffskyConfigFragment',
+           'Diffsky26ConfigFragment']
 
 
-class DiffskyObject(BaseObject):
-    _type_name = 'diffsky_galaxy'
+class _BaseDiffskyObject(BaseObject):
+    """Morphology and lensing shared by legacy and 2026 Diffsky objects."""
 
     # sersic values are constant for diffsky galaxies
     _sersic_disk = 1
     _sersic_bulge = 4
-
-    def _get_sed(self, component=None, resolution=None, mjd=None):
-        '''
-        Return sed and mag_norm for a galaxy component or for a star
-        Parameters
-        ----------
-        component    one of 'bulge', 'disk', 'knots' for now. Other components
-                     may be supported.  Ignored for stars
-        resolution   retained for API compatibility; Diffsky sampling is
-                     configured on the catalog SED factory.
-        mjd          ignored for static objects
-
-        Returns
-        -------
-        galsim.SED object
-        '''
-
-        if component not in ['disk', 'bulge', 'knots']:
-            raise ValueError(f'Cannot fetch SED for component type {component}')
-
-        if not hasattr(self, '_seds'):
-            z_h = self.get_native_attribute('redshiftHubble')
-            z = self.get_native_attribute('redshift')
-            sky_cat = self._belongs_to._sky_catalog
-            factory = sky_cat.observed_sed_factory(self._type_name)
-            self._seds = factory.create(
-                self.id, self.partition_id, z_h, z)
-
-        return self._seds[component]
-
-    def prefetch_seds(self, objects):
-        """Prefetch runtime SED arrays for a collection of Diffsky objects."""
-        if not objects:
-            return
-        factory = self._belongs_to._sky_catalog.observed_sed_factory(
-            self._type_name)
-        factory.prefetch(
-            [obj.id for obj in objects],
-            [obj.partition_id for obj in objects],
-            [obj.get_native_attribute('redshiftHubble') for obj in objects])
-
-    def clear_prefetched_seds(self):
-        """Release factory arrays after a one-pass batch consumer finishes."""
-        factory = self._belongs_to._sky_catalog.observed_sed_factory(
-            self._type_name)
-        factory.clear_sed_cache()
-
-    @property
-    def sed_prefetch_batch_size(self):
-        factory = self._belongs_to._sky_catalog.observed_sed_factory(
-            self._type_name)
-        return factory.prefetch_batch_size
 
     def get_knot_size(self, z):
         """
@@ -175,11 +124,75 @@ class DiffskyObject(BaseObject):
     def get_observer_sed_component(self, component, mjd=None, resolution=None):
         sed = self._get_sed(component)
         if sed is not None:
-            started = time.perf_counter()
             sed = self._apply_component_extinction(sed)
+        return sed
+
+
+class DiffskyObject(_BaseDiffskyObject):
+    """A galaxy backed by the legacy, precomputed Diffsky SED files."""
+
+    _type_name = 'diffsky_galaxy'
+
+    def _get_sed(self, component=None, resolution=None, mjd=None):
+        if component not in ('disk', 'bulge', 'knots'):
+            raise ValueError(f'Cannot fetch SED for component type {component}')
+        if not hasattr(self, '_seds'):
             factory = self._belongs_to._sky_catalog.observed_sed_factory(
                 self._type_name)
-            factory.profile('extinction', time.perf_counter() - started)
+            self._seds = factory.create(
+                self.partition_id, self.id,
+                self.get_native_attribute('redshiftHubble'),
+                self.get_native_attribute('redshift'))
+        return self._seds[component]
+
+
+class Diffsky26Object(_BaseDiffskyObject):
+    """A galaxy whose component SEDs are computed from Diffsky 2026 state."""
+
+    _type_name = 'diffsky26_galaxy'
+
+    def _get_sed(self, component=None, resolution=None, mjd=None):
+        if component not in ('disk', 'bulge', 'knots'):
+            raise ValueError(f'Cannot fetch SED for component type {component}')
+        if not hasattr(self, '_seds'):
+            factory = self._belongs_to._sky_catalog.observed_sed_factory(
+                self._type_name)
+            self._seds = factory.create(
+                self.id, self.partition_id,
+                self.get_native_attribute('redshiftHubble'),
+                self.get_native_attribute('redshift'))
+        return self._seds[component]
+
+    def prefetch_seds(self, objects):
+        """Prefetch runtime SED arrays for a collection of objects."""
+        if not objects:
+            return
+        factory = self._belongs_to._sky_catalog.observed_sed_factory(
+            self._type_name)
+        factory.prefetch(
+            [obj.id for obj in objects],
+            [obj.partition_id for obj in objects],
+            [obj.get_native_attribute('redshiftHubble') for obj in objects])
+
+    def clear_prefetched_seds(self):
+        factory = self._belongs_to._sky_catalog.observed_sed_factory(
+            self._type_name)
+        factory.clear_sed_cache()
+
+    @property
+    def sed_prefetch_batch_size(self):
+        factory = self._belongs_to._sky_catalog.observed_sed_factory(
+            self._type_name)
+        return factory.prefetch_batch_size
+
+    def get_observer_sed_component(self, component, mjd=None,
+                                   resolution=None):
+        started = time.perf_counter()
+        sed = super().get_observer_sed_component(
+            component, mjd=mjd, resolution=resolution)
+        factory = self._belongs_to._sky_catalog.observed_sed_factory(
+            self._type_name)
+        factory.profile('extinction', time.perf_counter() - started)
         return sed
 
 
@@ -187,6 +200,15 @@ class DiffskyConfigFragment(BaseConfigFragment):
     def __init__(self, prov, cosmology,
                  area_partition=None, data_file_type=None):
         super().__init__(prov, object_type_name='diffsky_galaxy',
+                         area_partition=area_partition,
+                         data_file_type=data_file_type)
+        self._opt_dict['Cosmology'] = cosmology
+
+
+class Diffsky26ConfigFragment(BaseConfigFragment):
+    def __init__(self, prov, cosmology,
+                 area_partition=None, data_file_type=None):
+        super().__init__(prov, object_type_name='diffsky26_galaxy',
                          area_partition=area_partition,
                          data_file_type=data_file_type)
         self._opt_dict['Cosmology'] = cosmology

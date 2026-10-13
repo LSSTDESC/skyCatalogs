@@ -37,7 +37,19 @@ object_types :
   diffsky_galaxy:
       file_template: 'galaxy_(?P<healpix>\d+).parquet'
       flux_file_template: 'galaxy_flux_(?P<healpix>\d+).parquet'
+      sed_file_template: 'galaxy_sed_(?P<healpix>\d+).hdf5'
+      data_file_type: parquet
+      area_partition:
+        { type: healpix, ordering: ring, nside: 32}
+      composite:
+        bulge: required
+        disk : required
+        knots: optional
+  diffsky26_galaxy:
+      file_template: 'diffsky26_galaxy_(?P<healpix>\d+).parquet'
+      flux_file_template: 'diffsky26_galaxy_flux_(?P<healpix>\d+).parquet'
       sed_model: diffsky_runtime
+      sed_state_dir: diffsky26_runtime
       sed_object_batch_size: 256
       sed_diffsky_batch_size: 25
       sed_engine: fast
@@ -58,24 +70,45 @@ object_types :
   diffsky_bulge:
       subtype: bulge
       parent: diffsky_galaxy
-      sed_model: diffsky_runtime
+      sed_model: TBD
       internal_extinction: CCM
       MW_extinction: F19
       spatial_model: sersic2D
   diffsky_disk:
       subtype: disk
       parent: diffsky_galaxy
-      sed_model: diffsky_runtime
+      sed_model: TBD
       internal_extinction: CCM
       MW_extinction: F19
-      spatial_model:  sersic2D
+      spatial_model: sersic2D
   diffsky_knots:
       subtype: knots
       parent: diffsky_galaxy
+      sed_model: TBD
+      internal_extinction: CCM
+      MW_extinction: F19
+      spatial_model: knots
+  diffsky26_bulge:
+      subtype: bulge
+      parent: diffsky26_galaxy
       sed_model: diffsky_runtime
       internal_extinction: CCM
       MW_extinction: F19
-      spatial_model:  knots
+      spatial_model: sersic2D
+  diffsky26_disk:
+      subtype: disk
+      parent: diffsky26_galaxy
+      sed_model: diffsky_runtime
+      internal_extinction: CCM
+      MW_extinction: F19
+      spatial_model: sersic2D
+  diffsky26_knots:
+      subtype: knots
+      parent: diffsky26_galaxy
+      sed_model: diffsky_runtime
+      internal_extinction: CCM
+      MW_extinction: F19
+      spatial_model: knots
 
   star:
       file_template: 'pointsource_(?P<healpix>\d+).parquet'

@@ -278,6 +278,8 @@ class Config(DelegatorBase):
                 object_type = 'galaxy'
             elif 'diffsky_galaxy' in self._cfg['object_types']:
                 object_type = 'diffsky_galaxy'
+            elif 'diffsky26_galaxy' in self._cfg['object_types']:
+                object_type = 'diffsky26_galaxy'
             elif 'skysim5000' in self._cfg['object_types']:
                 object_type = 'skysim5000'
             else:
