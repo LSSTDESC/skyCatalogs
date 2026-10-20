@@ -554,8 +554,6 @@ class SkyCatalog(object):
         else:
             obj_types = set(self.get_object_type_names()).intersection(obj_type_set)
         obj_types = self.toplevel_only(obj_types)
-        if 'galaxy' in obj_types and 'diffsky_galaxy' in obj_types:
-            raise ValueError('Only one of galaxy, diffsky_galaxy allowed')
 
         # Ensure they're always ordered the same way
         obj_types = list(obj_types)
